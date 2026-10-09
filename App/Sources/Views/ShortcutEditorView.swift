@@ -13,6 +13,7 @@ struct ShortcutEditorView: View {
     @State private var duplicateName = ""
     @State private var exportedURL: URL?
     @State private var isDeletePresented = false
+    @State private var isDiagnosticsPresented = false
 
     init(record: ShortcutRecord) {
         self.record = record
@@ -38,6 +39,7 @@ struct ShortcutEditorView: View {
                         isDuplicatePromptPresented = true
                     }
                     Button("Export…") { exportPanel() }
+                    Button("Diagnostics…") { isDiagnosticsPresented = true }
                     Button("Delete…", role: .destructive) { isDeletePresented = true }
                 }
             }
@@ -76,6 +78,9 @@ struct ShortcutEditorView: View {
         }
         .sheet(item: $exportedURL) { url in
             ExportSheet(exportedURL: url)
+        }
+        .sheet(isPresented: $isDiagnosticsPresented) {
+            DiagnosticsView(record: record)
         }
         .sheet(isPresented: $isDeletePresented) {
             DeleteShortcutSheet(record: record) { removeData in
