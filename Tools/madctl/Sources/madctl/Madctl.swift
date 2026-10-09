@@ -4,6 +4,6 @@ import ArgumentParser
     static let configuration = CommandConfiguration(
         commandName: "madctl",
         abstract: "macOS App Duplicator command-line generator.",
-        subcommands: [InspectCommand.self, PlanCommand.self]
+        subcommands: [InspectCommand.self, PlanCommand.self, NewCommand.self]
     )
 }
