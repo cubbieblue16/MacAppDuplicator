@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1B1540"/>
+      <stop offset="1" stop-color="#4A2DB8"/>
+    </linearGradient>
+    <linearGradient id="backTile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8A6CFF" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#5A3FD6" stop-opacity="0.35"/>
+    </linearGradient>
+    <linearGradient id="frontTile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.92"/>
+      <stop offset="1" stop-color="#E6F6FF" stop-opacity="0.78"/>
+    </linearGradient>
+    <linearGradient id="frontSheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0.0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- macOS squircle: 824 pt body inside the 1024 canvas, 100 pt margin -->
+  <rect x="100" y="100" width="824" height="824" rx="186" ry="186" fill="url(#bg)"/>
+
+  <!-- scan ring: three cyan arcs behind the tiles -->
+  <g fill="none" stroke="#5EF0FF" stroke-width="6" stroke-linecap="round" opacity="0.6">
+    <circle cx="512" cy="512" r="330" stroke-dasharray="520 1553" transform="rotate(-30 512 512)"/>
+    <circle cx="512" cy="512" r="330" stroke-dasharray="300 1773" transform="rotate(130 512 512)"/>
+    <circle cx="512" cy="512" r="330" stroke-dasharray="140 1933" transform="rotate(230 512 512)"/>
+  </g>
+  <circle cx="512" cy="512" r="330" fill="none" stroke="#5EF0FF" stroke-width="2" opacity="0.18"/>
+
+  <!-- back tile: violet glass, offset up-right -->
+  <rect x="380" y="260" width="400" height="400" rx="88" ry="88" fill="url(#backTile)" stroke="#B9A8FF" stroke-opacity="0.45" stroke-width="4"/>
+  <rect x="396" y="276" width="368" height="368" rx="76" ry="76" fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="3"/>
+
+  <!-- front tile: frosted white glass with cyan rim -->
+  <rect x="244" y="364" width="400" height="400" rx="88" ry="88" fill="url(#frontTile)" stroke="#5EF0FF" stroke-width="10"/>
+  <rect x="262" y="382" width="364" height="364" rx="74" ry="74" fill="none" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="3"/>
+  <rect x="262" y="382" width="364" height="190" rx="74" ry="74" fill="url(#frontSheen)"/>
+</svg>
