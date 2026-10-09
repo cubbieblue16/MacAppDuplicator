@@ -110,7 +110,7 @@ Checked in order; first match wins. Paths relative to `Contents/`.
 |---|---|
 | `todesktop` | `Resources/app.asar` present AND `Resources/todesktop-runtime-config.json` or `Info.plist` key `ToDesktopVersion` |
 | `electron` | `Frameworks/Electron Framework.framework` |
-| `chromium` | `Frameworks/<Name> Framework.framework/Versions/*/Libraries/libEGL.dylib` with `Chromium Embedded`-style `Helper (GPU).app`, or `Info.plist` `CFBundleExecutable` in known Chromium browser set, or presence of `Frameworks/Chromium Framework.framework` / `Google Chrome Framework.framework` / `Brave Browser Framework.framework` / `Microsoft Edge Framework.framework` / `Vivaldi Framework.framework` / `Opera Framework.framework` |
+| `chromium` | not `electron`, and `Frameworks/<X> Framework.framework/Versions/Current/Helpers/<X> Helper (GPU).app` exists together with `.../Libraries/libEGL.dylib` (any `<X>`); covers Chrome, Chromium, Brave, Edge, Vivaldi, Opera, Arc, Comet and other Chromium forks without a name list |
 | `firefox` | `Resources/omni.ja` AND `MacOS/XUL` or `Resources/application.ini` |
 | `eclipse` | `Eclipse/eclipse.ini` or `Eclipse/configuration/config.ini` or `Info.plist` `Eclipse` key |
 | `native` | none of the above |
@@ -125,7 +125,7 @@ Checked in order; first match wins. Paths relative to `Contents/`.
 |---|---|---|
 | chromium, electron, todesktop | `--user-data-dir=<path>` | Chromium single-instance lock is per user-data-dir, so instances are independent. Electron apps: same flag (Electron forwards it to `app.getPath("userData")`). |
 | firefox | `--profile <path>`, `--no-remote` | `--no-remote` prevents handing the launch to the running instance. Optional "use existing profile" lists entries from `~/Library/Application Support/Firefox/profiles.ini`. |
-| eclipse | `-data <path>/workspace`, `-configuration <path>/configuration`, `-vmargs -Dosgi.instance.area=<path>/workspace` | Workspace + configuration both redirected. |
+| eclipse | `-data <path>/workspace`, `-configuration <path>/configuration` | Workspace + configuration both redirected. User `-vmargs` untouched. |
 | native, not sandboxed | falls back to HOME override at `<path>` | shows warning "untested app; HOME override applied" |
 | native, sandboxed | Disabled | shows warning "sandboxed app; its container cannot be moved. Multiple instances may share data." |
 
@@ -136,9 +136,8 @@ Chromium-family "use existing Chrome profile" = `--profile-directory=<Dir>` adde
 ```
 <path>/
   Library/{Application Support,Preferences,Caches,Containers,Group Containers,Saved Application State,
-           WebKit,HTTPStorages,Cookies,Logs,Keychains}     real directories (Keychains stays real-dir
-                                                           but Keychain itself remains the login keychain;
-                                                           documented)
+           WebKit,HTTPStorages,Cookies,Logs,Keychains}     real empty directories; the login Keychain
+                                                           itself stays the real one (documented)
   Desktop Documents Downloads Movies Music Pictures Public  -> symlinks to real HOME equivalents
   .ssh .gitconfig .zshrc .zshenv .zprofile .zsh .oh-my-zsh .bashrc .bash_profile .profile
   .config .docker .npmrc .nvm .cargo .rustup .local .gnupg  -> symlinks to real HOME equivalents
@@ -265,7 +264,7 @@ Concept "Replicator": macOS 26 squircle. Background: deep indigo to electric vio
 ## 10. Testing
 
 - **Unit (Core, Profiles):** family detection against fixture bundle trees created in a temp dir (electron, chromium, firefox, eclipse, todesktop, native, sandboxed); `ShortcutConfig` plist round-trip; `DataSeparationPlanner` argv/env for every family × mode; `HomeTreeBuilder` idempotence, non-empty-dir subfolder rule, no writes outside target path; `profiles.json` schema validation; secret masking.
-- **Integration (Tests/Integration, runs locally, not in CI):** build Launcher → generate a shortcut for `/System/Applications/TextEdit.app` with Disabled mode → launch → assert `NSRunningApplication.bundleURL` equals the shortcut bundle and the pid's executable is TextEdit's → terminate. Appearance test: launch with Dark, read `AppleInterfaceStyle` via the target's `defaults read` argument domain is not observable, so assert argv instead.
+- **Integration (Tests/Integration, runs locally, not in CI):** build Launcher → generate a shortcut for `/System/Applications/TextEdit.app` with Disabled mode → launch → assert `NSRunningApplication.bundleURL` equals the shortcut bundle and the pid's executable is TextEdit's → terminate. Appearance and language: assert the generated argv contains the expected `-AppleInterfaceStyle` / `-AppleLanguages` arguments (the target's effective appearance is not observable from outside).
 - **Acceptance (manual, Phase 1 gate):** two Claude Desktop shortcuts, distinct data paths, both running, two accounts, two Dock icons, `ps -o args` shows distinct `--user-data-dir`, each has its own `claude_desktop_config.json`.
 - **Web shell smoke:** WhatsApp preset loads, login persists across relaunch with the same UUID, badge updates.
 
