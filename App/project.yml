@@ -1,0 +1,115 @@
+name: MacAppDuplicator
+options:
+  bundleIdPrefix: com.mikekuta
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  xcodeVersion: "27.0"
+
+packages:
+  DuplicatorCore:
+    path: ..
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: YES
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    ENABLE_HARDENED_RUNTIME: YES
+    ENABLE_APP_SANDBOX: NO
+    DEAD_CODE_STRIPPING: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
+
+targets:
+  MacAppDuplicator:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+      - path: Resources
+    dependencies:
+      - package: DuplicatorCore
+        product: DuplicatorCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mikekuta.MacAppDuplicator
+        PRODUCT_NAME: "macOS App Duplicator"
+        PRODUCT_MODULE_NAME: MacAppDuplicator
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: "macOS App Duplicator"
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Cubbieblue16"
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
+        INFOPLIST_KEY_NSMainStoryboardFile: ""
+        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "0.2.0"
+        SWIFT_EMIT_LOC_STRINGS: YES
+    info:
+      path: Resources/Info.plist
+      properties:
+        CFBundleName: "App Duplicator"
+        CFBundleDisplayName: "macOS App Duplicator"
+        LSMinimumSystemVersion: "26.0"
+        LSApplicationCategoryType: public.app-category.utilities
+        NSHighResolutionCapable: true
+        NSSupportsAutomaticTermination: false
+        NSSupportsSuddenTermination: false
+    postBuildScripts:
+      - name: Embed Launcher
+        shell: /bin/bash
+        inputFiles:
+          - "$(SRCROOT)/../.build/release/Launcher"
+        outputFiles:
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Launcher"
+        script: |
+          set -euo pipefail
+          LAUNCHER_SRC="${SRCROOT}/../.build/release/Launcher"
+          if [ ! -x "$LAUNCHER_SRC" ]; then
+            env -i HOME="$HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin xcrun swift build -c release --product Launcher --package-path "${SRCROOT}/.."
+          fi
+          DEST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Launcher"
+          mkdir -p "$(dirname "$DEST")"
+          cp -f "$LAUNCHER_SRC" "$DEST"
+          chmod 755 "$DEST"
+          if [ "${EXPANDED_CODE_SIGN_IDENTITY:--}" = "-" ] || [ -z "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
+            codesign --force --sign - "$DEST"
+          else
+            codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --options runtime --timestamp "$DEST"
+          fi
+
+  MacAppDuplicatorTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: MacAppDuplicator
+      - package: DuplicatorCore
+        product: DuplicatorCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mikekuta.MacAppDuplicatorTests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/macOS App Duplicator.app/Contents/MacOS/macOS App Duplicator"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  MacAppDuplicator:
+    build:
+      targets:
+        MacAppDuplicator: all
+        MacAppDuplicatorTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - MacAppDuplicatorTests

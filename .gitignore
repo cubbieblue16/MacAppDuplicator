@@ -12,3 +12,5 @@ xcuserdata/
 /.superpowers/
 /.build/
 /.build/fixtures/
+/App/MacAppDuplicator.xcodeproj/
+/App/Resources/Info.plist
