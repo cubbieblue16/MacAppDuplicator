@@ -255,6 +255,14 @@ final class AppInspectorTests: XCTestCase {
         XCTAssertTrue(app.isPlatformBinary)
     }
 
+    func testBraveIsChromium() throws {
+        let path = "/Applications/Brave Browser.app"
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: path), "Brave Browser is not installed")
+        let app = try AppInspector().inspect(appAt: URL(filePath: path, directoryHint: .isDirectory))
+        XCTAssertEqual(app.family, .chromium)
+        XCTAssertFalse(app.isPlatformBinary)
+    }
+
     func testClaudeDesktopIsElectron() throws {
         let path = "/Applications/Claude.app"
         try XCTSkipUnless(FileManager.default.fileExists(atPath: path), "Claude Desktop is not installed")
