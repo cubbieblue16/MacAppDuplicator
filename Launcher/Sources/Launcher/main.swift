@@ -38,12 +38,6 @@ func spawnHelperIfNeeded(config: ShortcutConfig) {
     _ = config
 }
 
-/// Stand-in until Task 5 adds the real System Launch path.
-@MainActor
-func launchViaSystem(prepared: PreparedLaunch, logger: LaunchLogger) -> Never {
-    fail(LauncherError.execFailed(errno: ENOTSUP, path: prepared.plan.executableURL.path), logger: logger)
-}
-
 if plan.launchMode == .systemLaunch {
     logger.log("system launch")
     launchViaSystem(prepared: prepared, logger: logger)
