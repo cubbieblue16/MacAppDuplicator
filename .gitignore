@@ -1,0 +1,11 @@
+.DS_Store
+._*
+/build/
+/DerivedData/
+*.xcuserstate
+xcuserdata/
+.swiftpm/
+/Packages/*/.build/
+/dist/
+*.dmg
+*.icns.tmp
