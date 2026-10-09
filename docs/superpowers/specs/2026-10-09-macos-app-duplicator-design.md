@@ -268,7 +268,7 @@ Concept "Replicator": macOS 26 squircle. Background: deep indigo to electric vio
 }
 ```
 
-`status` ∈ `verified | partial | unsupported`. Bundled copy ships with the app; "Check Profile Updates" fetches the raw file from the GitHub repo `main`, validates schema and `schemaVersion`, and stores it as the cached copy. Cached copy wins over bundled when newer. Seed list: Claude, Chrome, Brave, Edge, Firefox, VS Code, Cursor, Slack, Discord, Obsidian, Plex, Spotify, Signal, Telegram, Ghostty, iTerm2, Terminal (partial), Xcode — each marked `verified` only after a real launch test on Mike's Mac.
+`status` ∈ `verified | partial | unsupported`. Bundled copy ships with the app; "Check Profile Updates" fetches the raw file from the GitHub repo `main`, validates schema and `schemaVersion`, and stores it as the cached copy. Cached copy wins over bundled when newer. Seed list: Claude, Chrome, Brave, Edge, Firefox, VS Code, Cursor, Slack, Discord, Obsidian, Plex, Spotify, Signal, Telegram, Ghostty, iTerm2, Terminal (partial — Apple platform binary, System Launch only), Xcode — each marked `verified` only after a real launch test on Mike's Mac.
 
 ## 9. Security and signing
 
