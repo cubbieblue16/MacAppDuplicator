@@ -76,8 +76,29 @@ final class ShortcutBuilderTests: XCTestCase {
         XCTAssertEqual(second.lastPathComponent, "Target Personal.app")
         XCTAssertEqual(copy.config.slug, ShortcutConfig.slug(for: "Target Personal"))
         XCTAssertEqual(copy.config.bundleIdentifier, ShortcutConfig.bundleIdentifier(forSlug: copy.config.slug))
-        XCTAssertNil(copy.config.dataPath, "a duplicate gets its own default data folder, not the original's")
+        XCTAssertEqual(copy.config.dataPath, ShortcutConfig.defaultDataPath(forSlug: copy.config.slug, home: FileManager.default.homeDirectoryForCurrentUser))
+        XCTAssertNotEqual(copy.config.dataPath, record.config.dataPath, "a duplicate gets its own default data folder, not the original's")
         XCTAssertEqual(copy.config.targetPath, record.config.targetPath)
+    }
+
+    func testCreateResolvesDefaultDataPathWhenNil() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        var c = config()
+        c.dataMode = .auto
+        c.dataPath = nil
+        let bundle = try builder.create(config: c, in: out)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        XCTAssertEqual(record.config.dataPath, ShortcutConfig.defaultDataPath(forSlug: c.slug, home: FileManager.default.homeDirectoryForCurrentUser))
+    }
+
+    func testCreateKeepsNilDataPathWhenDataModeDisabled() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        var c = config()
+        c.dataMode = .disabled
+        c.dataPath = nil
+        let bundle = try builder.create(config: c, in: out)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        XCTAssertNil(record.config.dataPath)
     }
 
     func testExportCopiesBundle() throws {
@@ -99,12 +120,16 @@ final class ShortcutBuilderTests: XCTestCase {
         let bundle = try builder.create(config: c, in: out)
         let record = try LibraryScanner.record(forBundleAt: bundle)
 
-        try builder.delete(record: record, removeData: false)
+        let trashedBundle = try builder.delete(record: record, removeData: false)
+        addTeardownBlock { for url in trashedBundle { try FileManager.default.removeItem(at: url) } }
+        XCTAssertEqual(trashedBundle.count, 1)
         XCTAssertFalse(FileManager.default.fileExists(atPath: bundle.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: data.path))
 
         let again = try builder.create(config: c, in: out)
-        try builder.delete(record: try LibraryScanner.record(forBundleAt: again), removeData: true)
+        let trashedBoth = try builder.delete(record: try LibraryScanner.record(forBundleAt: again), removeData: true)
+        addTeardownBlock { for url in trashedBoth { try FileManager.default.removeItem(at: url) } }
+        XCTAssertEqual(trashedBoth.count, 2)
         XCTAssertFalse(FileManager.default.fileExists(atPath: data.path))
     }
 }

@@ -66,18 +66,34 @@ struct ShortcutBuilder {
     }
 
     /// Moves the bundle to the Trash; with `removeData`, also trashes the shortcut's data folder (never the target).
-    func delete(record: ShortcutRecord, removeData: Bool) throws {
-        try fileManager.trashItem(at: record.bundleURL, resultingItemURL: nil)
-        guard removeData else { return }
+    /// Returns the Trash location of everything it trashed, in order (bundle first).
+    @discardableResult
+    func delete(record: ShortcutRecord, removeData: Bool) throws -> [URL] {
+        var trashed: [URL] = []
+        trashed.append(try trash(record.bundleURL))
+        guard removeData else { return trashed }
         let home = fileManager.homeDirectoryForCurrentUser
         let dataPath = record.config.dataPath ?? ShortcutConfig.defaultDataPath(forSlug: record.config.slug, home: home)
         let dataURL = URL(fileURLWithPath: dataPath, isDirectory: true)
         if fileManager.fileExists(atPath: dataURL.path) {
-            try fileManager.trashItem(at: dataURL, resultingItemURL: nil)
+            trashed.append(try trash(dataURL))
         }
+        return trashed
     }
 
+    private func trash(_ url: URL) throws -> URL {
+        var resulting: NSURL?
+        try fileManager.trashItem(at: url, resultingItemURL: &resulting)
+        return (resulting as URL?) ?? url
+    }
+
+    /// A nil `dataPath` means "use the default data folder". It is resolved here, at write time, so the written
+    /// `MADConfig` is always explicit (Core skips data separation when `dataPath` is nil and the mode is not disabled).
     private func write(config: ShortcutConfig, in directory: URL) throws -> URL {
+        var config = config
+        if config.dataMode != .disabled, config.dataPath == nil {
+            config.dataPath = ShortcutConfig.defaultDataPath(forSlug: config.slug, home: fileManager.homeDirectoryForCurrentUser)
+        }
         let targetURL = URL(fileURLWithPath: config.targetPath)
         guard fileManager.fileExists(atPath: targetURL.path) else { throw BuilderError.targetMissing(config.targetPath) }
         let app = try AppInspector().inspect(appAt: targetURL)

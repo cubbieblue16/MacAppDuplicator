@@ -21,6 +21,14 @@ final class InstalledAppsTests: XCTestCase {
         XCTAssertEqual(apps.first?.version, "1.0")
     }
 
+    func testScanReportsUpdatedVersionAfterInfoPlistChanges() throws {
+        try writeFakeTarget(named: "Beta", bundleIdentifier: "com.example.beta", version: "1.0", in: dir)
+        XCTAssertEqual(InstalledApps.scan(folders: [dir]).first?.version, "1.0")
+
+        try writeFakeTarget(named: "Beta", bundleIdentifier: "com.example.beta", version: "2.5", in: dir)
+        XCTAssertEqual(InstalledApps.scan(folders: [dir]).first?.version, "2.5", "an updated app must not report cached metadata")
+    }
+
     func testDefaultFolders() {
         XCTAssertEqual(InstalledApps.defaultFolders.map(\.path), ["/Applications", FileManager.default.homeDirectoryForCurrentUser.appending(path: "Applications").path])
     }
