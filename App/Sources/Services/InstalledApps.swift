@@ -34,7 +34,7 @@ enum InstalledApps {
 
     /// Reads `Contents/Info.plist` directly: `Bundle(url:)` caches one instance per path for the process lifetime, so an
     /// app updated while this app runs would keep reporting its old name and version. Nil means "not a readable app".
-    private static func infoDictionary(ofAppAt appURL: URL) -> [String: Any]? {
+    static func infoDictionary(ofAppAt appURL: URL) -> [String: Any]? {
         let infoURL = appURL.appending(path: "Contents/Info.plist", directoryHint: .notDirectory)
         guard let data = FileManager.default.contents(atPath: infoURL.path) else { return nil }
         do {

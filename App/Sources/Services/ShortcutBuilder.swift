@@ -89,8 +89,12 @@ struct ShortcutBuilder {
 
     /// A nil `dataPath` means "use the default data folder". It is resolved here, at write time, so the written
     /// `MADConfig` is always explicit (Core skips data separation when `dataPath` is nil and the mode is not disabled).
+    ///
+    /// Every bundle this build writes carries this build's engine version; `BundleWriter` mirrors it into
+    /// `MADEngineVersion`, so rewriting a stale shortcut with its stored config would otherwise leave it stale forever.
     private func write(config: ShortcutConfig, in directory: URL) throws -> URL {
         var config = config
+        config.engineVersion = ShortcutConfig.currentEngineVersion
         if config.dataMode != .disabled, config.dataPath == nil {
             config.dataPath = ShortcutConfig.defaultDataPath(forSlug: config.slug, home: fileManager.homeDirectoryForCurrentUser)
         }

@@ -67,6 +67,24 @@ final class ShortcutBuilderTests: XCTestCase {
         XCTAssertEqual(record.config.arguments, ["--flag"])
     }
 
+    func testRegenerateStampsCurrentEngineVersion() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+        var stale = config()
+        stale.engineVersion = 0
+        let bundle = try writeShortcutBundle(named: "Target Work", in: out, config: stale, engineVersion: 0)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        XCTAssertEqual(record.config.engineVersion, 0)
+
+        let rewritten = try builder.regenerate(record: record, config: record.config)
+
+        let data = try Data(contentsOf: rewritten.appending(path: "Contents/Info.plist"))
+        let info = try XCTUnwrap(PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+        XCTAssertEqual(info[ShortcutConfig.engineVersionInfoPlistKey] as? Int, ShortcutConfig.currentEngineVersion)
+        let rawConfig = try XCTUnwrap(info[ShortcutConfig.infoPlistKey] as? [String: Any])
+        XCTAssertEqual(try ShortcutConfig(plistDictionary: rawConfig).engineVersion, ShortcutConfig.currentEngineVersion)
+    }
+
     func testDuplicateCreatesSecondBundleWithNewIdentity() throws {
         let out = dir.appending(path: "out", directoryHint: .isDirectory)
         let first = try builder.create(config: config(), in: out)

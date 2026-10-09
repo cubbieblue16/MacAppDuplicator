@@ -47,7 +47,7 @@ struct ShortcutEditorView: View {
         .safeAreaInset(edge: .bottom) {
             HStack {
                 if record.needsRebuild {
-                    Label("Built with an older launcher. Save or Regenerate to update.", systemImage: "exclamationmark.triangle")
+                    Label("Built with an older launcher. Regenerate to update.", systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -59,11 +59,11 @@ struct ShortcutEditorView: View {
             .padding(12)
             .background(.bar)
         }
-        .task(id: record.config.targetPath) {
+        .task(id: draft.targetPath) {
             // A missing or unreadable target is not an error here: the row already shows "Target missing" and the
             // badge falls back to `Unknown`.
             do {
-                inspected = try AppInspector().inspect(appAt: URL(fileURLWithPath: record.config.targetPath))
+                inspected = try AppInspector().inspect(appAt: URL(fileURLWithPath: draft.targetPath))
             } catch {
                 inspected = nil
             }

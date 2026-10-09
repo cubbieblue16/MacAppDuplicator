@@ -66,7 +66,7 @@ final class AppState {
     /// Creates in the output folder, rescans, selects the new bundle. Returns nil (and sets `pendingError`) on failure.
     func create(config: ShortcutConfig) async -> URL? {
         do {
-            let url = try builder.create(config: Self.stamped(config), in: settings.outputFolder)
+            let url = try builder.create(config: config, in: settings.outputFolder)
             await library.rescan()
             return select(url)
         } catch {
@@ -77,7 +77,7 @@ final class AppState {
 
     func save(record: ShortcutRecord, config: ShortcutConfig) async -> Bool {
         do {
-            let url = try builder.regenerate(record: record, config: Self.stamped(config))
+            let url = try builder.regenerate(record: record, config: config)
             await library.rescan()
             select(url)
             return true
@@ -104,7 +104,7 @@ final class AppState {
         var count = 0
         for record in library.recordsNeedingRebuild {
             do {
-                _ = try builder.regenerate(record: record, config: Self.stamped(record.config))
+                _ = try builder.regenerate(record: record, config: record.config)
                 count += 1
             } catch {
                 present(error, context: "Could not rebuild \(record.name)")
@@ -116,11 +116,8 @@ final class AppState {
     }
 
     func duplicate(_ record: ShortcutRecord, newName: String) async {
-        // The copy is a new write by this build, so it gets the current engine version even when the source is stale.
-        var source = record
-        source.config = Self.stamped(record.config)
         do {
-            let url = try builder.duplicate(record: source, newName: newName, in: record.bundleURL.deletingLastPathComponent())
+            let url = try builder.duplicate(record: record, newName: newName, in: record.bundleURL.deletingLastPathComponent())
             await library.rescan()
             select(url)
         } catch {
@@ -161,13 +158,5 @@ final class AppState {
         let url = library.record(for: written)?.bundleURL ?? written
         selection = url
         return url
-    }
-
-    /// Every bundle this build writes carries this build's engine version. `BundleWriter` mirrors `config.engineVersion`
-    /// into `MADEngineVersion`, so rewriting a stale shortcut with its stored config would leave it stale forever.
-    private static func stamped(_ config: ShortcutConfig) -> ShortcutConfig {
-        var config = config
-        config.engineVersion = ShortcutConfig.currentEngineVersion
-        return config
     }
 }

@@ -72,7 +72,7 @@ struct TargetSection: View {
         panel.allowedContentTypes = [.applicationBundle]
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         guard panel.runModal() == .OK, let url = panel.url,
-              let identifier = Bundle(url: url)?.bundleIdentifier else { return }
+              let identifier = InstalledApps.infoDictionary(ofAppAt: url)?["CFBundleIdentifier"] as? String else { return }
         draft.targetPath = url.path
         draft.targetBundleIdentifier = identifier
     }
@@ -82,6 +82,7 @@ struct LaunchSection: View {
     @Binding var draft: ShortcutConfig
 
     var body: some View {
+        let defaultPath = ShortcutConfig.defaultDataPath(forSlug: draft.slug, home: FileManager.default.homeDirectoryForCurrentUser)
         Section("Launch") {
             Picker("Launch mode", selection: $draft.launchMode) {
                 Text("Dock Shortcut").tag(LaunchMode.dockShortcut)
@@ -94,10 +95,10 @@ struct LaunchSection: View {
             }
             LabeledContent("Data folder") {
                 HStack {
-                    Text(draft.dataPath ?? ShortcutConfig.defaultDataPath(forSlug: draft.slug, home: FileManager.default.homeDirectoryForCurrentUser))
+                    Text(draft.dataPath ?? defaultPath)
                         .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
                     Button("Choose…") { chooseDataFolder() }
-                    if draft.dataPath != nil { Button("Default") { draft.dataPath = nil } }
+                    if draft.dataPath != nil, draft.dataPath != defaultPath { Button("Default") { draft.dataPath = nil } }
                 }
             }
             .disabled(draft.dataMode == .disabled)
