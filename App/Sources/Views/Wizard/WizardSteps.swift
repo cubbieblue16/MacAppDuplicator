@@ -70,7 +70,7 @@ struct TargetStep: View {
             selection = model.targetURL
         }
         .onChange(of: selection) { _, url in
-            if let url { model.selectTarget(url) }
+            if let url, url != model.targetURL { model.selectTarget(url) }
         }
     }
 

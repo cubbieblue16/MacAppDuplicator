@@ -24,10 +24,15 @@ final class WizardModel {
     private(set) var preview: LaunchPlanPreview?
     private(set) var previewError: String?
     var isCreating = false
+    var createError: String?
 
     /// The last name this model filled in itself. A name still equal to it was not typed by the user, so picking
     /// another target may replace it.
     private var suggestedName = ""
+
+    /// True while `launchMode` is System Launch only because a protected target forced it, so a later unprotected
+    /// target can restore the default.
+    private var launchModeWasForced = false
 
     init(prefillTarget: URL? = nil) {
         if let prefillTarget {
@@ -64,7 +69,13 @@ final class WizardModel {
                 name = "\(app.name) Copy"
                 suggestedName = name
             }
-            if requiresSystemLaunch { launchMode = .systemLaunch }
+            if requiresSystemLaunch {
+                launchMode = .systemLaunch
+                launchModeWasForced = true
+            } else if launchModeWasForced {
+                launchMode = .dockShortcut
+                launchModeWasForced = false
+            }
         } catch {
             inspected = nil
             inspectError = error.localizedDescription
@@ -103,10 +114,7 @@ final class WizardModel {
     /// Previews the plan the shortcut will actually run. `makeConfig()` leaves a default data folder as nil and
     /// `ShortcutBuilder` resolves it at write time; the planner would otherwise report "data separation skipped".
     func refreshPreview() {
-        var config = makeConfig()
-        if config.dataMode != .disabled, config.dataPath == nil {
-            config.dataPath = ShortcutConfig.defaultDataPath(forSlug: config.slug, home: FileManager.default.homeDirectoryForCurrentUser)
-        }
+        let config = makeConfig().resolvingDefaultDataPath(home: FileManager.default.homeDirectoryForCurrentUser)
         do {
             preview = try LaunchPlanPreview.make(config: config, bundleURL: nil)
             previewError = nil

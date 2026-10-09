@@ -28,6 +28,9 @@ struct NewShortcutWizard: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             HStack {
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                if let error = model.createError {
+                    Label(error, systemImage: "xmark.octagon").foregroundStyle(.red).font(.caption).lineLimit(2)
+                }
                 Spacer()
                 if model.step != .kind {
                     Button("Back") { model.back() }.disabled(model.isCreating)
@@ -59,10 +62,20 @@ struct NewShortcutWizard: View {
 
     private func create() {
         model.isCreating = true
+        model.createError = nil
         Task {
             let url = await appState.create(config: model.makeConfig())
             model.isCreating = false
-            if url != nil { dismiss() }
+            if url != nil {
+                dismiss()
+            } else {
+                if let error = appState.pendingError {
+                    model.createError = error.context.isEmpty ? error.message : "\(error.context): \(error.message)"
+                } else {
+                    model.createError = "Could not create the shortcut."
+                }
+                appState.pendingError = nil
+            }
         }
     }
 }

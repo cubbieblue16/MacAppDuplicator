@@ -18,6 +18,17 @@ final class WizardModelTests: XCTestCase {
         try FileManager.default.removeItem(at: dir)
     }
 
+    func testLaunchModeResetsWhenNewTargetIsUnprotected() throws {
+        let plain = try writeFakeTarget(named: "Plain", bundleIdentifier: "com.example.plain", version: "1.0", in: dir)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: plain.appending(path: "Contents/MacOS/Plain").path)
+        let model = WizardModel(prefillTarget: target)
+        XCTAssertEqual(model.launchMode, .systemLaunch)
+        model.selectTarget(plain)
+        XCTAssertNotNil(model.inspected)
+        XCTAssertFalse(model.requiresSystemLaunch)
+        XCTAssertEqual(model.launchMode, .dockShortcut)
+    }
+
     func testInitialStateWithoutPrefill() {
         let model = WizardModel()
         XCTAssertEqual(model.step, .kind)

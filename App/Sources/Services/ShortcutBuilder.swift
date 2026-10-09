@@ -93,11 +93,8 @@ struct ShortcutBuilder {
     /// Every bundle this build writes carries this build's engine version; `BundleWriter` mirrors it into
     /// `MADEngineVersion`, so rewriting a stale shortcut with its stored config would otherwise leave it stale forever.
     private func write(config: ShortcutConfig, in directory: URL) throws -> URL {
-        var config = config
+        var config = config.resolvingDefaultDataPath(home: fileManager.homeDirectoryForCurrentUser)
         config.engineVersion = ShortcutConfig.currentEngineVersion
-        if config.dataMode != .disabled, config.dataPath == nil {
-            config.dataPath = ShortcutConfig.defaultDataPath(forSlug: config.slug, home: fileManager.homeDirectoryForCurrentUser)
-        }
         let targetURL = URL(fileURLWithPath: config.targetPath)
         guard fileManager.fileExists(atPath: targetURL.path) else { throw BuilderError.targetMissing(config.targetPath) }
         let app = try AppInspector().inspect(appAt: targetURL)
