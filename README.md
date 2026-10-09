@@ -49,7 +49,33 @@ Launcher events are logged to `~/Library/Logs/App Duplicator/<Name>.log` (rotate
 - Sandboxed native apps outside the supported families stay in their system container.
 - Web shell: no passkeys.
 
-## Phase 2 consumes
+## Phase 2 library app
+
+`MacAppDuplicator.app` is a SwiftUI library window over the shortcut bundles in `~/Applications/App Duplicator` (plus any folders added in Settings). There is no database: each shortcut's `Info.plist` `MADConfig` dictionary is the record.
+
+### Build and test
+
+```bash
+Tools/build-fixture.sh     # test fixture app, needed by the end-to-end test
+Tools/build-app.sh         # regenerates the Xcode project with xcodegen, embeds the release Launcher, prints the .app path
+Tools/test-app.sh          # MacAppDuplicatorTests (62 tests)
+```
+
+The Xcode project under `App/` is generated from `App/project.yml` and git-ignored. Requirements: macOS 26 or later on Apple silicon, Xcode 26 or later, `xcodegen` (`brew install xcodegen`).
+
+### What the app does
+
+- Sidebar of shortcuts grouped by kind, with target version, running indicator and a `Needs rebuild` badge when the embedded launcher is older than the app's.
+- New Shortcut wizard: pick an installed app (grid, search, drag-and-drop or Browse), name and icon (copied, custom file or generated tile), data mode, and a review step with the masked launch plan.
+- Editor for every `MADConfig` field: launch mode, data mode and folder, appearance, language, arguments, environment (secret-looking keys masked), icon.
+- Actions: Launch, Reveal in Finder, Regenerate, Duplicate, Export (with the quarantine-clearing command), Delete (Trash, optional data folder), Rebuild All.
+- Diagnostics sheet: resolved executable, argv, masked environment, warnings and the last 200 log lines, copyable.
+- Settings: output and library folders, signing identity (Ad-hoc or any Developer ID in the keychain), HOME-override symlink list.
+- Help → Known Limitations.
+
+Acceptance checklist: `docs/acceptance/phase2-library-app.md`.
+
+## Core API used by the app
 
 - `BundleWriter.write(config:app:launcherBinary:to:)`: creates `<Name>.app` in the target directory.
 - `Signer.sign(bundle:identity:)` and `Signer.arguments(bundle:identity:)`.
