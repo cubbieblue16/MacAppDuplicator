@@ -904,7 +904,7 @@ ARGS=(
 if [ -n "$IDENTITY" ]; then
   ARGS+=("CODE_SIGN_IDENTITY=$IDENTITY" "DEVELOPMENT_TEAM=4NQ2UVJ4EZ")
 fi
-xcodebuild "${ARGS[@]}" build | grep -E '^(\*\* BUILD|error:|warning: .*\.swift)' || true
+xcodebuild "${ARGS[@]}" build | { grep -E '^(\*\* BUILD|error:|warning: .*\.swift)' || true; }
 
 APP="$REPO/.build/DerivedData/Build/Products/$CONFIG/macOS App Duplicator.app"
 test -d "$APP"
@@ -927,7 +927,7 @@ xcodebuild \
   -configuration Debug \
   -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath .build/DerivedData \
-  test "$@" 2>&1 | grep -E 'Test Suite|Test Case.*(passed|failed)|error:|\*\* TEST' || true
+  test "$@" 2>&1 | { grep -E 'Test Suite|Test Case.*(passed|failed)|error:|\*\* TEST' || true; }
 ```
 
 Then `chmod +x Tools/build-app.sh Tools/test-app.sh`.

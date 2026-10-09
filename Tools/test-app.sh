@@ -11,4 +11,4 @@ xcodebuild \
   -configuration Debug \
   -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath .build/DerivedData \
-  test "$@" 2>&1 | grep -E 'Test Suite|Test Case.*(passed|failed)|error:|\*\* TEST' || true
+  test "$@" 2>&1 | { grep -E 'Test Suite|Test Case.*(passed|failed)|error:|\*\* TEST' || true; }
