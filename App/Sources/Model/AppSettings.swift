@@ -6,7 +6,9 @@ import Observation
 @MainActor
 @Observable
 final class AppSettings {
-    static let adHocIdentityName = "Ad-hoc"
+    /// Nonisolated so non-UI code (`SigningIdentities.defaultIdentity`) and nonisolated tests can read it;
+    /// an immutable String is Sendable, so this is safe from any isolation domain.
+    nonisolated static let adHocIdentityName = "Ad-hoc"
 
     private enum Key {
         static let outputFolder = "outputFolderPath"
