@@ -48,3 +48,16 @@ Launcher events are logged to `~/Library/Logs/App Duplicator/<Name>.log` (rotate
 - HOME override does not create a separate Keychain or macOS user.
 - Sandboxed native apps outside the supported families stay in their system container.
 - Web shell: no passkeys.
+
+## Phase 2 consumes
+
+- `BundleWriter.write(config:app:launcherBinary:to:)`: creates `<Name>.app` in the target directory.
+- `Signer.sign(bundle:identity:)` and `Signer.arguments(bundle:identity:)`.
+- `ShortcutConfig`: `init`, `plistDictionary()`, `init(plistDictionary:)`, `slug(for:)`, `bundleIdentifier(forSlug:)`, `defaultDataPath(forSlug:home:)`, `fileSystemName(for:)`.
+- `AppInspector.inspect(appAt:)` and `InspectedApp` (family, sandbox, platform-binary and launch-constraint flags, icon URL, `warnings`).
+- `DataSeparationPlanner.plan(app:config:baseEnvironment:shortcutBundleURL:)` for previews.
+- `HomeTreeBuilder`.
+- `SecretMasking.mask`.
+- The `Launcher` release binary at `.build/release/Launcher`, to embed as a resource.
+
+The Phase 3 insertion point for profiles is the doc comment on `DataSeparationPlanner.plan`.
