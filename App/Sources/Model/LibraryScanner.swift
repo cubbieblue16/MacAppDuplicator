@@ -45,8 +45,9 @@ struct LibraryScanner: Sendable {
         return result
     }
 
-    /// Reads one bundle. Throws `ScanError.notAShortcut` for apps without `MADConfig`, `LauncherError.configCorrupt`
-    /// for shortcuts whose config no longer decodes.
+    /// Reads one bundle. Throws `ScanError.notAShortcut` for apps without `MADConfig`, `ScanError.unreadableInfoPlist`
+    /// when Info.plist is missing or malformed, and whatever `ShortcutConfig(plistDictionary:)` throws when the
+    /// config no longer decodes.
     static func record(forBundleAt bundleURL: URL, fileManager: FileManager = .default) throws -> ShortcutRecord {
         let infoURL = bundleURL.appending(path: "Contents/Info.plist", directoryHint: .notDirectory)
         guard let data = fileManager.contents(atPath: infoURL.path),
@@ -64,9 +65,15 @@ struct LibraryScanner: Sendable {
 
         let targetURL = URL(fileURLWithPath: config.targetPath)
         let targetExists = fileManager.fileExists(atPath: targetURL.path)
+        // Read the target's Info.plist directly: `Bundle(url:)` caches one instance per path for the process lifetime,
+        // so a target updated while this app runs would keep reporting its old version. An unreadable plist means
+        // "version unknown", which is what nil expresses.
         var targetVersion: String?
-        if targetExists, let bundle = Bundle(url: targetURL) {
-            targetVersion = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let targetInfoURL = targetURL.appending(path: "Contents/Info.plist", directoryHint: .notDirectory)
+        if targetExists,
+           let targetInfoData = fileManager.contents(atPath: targetInfoURL.path),
+           let targetInfo = (try? PropertyListSerialization.propertyList(from: targetInfoData, format: nil)) as? [String: Any] {
+            targetVersion = targetInfo["CFBundleShortVersionString"] as? String
         }
 
         let modified = (try? fileManager.attributesOfItem(atPath: infoURL.path)[.modificationDate] as? Date) ?? .distantPast

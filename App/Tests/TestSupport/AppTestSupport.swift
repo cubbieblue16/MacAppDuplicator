@@ -3,7 +3,7 @@ import XCTest
 @testable import DuplicatorCore
 @testable import MacAppDuplicator
 
-/// A unique temp directory per test; removed by `removeTemporaryDirectory`.
+/// A unique temp directory per test; the test removes it in tearDown.
 func makeAppTemporaryDirectory() throws -> URL {
     let url = FileManager.default.temporaryDirectory.appending(path: "mad-app-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -59,7 +59,7 @@ func makeConfig(name: String = "Target Work", targetPath: String = "/Application
     )
 }
 
-/// Isolated UserDefaults for one test; call `removeSuite` in tearDown.
+/// Isolated UserDefaults for one test; call `removePersistentDomain(forName:)` with the suite in tearDown.
 func makeTestDefaults() -> (defaults: UserDefaults, suite: String) {
     let suite = "com.mikekuta.MacAppDuplicatorTests.\(UUID().uuidString)"
     return (UserDefaults(suiteName: suite)!, suite)
