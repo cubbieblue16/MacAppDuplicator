@@ -1,0 +1,46 @@
+import ArgumentParser
+import DuplicatorCore
+import Foundation
+
+func inspectApp(at path: String) throws -> InspectedApp {
+    try AppInspector().inspect(appAt: URL(filePath: path, directoryHint: .isDirectory))
+}
+
+func makeConfig(app: InspectedApp, options: ShortcutOptions) throws -> ShortcutConfig {
+    let name = options.name ?? app.name
+    let slug = ShortcutConfig.slug(for: name)
+
+    var environment: [String: String] = [:]
+    for entry in options.env {
+        guard let separator = entry.firstIndex(of: "="), separator != entry.startIndex else {
+            throw ValidationError("--env expects K=V: \(entry)")
+        }
+        environment[String(entry[..<separator])] = String(entry[entry.index(after: separator)...])
+    }
+
+    let dataMode = options.dataMode.dataMode
+    let dataPath: String?
+    if let explicit = options.dataPath {
+        dataPath = explicit
+    } else if dataMode == .auto || dataMode == .homeOverride {
+        dataPath = ShortcutConfig.defaultDataPath(forSlug: slug, home: FileManager.default.homeDirectoryForCurrentUser)
+    } else {
+        dataPath = nil
+    }
+
+    return ShortcutConfig(
+        kind: .app,
+        name: name,
+        slug: slug,
+        bundleIdentifier: ShortcutConfig.bundleIdentifier(forSlug: slug),
+        targetPath: app.bundleURL.path,
+        targetBundleIdentifier: app.bundleIdentifier,
+        launchMode: options.mode.launchMode,
+        dataMode: dataMode,
+        dataPath: dataPath,
+        environment: environment,
+        arguments: options.arg,
+        appearance: options.appearance.appearance,
+        languageCode: options.language
+    )
+}
