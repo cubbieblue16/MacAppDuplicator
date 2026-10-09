@@ -32,7 +32,7 @@ final class ShortcutConfigTests: XCTestCase {
         let dictionary = makeConfig().plistDictionary()
         XCTAssertEqual(Set(dictionary.keys), [
             "kind", "name", "slug", "bundleIdentifier", "targetPath", "targetBundleIdentifier", "launchMode", "dataMode",
-            "dataPath", "environment", "arguments", "appearance", "languageCode", "eraseOnQuit", "menuBarIcon", "engineVersion",
+            "dataPath", "environment", "arguments", "appearance", "languageCode", "eraseOnQuit", "menuBarIcon", "iconMode", "engineVersion",
         ])
         XCTAssertEqual(dictionary["kind"] as? String, "app")
         XCTAssertEqual(dictionary["launchMode"] as? String, "systemLaunch")
@@ -108,5 +108,48 @@ final class ShortcutConfigTests: XCTestCase {
         XCTAssertEqual(ShortcutConfig.fileSystemName(for: "Claude Work"), "Claude Work")
         XCTAssertEqual(ShortcutConfig.fileSystemName(for: "Work/Personal: 2"), "Work-Personal- 2")
         XCTAssertEqual(ShortcutConfig.fileSystemName(for: "   "), "Shortcut")
+    }
+
+    func testIconFieldsRoundTrip() throws {
+        var config = makeConfig()
+        config.iconMode = .custom
+        config.customIconPath = "/Users/test/Pictures/work.png"
+        config.homeSymlinkEntries = ["Desktop", ".ssh"]
+        let decoded = try ShortcutConfig(plistDictionary: config.plistDictionary())
+        XCTAssertEqual(decoded, config)
+        XCTAssertEqual(decoded.iconMode, .custom)
+        XCTAssertEqual(decoded.customIconPath, "/Users/test/Pictures/work.png")
+        XCTAssertEqual(decoded.homeSymlinkEntries, ["Desktop", ".ssh"])
+    }
+
+    func testEngineVersion1PlistWithoutIconFieldsDecodesWithDefaults() throws {
+        // A Phase 1 MADConfig dictionary: no iconMode, customIconPath or homeSymlinkEntries keys.
+        let legacy: [String: Any] = [
+            "kind": "app", "name": "Claude Work", "slug": "claude-work",
+            "bundleIdentifier": "com.mikekuta.appduplicator.claude-work",
+            "targetPath": "/Applications/Claude.app", "targetBundleIdentifier": "com.anthropic.claudefordesktop",
+            "launchMode": "dockShortcut", "dataMode": "auto",
+            "environment": [String: String](), "arguments": [String](),
+            "appearance": "system", "eraseOnQuit": false, "menuBarIcon": false, "engineVersion": 1,
+        ]
+        let config = try ShortcutConfig(plistDictionary: legacy)
+        XCTAssertEqual(config.iconMode, .copied)
+        XCTAssertNil(config.customIconPath)
+        XCTAssertNil(config.homeSymlinkEntries)
+        XCTAssertEqual(config.name, "Claude Work")
+    }
+
+    func testDefaultIconModeIsCopiedAndNilOptionalsAreOmitted() {
+        let config = makeConfig()
+        XCTAssertEqual(config.iconMode, .copied)
+        let dictionary = config.plistDictionary()
+        XCTAssertEqual(dictionary["iconMode"] as? String, "copied")
+        XCTAssertNil(dictionary["customIconPath"])
+        XCTAssertNil(dictionary["homeSymlinkEntries"])
+    }
+
+    func testConfigIsHashable() {
+        let set: Set<ShortcutConfig> = [makeConfig(), makeConfig()]
+        XCTAssertEqual(set.count, 1)
     }
 }

@@ -1,7 +1,7 @@
 import Foundation
 
 /// One shortcut's configuration (spec §3.1). Stored in the shortcut's own Info.plist under `MADConfig` (spec §2).
-public struct ShortcutConfig: Codable, Equatable, Sendable {
+public struct ShortcutConfig: Codable, Hashable, Sendable {
     /// Engine version written by this build; mirrored at Info.plist top level as `MADEngineVersion`.
     public static let currentEngineVersion = 1
     /// Info.plist key that holds `plistDictionary()`.
@@ -26,6 +26,12 @@ public struct ShortcutConfig: Codable, Equatable, Sendable {
     public var languageCode: String?
     public var eraseOnQuit: Bool
     public var menuBarIcon: Bool
+    /// Icon source for the shortcut bundle (spec §7). Default `.copied`.
+    public var iconMode: IconMode
+    /// Image file converted to the bundle icon when `iconMode == .custom` (PNG, JPEG, TIFF or ICNS).
+    public var customIconPath: String?
+    /// HOME-override symlink list override; nil means `HomeTreeBuilder.defaultSymlinkEntries` (spec §4.3, §7 Settings).
+    public var homeSymlinkEntries: [String]?
     public var engineVersion: Int
 
     public init(
@@ -44,6 +50,9 @@ public struct ShortcutConfig: Codable, Equatable, Sendable {
         languageCode: String? = nil,
         eraseOnQuit: Bool = false,
         menuBarIcon: Bool = false,
+        iconMode: IconMode = .copied,
+        customIconPath: String? = nil,
+        homeSymlinkEntries: [String]? = nil,
         engineVersion: Int = ShortcutConfig.currentEngineVersion
     ) {
         self.kind = kind
@@ -61,7 +70,40 @@ public struct ShortcutConfig: Codable, Equatable, Sendable {
         self.languageCode = languageCode
         self.eraseOnQuit = eraseOnQuit
         self.menuBarIcon = menuBarIcon
+        self.iconMode = iconMode
+        self.customIconPath = customIconPath
+        self.homeSymlinkEntries = homeSymlinkEntries
         self.engineVersion = engineVersion
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, name, slug, bundleIdentifier, targetPath, targetBundleIdentifier, launchMode, dataMode, dataPath
+        case environment, arguments, appearance, languageCode, eraseOnQuit, menuBarIcon
+        case iconMode, customIconPath, homeSymlinkEntries, engineVersion
+    }
+
+    /// Decodes Phase 1 dictionaries too: `iconMode`, `customIconPath` and `homeSymlinkEntries` are optional on input.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try container.decode(ShortcutKind.self, forKey: .kind)
+        name = try container.decode(String.self, forKey: .name)
+        slug = try container.decode(String.self, forKey: .slug)
+        bundleIdentifier = try container.decode(String.self, forKey: .bundleIdentifier)
+        targetPath = try container.decode(String.self, forKey: .targetPath)
+        targetBundleIdentifier = try container.decode(String.self, forKey: .targetBundleIdentifier)
+        launchMode = try container.decode(LaunchMode.self, forKey: .launchMode)
+        dataMode = try container.decode(DataMode.self, forKey: .dataMode)
+        dataPath = try container.decodeIfPresent(String.self, forKey: .dataPath)
+        environment = try container.decode([String: String].self, forKey: .environment)
+        arguments = try container.decode([String].self, forKey: .arguments)
+        appearance = try container.decode(Appearance.self, forKey: .appearance)
+        languageCode = try container.decodeIfPresent(String.self, forKey: .languageCode)
+        eraseOnQuit = try container.decode(Bool.self, forKey: .eraseOnQuit)
+        menuBarIcon = try container.decode(Bool.self, forKey: .menuBarIcon)
+        iconMode = try container.decodeIfPresent(IconMode.self, forKey: .iconMode) ?? .copied
+        customIconPath = try container.decodeIfPresent(String.self, forKey: .customIconPath)
+        homeSymlinkEntries = try container.decodeIfPresent([String].self, forKey: .homeSymlinkEntries)
+        engineVersion = try container.decode(Int.self, forKey: .engineVersion)
     }
 
     /// The `MADConfig` dictionary. Optional fields that are nil are omitted (property lists have no null).

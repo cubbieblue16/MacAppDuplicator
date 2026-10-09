@@ -54,7 +54,9 @@ public struct LaunchPreparer {
         }
         if let home = plan.homeOverridePath {
             do {
-                let effectiveHome = try HomeTreeBuilder(fileManager: fileManager, realHome: realHome).materialize(at: home)
+                let symlinkEntries = config.homeSymlinkEntries ?? HomeTreeBuilder.defaultSymlinkEntries
+                let effectiveHome = try HomeTreeBuilder(fileManager: fileManager, realHome: realHome, symlinkEntries: symlinkEntries)
+                    .materialize(at: home)
                 plan = plan.applyingEffectiveHome(effectiveHome)
             } catch {
                 throw LauncherError.dataPathNotWritable(home.path)

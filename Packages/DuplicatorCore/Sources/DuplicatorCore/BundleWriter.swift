@@ -19,6 +19,13 @@ public struct BundleWriter {
     /// `launcherBinary` is copied to `Contents/MacOS/<Name>`; the target's icon file is copied (never symlinked)
     /// to `Contents/Resources/AppIcon.icns`.
     public func write(config: ShortcutConfig, app: InspectedApp, launcherBinary: URL, to directory: URL) throws -> URL {
+        try write(config: config, app: app, launcherBinary: launcherBinary, iconFile: app.iconFileURL, to: directory)
+    }
+
+    /// Same as `write(config:app:launcherBinary:to:)` with an explicit icon: `iconFile` (any `.icns`, or nil for no icon)
+    /// is copied to `Contents/Resources/AppIcon.icns` instead of the target's icon. The library app passes the result of
+    /// its icon mode (copied / custom / generated) here.
+    public func write(config: ShortcutConfig, app: InspectedApp, launcherBinary: URL, iconFile: URL?, to directory: URL) throws -> URL {
         let bundleName = ShortcutConfig.fileSystemName(for: config.name)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         let destination = directory.appending(path: bundleName + ".app", directoryHint: .isDirectory)
@@ -35,7 +42,7 @@ public struct BundleWriter {
             try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
 
             var hasIcon = false
-            if let icon = app.iconFileURL, fileManager.fileExists(atPath: icon.path) {
+            if let icon = iconFile, fileManager.fileExists(atPath: icon.path) {
                 // Data(contentsOf:) follows symlinks, so the bundle always gets a regular-file copy.
                 try Data(contentsOf: icon).write(to: resources.appending(path: "AppIcon.icns", directoryHint: .notDirectory))
                 hasIcon = true

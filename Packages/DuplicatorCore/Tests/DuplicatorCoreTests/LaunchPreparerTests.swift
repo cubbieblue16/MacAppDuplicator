@@ -136,4 +136,18 @@ final class LaunchPreparerTests: XCTestCase {
         XCTAssertFalse(fileManager.fileExists(atPath: data.path))
         XCTAssertEqual(try fileManager.contentsOfDirectory(atPath: fixture.root.path).sorted(), before)
     }
+
+    func testHomeOverrideUsesConfigSymlinkEntries() throws {
+        let fixture = try makeFixture()
+        try fileManager.createDirectory(at: fixture.realHome.appending(path: "Desktop", directoryHint: .isDirectory), withIntermediateDirectories: true)
+        let home = fixture.root.appending(path: "home", directoryHint: .isDirectory)
+        var shortcut = config(for: fixture, dataMode: .homeOverride, dataPath: home.path)
+        shortcut.homeSymlinkEntries = ["Desktop"]
+
+        _ = try prepare(fixture, ["MADConfig": shortcut.plistDictionary()])
+
+        let desktop = home.appending(path: "Desktop", directoryHint: .notDirectory)
+        XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: desktop.path), fixture.realHome.appending(path: "Desktop").path)
+        XCTAssertFalse(fileManager.fileExists(atPath: home.appending(path: "Documents").path), "Documents is not in the config's list")
+    }
 }

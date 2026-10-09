@@ -145,4 +145,35 @@ final class BundleWriterTests: XCTestCase {
         XCTAssertEqual(try entries(in: fixture.output), ["Work-Personal.app"])
         XCTAssertEqual(try readPlist(bundle)["CFBundleName"] as? String, "Work/Personal")
     }
+
+    func testExplicitIconFileWinsOverTargetIcon() throws {
+        let fixture = try makeFixture(withIcon: true)
+        try fileManager.createDirectory(at: fixture.output, withIntermediateDirectories: true)
+        let custom = fixture.output.appending(path: "custom.icns", directoryHint: .notDirectory)
+        try Data([9, 9, 9, 9]).write(to: custom)
+
+        let bundle = try BundleWriter().write(config: config(), app: fixture.app, launcherBinary: fixture.launcher, iconFile: custom, to: fixture.output)
+
+        let icon = bundle.appending(path: "Contents/Resources/AppIcon.icns", directoryHint: .notDirectory)
+        XCTAssertEqual(try Data(contentsOf: icon), Data([9, 9, 9, 9]))
+        let info = try readPlist(bundle)
+        XCTAssertEqual(info["CFBundleIconFile"] as? String, "AppIcon")
+    }
+
+    func testNilIconFileWritesNoIconEvenWhenTargetHasOne() throws {
+        let fixture = try makeFixture(withIcon: true)
+
+        let bundle = try BundleWriter().write(config: config(), app: fixture.app, launcherBinary: fixture.launcher, iconFile: nil, to: fixture.output)
+
+        XCTAssertFalse(fileManager.fileExists(atPath: bundle.appending(path: "Contents/Resources/AppIcon.icns").path))
+        let info = try readPlist(bundle)
+        XCTAssertNil(info["CFBundleIconFile"])
+    }
+
+    func testFourArgumentWriteStillCopiesTargetIcon() throws {
+        let fixture = try makeFixture(withIcon: true)
+        let bundle = try BundleWriter().write(config: config(), app: fixture.app, launcherBinary: fixture.launcher, to: fixture.output)
+        let icon = bundle.appending(path: "Contents/Resources/AppIcon.icns", directoryHint: .notDirectory)
+        XCTAssertEqual(try Data(contentsOf: icon), Data([1, 2, 3]))
+    }
 }
