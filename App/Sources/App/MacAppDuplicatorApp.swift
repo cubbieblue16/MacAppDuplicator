@@ -69,6 +69,10 @@ struct MacAppDuplicatorApp: App {
                 KnownLimitationsMenuItem()
             }
         }
+        // Under the unit-test host no window may open or be restored: the main window's frame autosave wrote the
+        // real com.mikekuta.MacAppDuplicator defaults domain on every test run (re-review Minor 7).
+        .defaultLaunchBehavior(Self.isTestHost ? .suppressed : .automatic)
+        .restorationBehavior(Self.isTestHost ? .disabled : .automatic)
 
         Settings {
             SettingsView()
@@ -79,6 +83,8 @@ struct MacAppDuplicatorApp: App {
             KnownLimitationsView()
                 .frame(minWidth: 520, minHeight: 420)
         }
+        .defaultLaunchBehavior(Self.isTestHost ? .suppressed : .automatic)
+        .restorationBehavior(Self.isTestHost ? .disabled : .automatic)
     }
 
     /// True for the process that hosts the test bundle (`LaunchEnvironment.isTestHost`).

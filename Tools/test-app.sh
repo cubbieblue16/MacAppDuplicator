@@ -16,6 +16,14 @@ if [ -z "$XCODEGEN" ]; then
 fi
 "$XCODEGEN" generate --spec App/project.yml --project App --quiet
 swift build -c release --product Launcher
+# makeTestDefaults() suites leave one empty com.mikekuta.MacAppDuplicatorTests.<UUID>.plist each in
+# ~/Library/Preferences (re-review Minor 7). Delete exactly those on every exit, pass or fail. Scope: that one
+# directory, that one name pattern, regular files only, no recursion.
+cleanup_test_defaults() {
+  find "$HOME/Library/Preferences" -maxdepth 1 -type f -name 'com.mikekuta.MacAppDuplicatorTests.*.plist' -delete \
+    || echo "warning: could not remove MacAppDuplicatorTests defaults residue from ~/Library/Preferences" >&2
+}
+trap cleanup_test_defaults EXIT
 xcodebuild \
   -project App/MacAppDuplicator.xcodeproj \
   -scheme MacAppDuplicator \
