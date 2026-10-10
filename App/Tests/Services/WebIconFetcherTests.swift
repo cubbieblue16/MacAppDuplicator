@@ -67,6 +67,45 @@ final class WebIconHTMLParserTests: XCTestCase {
         XCTAssertTrue(try fetchable("http://192.168.1.1/icon.png", pageHost: "192.168.1.1"), "the page's own host is the user's choice")
     }
 
+    func testAlternateIPSpellingsAreRecognisedAsLoopbackOrPrivate() throws {
+        func blocked(_ host: String) -> Bool { WebIconHTMLParser.isLoopbackOrPrivate(host: host) }
+        for host in ["127.1", "127.0.1", "0x7f000001", "0x7f.0.0.1", "2130706433", "017700000001", "0177.0.0.1", "10.1", "0xa000001",
+                     "3232235777", "0", "0.0.0.0", "0.1.2.3", "100.64.0.1", "100.127.255.254", "169.254.169.254", "224.0.0.1", "255.255.255.255",
+                     "[::1]", "::1", "::", "::ffff:127.0.0.1", "[::ffff:127.0.0.1]", "::ffff:7f00:1", "::ffff:10.0.0.1", "::ffff:192.168.1.1",
+                     "::127.0.0.1", "64:ff9b::7f00:1", "fe80::1", "fe80::1%en0", "febf::1", "fc00::1", "fd12:3456::1", "ff02::1",
+                     "localhost.", "LOCALHOST", "printer.local."] {
+            XCTAssertTrue(blocked(host), "\(host) must count as loopback or private")
+        }
+        for host in ["8.8.8.8", "1.1.1.1", "100.63.255.255", "100.128.0.1", "172.15.0.1", "172.32.0.1", "169.253.0.1", "223.255.255.255",
+                     "::ffff:8.8.8.8", "2001:4860:4860::8888", "2606:4700::1111", "fec0::1", "64:ff9b::808:808",
+                     "cdn.example.test", "10.example.test", "127.example.test", "0x7f.example.test"] {
+            XCTAssertFalse(blocked(host), "\(host) is a public address or a name")
+        }
+        XCTAssertFalse(WebIconHTMLParser.isFetchableIconURL(try XCTUnwrap(URL(string: "http://127.1/i.png")), pageHost: "www.example.test"))
+        XCTAssertFalse(WebIconHTMLParser.isFetchableIconURL(try XCTUnwrap(URL(string: "http://[::ffff:127.0.0.1]/i.png")), pageHost: "www.example.test"))
+        XCTAssertFalse(WebIconHTMLParser.isFetchableIconURL(try XCTUnwrap(URL(string: "http://2130706433/i.png")), pageHost: "www.example.test"))
+    }
+
+    func testRedirectsAreCheckedLikeDeclaredIcons() throws {
+        func allowed(_ target: String, from original: String) throws -> Bool {
+            WebIconHTMLParser.isRedirectAllowed(to: try XCTUnwrap(URL(string: target)), from: URL(string: original))
+        }
+        XCTAssertTrue(try allowed("https://cdn.example.test/i.png", from: "https://www.example.test/"))
+        XCTAssertFalse(try allowed("http://192.168.1.1/", from: "https://attacker.example/i.png"))
+        XCTAssertFalse(try allowed("http://169.254.169.254/latest/meta-data/", from: "https://attacker.example/i.png"))
+        XCTAssertFalse(try allowed("http://localhost:8080/", from: "https://attacker.example/i.png"))
+        XCTAssertFalse(try allowed("http://[::ffff:127.0.0.1]/", from: "https://attacker.example/i.png"))
+        XCTAssertFalse(try allowed("ftp://cdn.example.test/i.png", from: "https://www.example.test/"))
+        XCTAssertTrue(try allowed("http://192.168.1.1/other", from: "http://192.168.1.1/"), "a redirect within the user's own host is fine")
+        XCTAssertFalse(try allowed("http://192.168.1.2/", from: "http://192.168.1.1/"), "a different private host is not")
+    }
+
+    func testTheFetcherSessionRefusesUnfetchableRedirects() throws {
+        let session = URLSessionWebIconFetcher.makeSession()
+        defer { session.invalidateAndCancel() }
+        XCTAssertTrue(session.delegate is RedirectGuard)
+    }
+
     func testUnusableLinksAreSkipped() {
         let html = """
         <link rel="mask-icon" href="/mask.svg">

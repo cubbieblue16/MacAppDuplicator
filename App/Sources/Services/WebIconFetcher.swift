@@ -1,6 +1,8 @@
 import CoreGraphics
+import Darwin
 import Foundation
 import ImageIO
+import Network
 import os
 
 /// Finds the icon of a web page for a Web App shortcut (spec §7). Best effort: nil means "no usable icon", and the
@@ -90,21 +92,51 @@ enum WebIconHTMLParser {
         return !isLoopbackOrPrivate(host: host)
     }
 
+    /// True when `rawHost` names this machine or a non-public network: `localhost`, `.local`, and any IP literal in a
+    /// loopback, private, link-local, carrier-grade NAT, unspecified or multicast range. IP literals are parsed the way
+    /// the system resolver does, so legacy spellings (`127.1`, `0x7f000001`, `2130706433`) and IPv4-mapped IPv6
+    /// (`::ffff:127.0.0.1`) are recognised, not just the dotted-quad form.
     static func isLoopbackOrPrivate(host rawHost: String) -> Bool {
         var host = rawHost.lowercased()
         if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
+        while host.hasSuffix(".") { host.removeLast() }
         if host == "localhost" || host.hasSuffix(".localhost") || host.hasSuffix(".local") { return true }
-        if host == "::1" || host == "::" || host == "0.0.0.0" { return true }
         if host.contains(":") {
-            return host.hasPrefix("fc") || host.hasPrefix("fd") || host.hasPrefix("fe80")
+            let unscoped = host.split(separator: "%", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? host
+            guard let address = IPv6Address(unscoped) else { return false }
+            return isNonPublic(address.rawValue.map { $0 })
         }
-        let parts = host.split(separator: ".", omittingEmptySubsequences: false).compactMap { Int($0) }
-        guard parts.count == 4 else { return false }
-        switch (parts[0], parts[1]) {
-        case (127, _), (10, _), (192, 168), (169, 254): return true
-        case (172, 16...31): return true
-        default: return false
+        var legacy = in_addr()
+        guard inet_aton(host, &legacy) != 0 else { return false }
+        return isNonPublic(withUnsafeBytes(of: legacy.s_addr) { Array($0) })
+    }
+
+    /// `bytes` is a 4-byte IPv4 or 16-byte IPv6 address in network order.
+    private static func isNonPublic(_ bytes: [UInt8]) -> Bool {
+        if bytes.count == 4 {
+            switch (bytes[0], bytes[1]) {
+            case (0, _), (10, _), (127, _), (169, 254), (192, 168): return true
+            case (100, 64...127), (172, 16...31): return true
+            case (224...255, _): return true
+            default: return false
+            }
         }
+        guard bytes.count == 16 else { return true }
+        let leading = bytes[0..<12]
+        // IPv4-mapped (::ffff:a.b.c.d), IPv4-compatible (::a.b.c.d, also :: and ::1) and NAT64 (64:ff9b::a.b.c.d) carry an IPv4 address.
+        let mapped = leading.elementsEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff])
+        let compatible = leading.allSatisfy { $0 == 0 }
+        let nat64 = leading.elementsEqual([0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0])
+        if mapped || nat64 { return isNonPublic(Array(bytes[12..<16])) }
+        if compatible { return true }
+        // fc00::/7 unique local, fe80::/10 link local, ff00::/8 multicast.
+        return bytes[0] & 0xfe == 0xfc || (bytes[0] == 0xfe && bytes[1] & 0xc0 == 0x80) || bytes[0] == 0xff
+    }
+
+    /// Whether a redirect from `original` to `target` may be followed: the same rule as for a declared icon, with the
+    /// host of the request that started the chain counting as the user's own.
+    static func isRedirectAllowed(to target: URL, from original: URL?) -> Bool {
+        isFetchableIconURL(target, pageHost: original?.host(percentEncoded: false))
     }
 
     private static func resolve(_ href: String, against pageURL: URL) -> URL? {
@@ -112,6 +144,25 @@ enum WebIconHTMLParser {
         guard !cleaned.isEmpty, let url = URL(string: cleaned, relativeTo: pageURL)?.absoluteURL,
               let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http", url.host != nil else { return nil }
         return url
+    }
+}
+
+/// Cancels a redirect to a loopback or private-network address, so a public page or icon address cannot bounce the
+/// request to another machine on the user's network. A refused redirect ends the request with the 3xx response, which
+/// `get()` treats as "no icon".
+final class RedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+        guard let target = request.url, WebIconHTMLParser.isRedirectAllowed(to: target, from: task.originalRequest?.url) else {
+            completionHandler(nil)
+            return
+        }
+        completionHandler(request)
     }
 }
 
@@ -136,7 +187,7 @@ struct URLSessionWebIconFetcher: WebIconFetching {
         configuration.timeoutIntervalForResource = requestTimeout * 2
         configuration.httpCookieStorage = nil
         configuration.urlCache = nil
-        return URLSession(configuration: configuration)
+        return URLSession(configuration: configuration, delegate: RedirectGuard(), delegateQueue: nil)
     }
 
     func fetchIcon(for pageURL: URL) async throws -> Data? {
