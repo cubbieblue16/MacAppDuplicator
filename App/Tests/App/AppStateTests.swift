@@ -101,6 +101,53 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(state.selection)
     }
 
+    func testDeleteRefusesADataFolderSharedWithAnotherShortcutAndKeepsBoth() async throws {
+        let shared = dir.appending(path: "shared", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: shared, withIntermediateDirectories: true)
+        var first = config(name: "First")
+        first.dataMode = .homeOverride
+        first.dataPath = shared.path
+        var second = config(name: "Second")
+        second.dataMode = .homeOverride
+        second.dataPath = shared.path
+        let created = await state.create(config: first)
+        _ = await state.create(config: second)
+        let record = try XCTUnwrap(library.record(for: try XCTUnwrap(created)))
+
+        let trashed = await state.delete(record, removeData: true)
+
+        XCTAssertEqual(trashed, [])
+        XCTAssertEqual(state.pendingError?.context, "Could not delete shortcut")
+        XCTAssertEqual(library.records.map(\.name), ["First", "Second"])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: shared.path))
+        guard case .unavailable = state.dataFolderDeletionOption(for: record) else { return XCTFail("a shared data folder must not be offered") }
+    }
+
+    func testDataFolderDeletionIsOfferedOnlyForAnExistingSafeFolder() async throws {
+        let existing = dir.appending(path: "data", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: true)
+        func record(_ name: String, mode: DataMode, path: URL?) async throws -> ShortcutRecord {
+            var c = config(name: name)
+            c.dataMode = mode
+            c.dataPath = path?.path
+            let created = await state.create(config: c)
+            return try XCTUnwrap(library.record(for: try XCTUnwrap(created)))
+        }
+
+        let disabled = try await record("Disabled", mode: .disabled, path: nil)
+        let missing = try await record("Missing", mode: .homeOverride, path: dir.appending(path: "missing"))
+        let unsafe = try await record("Unsafe", mode: .homeOverride, path: out)
+        let safe = try await record("Safe", mode: .homeOverride, path: existing)
+
+        guard case .unavailable = state.dataFolderDeletionOption(for: disabled) else { return XCTFail("Disabled mode has no data folder to trash") }
+        guard case .unavailable = state.dataFolderDeletionOption(for: missing) else { return XCTFail("a missing folder is not offered") }
+        guard case .unavailable(let note) = state.dataFolderDeletionOption(for: unsafe) else { return XCTFail("the output folder is refused") }
+        XCTAssertTrue(note.contains("library folder"), note)
+        guard case .available(let folder, let outsideDataRoot) = state.dataFolderDeletionOption(for: safe) else { return XCTFail("a safe folder is offered") }
+        XCTAssertEqual(folder.lastPathComponent, "data")
+        XCTAssertTrue(outsideDataRoot, "a temp folder is outside ~/Library/Application Support/App Duplicator")
+    }
+
     func testRebuildAllRewritesOnlyStaleRecords() async throws {
         _ = await state.create(config: config())
         // A real stale shortcut carries the old engine version in its MADConfig as well as in MADEngineVersion.

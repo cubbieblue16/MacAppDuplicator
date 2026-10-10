@@ -150,7 +150,9 @@ struct IdentityStep: View {
 }
 
 struct DataStep: View {
+    @Environment(AppState.self) private var appState
     @Bindable var model: WizardModel
+    @State private var dataFolderError: String?
 
     private var slug: String { ShortcutConfig.slug(for: model.name.trimmingCharacters(in: .whitespaces)) }
 
@@ -169,10 +171,18 @@ struct DataStep: View {
                     Text(model.dataPath ?? ShortcutConfig.defaultDataPath(forSlug: slug, home: FileManager.default.homeDirectoryForCurrentUser))
                         .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
                     Button("Choose…") { choose() }
-                    if model.dataPath != nil { Button("Default") { model.dataPath = nil } }
+                    if model.dataPath != nil {
+                        Button("Default") {
+                            model.dataPath = nil
+                            dataFolderError = nil
+                        }
+                    }
                 }
             }
             .disabled(model.dataMode == .disabled)
+            if let dataFolderError {
+                Label(dataFolderError, systemImage: "xmark.octagon").font(.caption).foregroundStyle(.red)
+            }
             Text("Default: ~/Library/Application Support/App Duplicator/\(slug)").font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -189,7 +199,15 @@ struct DataStep: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
-        if panel.runModal() == .OK, let url = panel.url { model.dataPath = url.path }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        // The same guard delete uses (final review I1); a new shortcut has no bundle of its own to exclude yet.
+        switch appState.validateDataPath(url.path, targetPath: model.targetURL?.path ?? "", excluding: nil) {
+        case .success:
+            model.dataPath = url.path
+            dataFolderError = nil
+        case .failure(let error):
+            dataFolderError = error.localizedDescription
+        }
     }
 }
 

@@ -79,7 +79,10 @@ struct TargetSection: View {
 }
 
 struct LaunchSection: View {
+    @Environment(AppState.self) private var appState
     @Binding var draft: ShortcutConfig
+    let record: ShortcutRecord
+    @State private var dataFolderError: String?
 
     var body: some View {
         let defaultPath = ShortcutConfig.defaultDataPath(forSlug: draft.slug, home: FileManager.default.homeDirectoryForCurrentUser)
@@ -98,10 +101,18 @@ struct LaunchSection: View {
                     Text(draft.dataPath ?? defaultPath)
                         .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
                     Button("Choose…") { chooseDataFolder() }
-                    if draft.dataPath != nil, draft.dataPath != defaultPath { Button("Default") { draft.dataPath = nil } }
+                    if draft.dataPath != nil, draft.dataPath != defaultPath {
+                        Button("Default") {
+                            draft.dataPath = nil
+                            dataFolderError = nil
+                        }
+                    }
                 }
             }
             .disabled(draft.dataMode == .disabled)
+            if let dataFolderError {
+                Label(dataFolderError, systemImage: "xmark.octagon").font(.caption).foregroundStyle(.red)
+            }
             Picker("Appearance", selection: $draft.appearance) {
                 Text("System").tag(Appearance.system)
                 Text("Light").tag(Appearance.light)
@@ -120,7 +131,15 @@ struct LaunchSection: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
-        if panel.runModal() == .OK, let url = panel.url { draft.dataPath = url.path }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        // The same guard delete uses (final review I1): a folder that could never be trashed safely is never stored.
+        switch appState.validateDataPath(url.path, targetPath: draft.targetPath, excluding: record.bundleURL) {
+        case .success:
+            draft.dataPath = url.path
+            dataFolderError = nil
+        case .failure(let error):
+            dataFolderError = error.localizedDescription
+        }
     }
 }
 

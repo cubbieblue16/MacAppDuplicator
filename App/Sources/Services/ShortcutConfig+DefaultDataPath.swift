@@ -9,4 +9,15 @@ extension ShortcutConfig {
         copy.dataPath = ShortcutConfig.defaultDataPath(forSlug: slug, home: home)
         return copy
     }
+
+    /// The data folder this shortcut uses: its `dataPath`, else the default folder for its slug. Nil when data
+    /// separation is disabled and no folder was ever set (the shortcut shares the original app's data).
+    func effectiveDataPath(home: URL) -> String? {
+        resolvingDefaultDataPath(home: home).dataPath
+    }
+
+    /// `~/Library/Application Support/App Duplicator`, the parent of every default data folder.
+    static func dataRoot(home: URL) -> URL {
+        URL(fileURLWithPath: defaultDataPath(forSlug: "slug", home: home), isDirectory: true).deletingLastPathComponent()
+    }
 }

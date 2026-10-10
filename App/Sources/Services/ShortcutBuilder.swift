@@ -1,5 +1,6 @@
 import DuplicatorCore
 import Foundation
+import os
 
 /// Create / regenerate / duplicate / export / delete shortcut bundles (spec §7 actions). Every write goes through
 /// `BundleWriter` + `Signer`; the target app is only ever read.
@@ -7,14 +8,20 @@ struct ShortcutBuilder {
     enum BuilderError: Error, LocalizedError {
         case alreadyExists(URL)
         case targetMissing(String)
+        case exportOverlapsShortcut(URL)
+        case exportOverlapsTarget(URL)
 
         var errorDescription: String? {
             switch self {
             case .alreadyExists(let url): "\(url.lastPathComponent) already exists in \(url.deletingLastPathComponent().path)."
             case .targetMissing(let path): "The target app was not found at \(path)."
+            case .exportOverlapsShortcut(let url): "Cannot export to \(url.path): it is, contains or is inside the shortcut itself."
+            case .exportOverlapsTarget(let url): "Cannot export to \(url.path): it is, contains or is inside the target app."
             }
         }
     }
+
+    private static let logger = Logger(subsystem: "com.mikekuta.MacAppDuplicator", category: "ShortcutBuilder")
 
     let launcherBinary: URL
     /// Codesign identity display name, or nil for ad hoc.
@@ -59,26 +66,63 @@ struct ShortcutBuilder {
     }
 
     /// Copies the bundle to `destination` (an `.app` path chosen by the user). The copy keeps its signature.
+    /// A destination that is, contains or is inside the target or the shortcut itself is refused before any write.
+    /// The copy is staged next to the destination and swapped in with `replaceItemAt`, so an existing item there is
+    /// removed only once its replacement is in place, and a failed export leaves both the source and it untouched.
     func export(record: ShortcutRecord, to destination: URL) throws -> URL {
-        if fileManager.fileExists(atPath: destination.path) { try fileManager.removeItem(at: destination) }
-        try fileManager.copyItem(at: record.bundleURL, to: destination)
-        return destination
+        let canonicalDestination = CanonicalPath(destination.path)
+        if record.config.targetPath.hasPrefix("/"), canonicalDestination.overlaps(CanonicalPath(record.config.targetPath)) {
+            throw BuilderError.exportOverlapsTarget(destination)
+        }
+        if canonicalDestination.overlaps(CanonicalPath(record.bundleURL.path)) {
+            throw BuilderError.exportOverlapsShortcut(destination)
+        }
+        let staging = destination.deletingLastPathComponent()
+            .appending(path: ".\(destination.lastPathComponent).mad-export-\(UUID().uuidString)", directoryHint: .isDirectory)
+        do {
+            try fileManager.copyItem(at: record.bundleURL, to: staging)
+            if fileManager.fileExists(atPath: destination.path) {
+                // New metadata only: the export must be byte-for-byte the signed source, not inherit the old item's.
+                return try fileManager.replaceItemAt(destination, withItemAt: staging, options: .usingNewMetadataOnly) ?? destination
+            }
+            try fileManager.moveItem(at: staging, to: destination)
+            return destination
+        } catch {
+            removeStagingCopy(staging)
+            throw error
+        }
     }
 
     /// Moves the bundle to the Trash; with `removeData`, also trashes the shortcut's data folder (never the target).
-    /// Returns the Trash location of everything it trashed, in order (bundle first).
+    /// The data folder must pass `DataPathGuard` against `libraryFolders` (the bundle's own folder is always included)
+    /// and `otherRecordDataPaths`; a refusal throws before anything is trashed. Returns the Trash location of
+    /// everything it trashed, in order (bundle first).
     @discardableResult
-    func delete(record: ShortcutRecord, removeData: Bool) throws -> [URL] {
+    func delete(record: ShortcutRecord, removeData: Bool, libraryFolders: [URL] = [], otherRecordDataPaths: [String] = []) throws -> [URL] {
+        var dataFolder: URL?
+        let home = fileManager.homeDirectoryForCurrentUser
+        if removeData, let dataPath = record.config.effectiveDataPath(home: home) {
+            dataFolder = try DataPathGuard.validate(
+                dataPath: dataPath, targetPath: record.config.targetPath, outputFolder: record.bundleURL.deletingLastPathComponent(),
+                libraryFolders: libraryFolders, otherRecordDataPaths: otherRecordDataPaths, home: home
+            ).get()
+        }
         var trashed: [URL] = []
         trashed.append(try trash(record.bundleURL))
-        guard removeData else { return trashed }
-        let home = fileManager.homeDirectoryForCurrentUser
-        let dataPath = record.config.dataPath ?? ShortcutConfig.defaultDataPath(forSlug: record.config.slug, home: home)
-        let dataURL = URL(fileURLWithPath: dataPath, isDirectory: true)
-        if fileManager.fileExists(atPath: dataURL.path) {
-            trashed.append(try trash(dataURL))
+        if let dataFolder, fileManager.fileExists(atPath: dataFolder.path) {
+            trashed.append(try trash(dataFolder))
         }
         return trashed
+    }
+
+    /// Best-effort cleanup after a failed export; the export error is what the caller sees.
+    private func removeStagingCopy(_ staging: URL) {
+        guard fileManager.fileExists(atPath: staging.path) else { return }
+        do {
+            try fileManager.removeItem(at: staging)
+        } catch {
+            Self.logger.warning("Could not remove export staging copy \(staging.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func trash(_ url: URL) throws -> URL {

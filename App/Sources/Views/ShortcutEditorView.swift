@@ -26,7 +26,7 @@ struct ShortcutEditorView: View {
         Form {
             IdentitySection(draft: $draft, record: record)
             TargetSection(draft: $draft, inspected: inspected)
-            LaunchSection(draft: $draft)
+            LaunchSection(draft: $draft, record: record)
             AdvancedSection(draft: $draft)
             Section("Actions") {
                 HStack {
@@ -83,7 +83,7 @@ struct ShortcutEditorView: View {
             DiagnosticsView(record: record)
         }
         .sheet(isPresented: $isDeletePresented) {
-            DeleteShortcutSheet(record: record) { removeData in
+            DeleteShortcutSheet(record: record, dataFolder: appState.dataFolderDeletionOption(for: record)) { removeData in
                 await appState.delete(record, removeData: removeData)
             }
         }
@@ -112,6 +112,8 @@ struct ShortcutEditorView: View {
         panel.nameFieldStringValue = record.bundleURL.lastPathComponent
         panel.allowedContentTypes = [.applicationBundle]
         panel.canCreateDirectories = true
+        // Never default to the library folder the shortcut lives in (final review I2).
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Desktop", directoryHint: .isDirectory)
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task {
             if await appState.export(record, to: url) { exportedURL = url }
