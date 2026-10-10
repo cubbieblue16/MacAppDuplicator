@@ -22,7 +22,7 @@ struct PlanCommand: ParsableCommand {
         print("mode: \(plan.launchMode.rawValue)")
         print("argv:")
         print("  \(plan.executableURL.path)")
-        for argument in plan.arguments {
+        for argument in SecretMasking.maskArguments(plan.arguments) {
             print("  \(argument)")
         }
         print("env:")
