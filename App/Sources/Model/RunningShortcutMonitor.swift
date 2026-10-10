@@ -12,6 +12,15 @@ final class RunningShortcutMonitor {
 
     private var observers: [NSObjectProtocol] = []
     private var refreshTask: Task<Void, Never>?
+    private let probe: @Sendable () -> Set<String>
+    /// Bumped by every `refresh()`; only the newest refresh may publish its paths (final review M7).
+    @ObservationIgnored private var refreshGeneration: UInt64 = 0
+
+    /// `probe` lists the standardized bundle paths of running shortcuts; it runs detached, off the main actor.
+    /// Tests inject a stub. The default is a nonisolated closure, never a main-actor value.
+    init(probe: @escaping @Sendable () -> Set<String> = { RunningShortcutMonitor.liveRunningBundlePaths() }) {
+        self.probe = probe
+    }
 
     func start() {
         guard observers.isEmpty else { return }
@@ -31,13 +40,22 @@ final class RunningShortcutMonitor {
         refreshTask = nil
     }
 
-    /// Rescans process environments once. Safe to call while a scheduled refresh is pending.
+    /// Rescans process environments once. Safe to call while a scheduled refresh is pending: overlapping refreshes
+    /// can finish out of order, so only the newest one publishes its paths (final review M7).
     func refresh() async {
-        let key = DataSeparationPlanner.shortcutBundleKey
-        let paths = await Task.detached(priority: .utility) {
-            Set(ProcessEnvironment.values(forEnvironmentKey: key).values.map { URL(fileURLWithPath: $0).standardizedFileURL.path })
-        }.value
+        refreshGeneration &+= 1
+        let generation = refreshGeneration
+        let probe = probe
+        let paths = await Task.detached(priority: .utility) { probe() }.value
+        guard generation == refreshGeneration else { return }
         runningBundlePaths = paths
+    }
+
+    /// Standardized paths from every process's `MAD_SHORTCUT_BUNDLE` entry (spec §7). Nonisolated because it runs
+    /// detached; the body is the expression `refresh()` ran inline before the seam existed.
+    nonisolated static func liveRunningBundlePaths() -> Set<String> {
+        let key = DataSeparationPlanner.shortcutBundleKey
+        return Set(ProcessEnvironment.values(forEnvironmentKey: key).values.map { URL(fileURLWithPath: $0).standardizedFileURL.path })
     }
 
     func isRunning(bundleURL: URL) -> Bool {
