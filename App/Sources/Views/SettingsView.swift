@@ -53,7 +53,7 @@ private struct GeneralSettingsTab: View {
                 }
             }
             Button("Open Logs Folder") { openLogsFolder() }
-            Text("Shortcuts are scanned from these folders at launch and whenever they change.")
+            Text("Shortcuts are rescanned at launch, when this list changes, and when a bundle is added, removed or renamed in one of these folders. After editing a bundle in place, choose View → Refresh (⌘R).")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
@@ -123,6 +123,8 @@ private struct DataSettingsTab: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("HOME override symlinks").font(.headline)
             Text("When a shortcut runs with a separate HOME, these entries are linked back to your real home folder so the app still sees them.")
+                .font(.caption).foregroundStyle(.secondary)
+            Text("Changes apply to shortcuts created afterwards, when their separate HOME folder is first built. Existing shortcuts, and HOME folders already built, keep their links.")
                 .font(.caption).foregroundStyle(.secondary)
             HomeSymlinkListEditor(entries: $settings.homeSymlinkEntries)
             HStack {

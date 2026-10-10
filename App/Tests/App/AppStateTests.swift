@@ -50,6 +50,17 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(state.pendingError)
     }
 
+    func testCreateStampsACustomizedHomeSymlinkList() async throws {
+        let defaultCreated = await state.create(config: config(name: "Default List"))
+        settings.homeSymlinkEntries = [".ssh", ".aws"]
+        let customCreated = await state.create(config: config(name: "Custom List"))
+
+        let defaultRecord = try XCTUnwrap(library.record(for: try XCTUnwrap(defaultCreated)))
+        let customRecord = try XCTUnwrap(library.record(for: try XCTUnwrap(customCreated)))
+        XCTAssertNil(defaultRecord.config.homeSymlinkEntries, "the default list is left out, so the launcher keeps the built-in default")
+        XCTAssertEqual(customRecord.config.homeSymlinkEntries, [".ssh", ".aws"])
+    }
+
     func testCreateDuplicateNameReportsError() async throws {
         _ = await state.create(config: config())
         let second = await state.create(config: config())

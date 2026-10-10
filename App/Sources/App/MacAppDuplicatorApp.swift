@@ -31,11 +31,20 @@ struct MacAppDuplicatorApp: App {
                     // As the unit-test host the app must not scan or watch the real library folders.
                     if !Self.isTestHost { appState.library.start() }
                 }
+                .onChange(of: appState.settings.allLibraryFolders) {
+                    // A folder added, removed or changed in Settings is watched and scanned at once (final review I4).
+                    if !Self.isTestHost { appState.library.start() }
+                }
         }
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Shortcut…") { appState.isWizardPresented = true }
                     .keyboardShortcut("n", modifiers: .command)
+            }
+            CommandGroup(before: .toolbar) {
+                // The watcher sees bundles added, removed or renamed, not edits inside a bundle (final review M8).
+                Button("Refresh") { Task { await appState.library.rescan() } }
+                    .keyboardShortcut("r", modifiers: .command)
             }
             CommandGroup(after: .help) {
                 KnownLimitationsMenuItem()

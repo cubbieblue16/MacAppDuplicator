@@ -34,7 +34,9 @@ final class AppSettings {
     var signingIdentity: String {
         didSet { defaults.set(signingIdentity, forKey: Key.signingIdentity) }
     }
-    /// Symlink list applied to new HOME-override shortcuts (spec §4.3). Stored per shortcut at creation time.
+    /// Symlink list for the separate HOME of new shortcuts (spec §4.3). `AppState.create` copies it into a new
+    /// shortcut's config when it differs from `HomeTreeBuilder.defaultSymlinkEntries`; the launcher uses it when that
+    /// shortcut's HOME tree is first built. Existing shortcuts keep the list they were created with.
     var homeSymlinkEntries: [String] {
         didSet { defaults.set(homeSymlinkEntries, forKey: Key.homeSymlinkEntries) }
     }

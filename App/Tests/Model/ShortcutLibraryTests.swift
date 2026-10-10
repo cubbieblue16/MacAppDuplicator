@@ -51,4 +51,33 @@ final class ShortcutLibraryTests: XCTestCase {
         await waitUntil { library.records.map(\.name) == ["Late"] }
         XCTAssertEqual(library.records.map(\.name), ["Late"])
     }
+
+    func testStartAgainReplacesTheWatcherAndFollowsTheFolderList() async throws {
+        let extra = try makeAppTemporaryDirectory()
+        addTeardownBlock { try FileManager.default.removeItem(at: extra) }
+        try writeShortcutBundle(named: "Extra", in: extra, config: makeConfig(name: "Extra"))
+        let library = makeLibrary()
+        defer { library.stop() }
+
+        library.start()
+        let first = try XCTUnwrap(library.watcher)
+        library.start()
+        let second = try XCTUnwrap(library.watcher)
+        XCTAssertFalse(first === second)
+        XCTAssertEqual(first.watchedSourceCount, 0, "the previous watcher's sources are cancelled")
+        XCTAssertEqual(second.watchedSourceCount, 1, "an unchanged folder is watched once, not twice")
+
+        library.settings.libraryFolders = [extra]
+        library.start()
+        let third = try XCTUnwrap(library.watcher)
+        XCTAssertEqual(second.watchedSourceCount, 0)
+        XCTAssertEqual(third.watchedSourceCount, 2, "an added folder is watched")
+        await waitUntil { library.records.map(\.name) == ["Extra"] }
+        XCTAssertEqual(library.records.map(\.name), ["Extra"], "start() rescans the new folder list")
+
+        library.settings.libraryFolders = []
+        library.start()
+        XCTAssertEqual(third.watchedSourceCount, 0)
+        XCTAssertEqual(library.watcher?.watchedSourceCount, 1, "a removed folder is no longer watched")
+    }
 }

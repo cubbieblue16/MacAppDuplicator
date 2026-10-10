@@ -16,6 +16,9 @@ final class FolderWatcher {
         self.onChange = onChange
     }
 
+    /// Number of folders currently watched; 0 after `stop()`.
+    var watchedSourceCount: Int { sources.count }
+
     func start() {
         stop()
         for folder in folders {

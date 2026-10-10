@@ -51,6 +51,19 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(second.allLibraryFolders.count, 2)
     }
 
+    func testHomeSymlinkEntriesMustBeSingleNewNames() {
+        XCTAssertNil(HomeSymlinkEntry.problem(with: ".aws", existing: [".ssh"]))
+        XCTAssertNil(HomeSymlinkEntry.problem(with: "  .aws ", existing: []), "surrounding spaces are trimmed")
+        XCTAssertEqual(HomeSymlinkEntry.normalized("  .aws "), ".aws")
+        for invalid in ["", "   ", ".", "..", "Library/Keychains", "../escape", "/etc"] {
+            XCTAssertNotNil(HomeSymlinkEntry.problem(with: invalid, existing: []), invalid)
+        }
+        XCTAssertNotNil(HomeSymlinkEntry.problem(with: ".SSH", existing: [".ssh"]), "duplicates match case-insensitively")
+        for entry in HomeTreeBuilder.defaultSymlinkEntries {
+            XCTAssertNil(HomeSymlinkEntry.problem(with: entry, existing: []), "every default entry is valid: \(entry)")
+        }
+    }
+
     func testAllLibraryFoldersDeduplicatesOutputFolder() throws {
         let settings = AppSettings(defaults: defaults, defaultSigningIdentity: "Ad-hoc")
         settings.libraryFolders = [settings.outputFolder]

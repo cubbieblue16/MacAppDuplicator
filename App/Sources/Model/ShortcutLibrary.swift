@@ -1,6 +1,7 @@
 import DuplicatorCore
 import Foundation
 import Observation
+import os
 
 /// The in-memory library: scan results for all library folders, a folder watcher, and the running monitor (spec §7).
 @MainActor
@@ -13,8 +14,10 @@ final class ShortcutLibrary {
     let settings: AppSettings
     let monitor: RunningShortcutMonitor
     private let scanner: LibraryScanner
-    private var watcher: FolderWatcher?
-    private var watchedFolders: [URL] = []
+    /// Internal (not private) so tests can check that a restart replaces the watcher instead of adding one.
+    private(set) var watcher: FolderWatcher?
+
+    private static let logger = Logger(subsystem: "com.mikekuta.MacAppDuplicator", category: "ShortcutLibrary")
 
     init(settings: AppSettings, scanner: LibraryScanner = LibraryScanner(), monitor: RunningShortcutMonitor? = nil) {
         self.settings = settings
@@ -22,18 +25,22 @@ final class ShortcutLibrary {
         self.monitor = monitor ?? RunningShortcutMonitor()
     }
 
-    /// Starts watching and performs the first scan. Call again after the folder list changes.
+    /// Watches the current library folders and rescans. The scene calls it at launch and again whenever
+    /// `settings.allLibraryFolders` changes (final review I4); the previous watcher is always stopped first, so a
+    /// removed folder stops being watched, a new one starts, and no folder is ever watched twice.
     func start() {
-        let folders = settings.allLibraryFolders
-        if watcher == nil || folders != watchedFolders {
-            watcher?.stop()
-            watchedFolders = folders
-            try? FileManager.default.createDirectory(at: settings.outputFolder, withIntermediateDirectories: true)
-            watcher = FolderWatcher(folders: folders) { [weak self] in
-                Task { await self?.rescan() }
-            }
-            watcher?.start()
+        watcher?.stop()
+        do {
+            try FileManager.default.createDirectory(at: settings.outputFolder, withIntermediateDirectories: true)
+        } catch {
+            // Not fatal: the scan skips a missing folder and the watcher skips a folder it cannot open.
+            Self.logger.error("Could not create the output folder \(self.settings.outputFolder.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
+        let watcher = FolderWatcher(folders: settings.allLibraryFolders) { [weak self] in
+            Task { await self?.rescan() }
+        }
+        watcher.start()
+        self.watcher = watcher
         monitor.start()
         Task { await rescan() }
     }
@@ -41,7 +48,6 @@ final class ShortcutLibrary {
     func stop() {
         watcher?.stop()
         watcher = nil
-        watchedFolders = []
         monitor.stop()
     }
 

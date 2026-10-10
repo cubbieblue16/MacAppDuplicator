@@ -78,8 +78,9 @@ public struct HomeTreeBuilder {
         try Data().write(to: home.appending(path: Self.markerFileName))
     }
 
-    /// Single path component only, so an entry can never point the tree outside `path`.
-    static func isPlainEntryName(_ entry: String) -> Bool {
+    /// Single path component only, so an entry can never point the tree outside `path`. Public so the app can
+    /// validate the Settings list with the same rule.
+    public static func isPlainEntryName(_ entry: String) -> Bool {
         !entry.isEmpty && entry != "." && entry != ".." && !entry.contains("/")
     }
 }
