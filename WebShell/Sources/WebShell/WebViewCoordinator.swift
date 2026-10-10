@@ -23,6 +23,8 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
     private var crashDates: [Date] = []
     private static let crashWindow: TimeInterval = 60
     private static let crashLimit = 3
+    /// Termination times per popup web view, keyed by identity; removed when the popup's window closes.
+    private var popupCrashDates: [ObjectIdentifier: [Date]] = [:]
 
     init(shell: ShellConfig, logger: LaunchLogger) {
         self.shell = shell
@@ -68,33 +70,27 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
     // MARK: - Navigation policy (skeleton decision 6)
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-        // Frame exemption first: popups (no target frame) and subframes are never redirected or opened externally.
-        guard let targetFrame = navigationAction.targetFrame, targetFrame.isMainFrame else {
-            return .allow
-        }
         guard let url = navigationAction.request.url else { return .allow }
-        let scheme = url.scheme?.lowercased() ?? ""
-        if scheme == "about" || WebHostPolicy.isInternalScheme(url) {
+        let decision = NavigationPolicy.decide(
+            url: url,
+            scheme: url.scheme,
+            targetFrameIsMain: navigationAction.targetFrame?.isMainFrame,
+            navigationType: navigationAction.navigationType,
+            isPrimaryWebView: webView === self.webView,
+            policy: shell.policy
+        )
+        switch decision {
+        case .allow:
             return .allow
-        }
-        guard scheme == "http" || scheme == "https" else {
-            // Never forward file: to the workspace, and only open other schemes for a real link click.
-            if scheme != "file", navigationAction.navigationType == .linkActivated {
-                openExternally(url)
-            } else {
-                logger.log("blocked scheme=\(scheme)")
-            }
+        case .cancel:
+            return .cancel
+        case .openExternally:
+            openExternally(url)
+            return .cancel
+        case .blocked(let reason):
+            logger.log(reason)
             return .cancel
         }
-        if webView !== self.webView {
-            // Popup windows are exempt from the in-place policy so OAuth completes.
-            return .allow
-        }
-        if shell.policy.allowsInPlace(url) {
-            return .allow
-        }
-        openExternally(url)
-        return .cancel
     }
 
     private func openExternally(_ url: URL) {
@@ -132,11 +128,26 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         logger.log("error web content process terminated")
+        let now = Date()
         guard webView === self.webView else {
-            webView.reload()
+            let key = ObjectIdentifier(webView)
+            var dates = popupCrashDates[key, default: []]
+            dates.removeAll { now.timeIntervalSince($0) > Self.crashWindow }
+            dates.append(now)
+            if dates.count >= Self.crashLimit {
+                logger.log("error popup web content process crashed \(dates.count) times within \(Int(Self.crashWindow))s; closing popup")
+                popupCrashDates[key] = nil
+                if let window = popupWindows.first(where: { $0.contentView === webView }) {
+                    window.close()
+                } else {
+                    webView.window?.close()
+                }
+            } else {
+                popupCrashDates[key] = dates
+                webView.reload()
+            }
             return
         }
-        let now = Date()
         crashDates.removeAll { now.timeIntervalSince($0) > Self.crashWindow }
         crashDates.append(now)
         if crashDates.count >= Self.crashLimit {
@@ -215,6 +226,9 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
 
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow else { return }
+        if let popup = window.contentView {
+            popupCrashDates[ObjectIdentifier(popup)] = nil
+        }
         popupWindows.removeAll { $0 === window }
     }
 }
