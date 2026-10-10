@@ -62,7 +62,7 @@ Launcher events are logged to `~/Library/Logs/App Duplicator/<Name>.log` (rotate
 ```bash
 Tools/build-fixture.sh     # test fixture app, needed by the end-to-end test
 Tools/build-app.sh         # regenerates the Xcode project with xcodegen, embeds the release Launcher, prints the .app path
-Tools/test-app.sh          # MacAppDuplicatorTests (108 tests)
+Tools/test-app.sh          # MacAppDuplicatorTests
 ```
 
 The Xcode project under `App/` is generated from `App/project.yml` and git-ignored. Requirements: macOS 26 or later on Apple silicon, Xcode 26 or later, `xcodegen` (`brew install xcodegen`; the scripts look for it on `PATH`, then in `/usr/local/bin` and `/opt/homebrew/bin`).
@@ -75,9 +75,45 @@ The Xcode project under `App/` is generated from `App/project.yml` and git-ignor
 - Actions: Launch, Reveal in Finder, Regenerate, Duplicate, Export (with the quarantine-clearing command), Delete (Trash, optional data folder), Rebuild All.
 - Diagnostics sheet: resolved target path (plus the stored path when it differs), executable, launch mode, argv, masked environment, warnings and the last 200 log lines, copyable.
 - Settings: output and library folders (a change rescans the library), signing identity (Ad-hoc or any codesigning identity in the keychain; defaults to the first Developer ID Application identity), the HOME-override symlink list copied into new shortcuts, and Open Logs Folder.
-- Help → Known Limitations (14 entries).
+- Help → Known Limitations (20 entries since Phase 3; the six profile entries are listed under Phase 3 profiles).
 
 Acceptance checklist: `docs/acceptance/phase2-library-app.md`.
+
+## Phase 3 profiles
+
+Compatibility profiles (`Packages/CompatProfiles`) record, per bundle identifier, a status (`verified`, `partial` or `unsupported`), suggested launch arguments and environment variables, and notes. The New Shortcut wizard fills a new shortcut's arguments and environment from the matching profile, the editor's Profile section shows which profile matched, and Diagnostics lists it.
+
+### What a badge means
+
+The compatibility badge in the New Shortcut wizard is evaluated in this order (`CompatBadge.badge(for:profile:)`):
+
+- `Unsupported`: the profile marks the app unsupported (typically an app that refuses to run twice).
+- `Verified`: the profile was checked end to end on one Mac (second account, separate data folder, two Dock icons). It is advisory, not a guarantee for your app version or setup.
+- `Unknown`: no app inspected yet, or a sandboxed native app, whose container ignores the HOME override so its data cannot be separated.
+- `HOME only`: any other native app; App Duplicator applies the HOME override, untested for this app.
+- `Auto`: a Chromium, Electron, ToDesktop, Firefox or Eclipse app without a verified profile; App Duplicator applies its family's data separation, untested for this app.
+
+A `partial` profile still fills in arguments and environment but does not change the badge, so review those values before relying on them. `docs/acceptance/profile-promotion.md` is the procedure that moves a profile from `partial` to `verified`.
+
+### Checking for profile updates
+
+- Profiles change only when you choose Check Profile Updates. Nothing checks automatically or in the background.
+- The default profiles URL is the raw `profiles.json` on this repository's `main` branch, so a profile change reaches existing installs once it is on `main`. The URL is a setting, and only `https://raw.githubusercontent.com` addresses are accepted (`ProfilesFetchPolicy.allowedHost`).
+- A successful check writes the cache `~/Library/Application Support/App Duplicator/profiles.json`. A failed or invalid download leaves the cache as it was.
+- The app uses the cache only when its `updated` date is later than the bundled seed's (`Packages/CompatProfiles/Resources/profiles.json`); otherwise it uses the seed.
+
+### Profile limitations
+
+Also listed in Help → Known Limitations:
+
+- Profiles are advisory: `Verified` means checked on one Mac, not a guarantee.
+- `partial` profiles need manual review.
+- Check Profile Updates is manual and fetches only from `raw.githubusercontent.com`.
+- Sandboxed native apps cannot be separated (`Unknown`, or `Unsupported` when a profile says so).
+- Shortcuts whose names give the same slug get `-2`, `-3` and so on appended, so they never share a bundle identifier or default data folder.
+- Exporting over an existing bundle moves the old one to the Trash.
+
+Acceptance checklist: `docs/acceptance/phase3-profiles.md`. Promotion procedure: `docs/acceptance/profile-promotion.md`.
 
 ## Core API used by the app
 
@@ -90,4 +126,4 @@ Acceptance checklist: `docs/acceptance/phase2-library-app.md`.
 - `SecretMasking.mask`.
 - The `Launcher` release binary at `.build/release/Launcher`, to embed as a resource.
 
-The Phase 3 insertion point for profiles is the doc comment on `DataSeparationPlanner.plan`.
+Profiles feed `DataSeparationPlanner.plan` through the wizard prefill (`WizardModel(prefillTarget:profileLookup:)`); see "Phase 3 profiles" above.
