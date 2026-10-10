@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updated": "2026-10-09",
+  "updated": "2026-10-10",
   "apps": {
     "com.anthropic.claudefordesktop": {
       "name": "Claude",
@@ -165,5 +165,30 @@
       "notes": "Native app: Auto data mode falls back to a HOME override; preferences (CFPreferences) stay shared. Not launch-tested yet."
     }
   },
-  "webApps": {}
+  "webApps": {
+    "whatsapp": {
+      "name": "WhatsApp",
+      "url": "https://web.whatsapp.com",
+      "userAgent": "chrome",
+      "badgeRegex": "\\((\\d+)\\)",
+      "extraHosts": ["whatsapp.com", "whatsapp.net"],
+      "iconURL": null
+    },
+    "teams": {
+      "name": "Microsoft Teams",
+      "url": "https://teams.microsoft.com",
+      "userAgent": null,
+      "badgeRegex": null,
+      "extraHosts": ["microsoft.com", "microsoftonline.com", "live.com", "office.com", "office.net", "skype.com"],
+      "iconURL": null
+    },
+    "outlook": {
+      "name": "Microsoft Outlook",
+      "url": "https://outlook.office.com/mail/",
+      "userAgent": null,
+      "badgeRegex": null,
+      "extraHosts": ["office.com", "office365.com", "microsoft.com", "microsoftonline.com", "live.com", "office.net"],
+      "iconURL": null
+    }
+  }
 }

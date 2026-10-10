@@ -63,11 +63,42 @@ final class SeedProfilesTests: XCTestCase {
         XCTAssertEqual(document.schemaVersion, 1)
         XCTAssertNotNil(document.updated.wholeMatch(of: /^\d{4}-\d{2}-\d{2}$/), "updated is a YYYY-MM-DD date")
         XCTAssertGreaterThanOrEqual(document.updated, "2026-10-09")
-        XCTAssertTrue(document.webApps.isEmpty, "web app presets arrive with the Phase 4 web shell")
         for (identifier, profile) in document.apps {
             XCTAssertEqual(profile.args, [], identifier)
             XCTAssertEqual(profile.env, [:], identifier)
             XCTAssertNil(profile.newWindowCommand, identifier)
         }
+    }
+
+    func testSeedShipsThreeWebAppPresets() throws {
+        let document = try seed()
+        XCTAssertGreaterThanOrEqual(document.updated, "2026-10-10", "the presets bump the seed date so a cached older copy never wins")
+        let presets = document.webApps
+        XCTAssertEqual(Set(presets.keys), ["whatsapp", "teams", "outlook"])
+
+        let whatsapp = try XCTUnwrap(presets["whatsapp"])
+        XCTAssertEqual(whatsapp.name, "WhatsApp")
+        XCTAssertEqual(whatsapp.url, "https://web.whatsapp.com")
+        XCTAssertEqual(whatsapp.userAgent, "chrome")
+        XCTAssertEqual(whatsapp.badgeRegex, #"\((\d+)\)"#)
+        XCTAssertEqual(whatsapp.extraHosts, ["whatsapp.com", "whatsapp.net"])
+
+        let teams = try XCTUnwrap(presets["teams"])
+        XCTAssertEqual(teams.name, "Microsoft Teams")
+        XCTAssertEqual(teams.url, "https://teams.microsoft.com")
+        XCTAssertEqual(teams.extraHosts, ["microsoft.com", "microsoftonline.com", "live.com", "office.com", "office.net", "skype.com"])
+
+        let outlook = try XCTUnwrap(presets["outlook"])
+        XCTAssertEqual(outlook.name, "Microsoft Outlook")
+        XCTAssertEqual(outlook.url, "https://outlook.office.com/mail/")
+        XCTAssertEqual(outlook.extraHosts, ["office.com", "office365.com", "microsoft.com", "microsoftonline.com", "live.com", "office.net"])
+
+        for (key, preset) in presets {
+            XCTAssertNil(preset.iconURL, "\(key): icons are fetched from the site")
+            XCTAssertNoThrow(try WebAppURLValidator.validate(preset.url), key)
+        }
+        let parser = BadgeTitleParser(pattern: whatsapp.badgeRegex)
+        XCTAssertFalse(parser.usedFallbackPattern)
+        XCTAssertEqual(parser.count(in: "(3) WhatsApp"), 3)
     }
 }
