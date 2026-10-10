@@ -19,4 +19,18 @@ final class DeleteConfirmationTests: XCTestCase {
             "The data folder of “Work” is /Volumes/Work/Shared Data, outside ~/Library/Application Support/App Duplicator. Everything in it is moved to the Trash with the shortcut."
         )
     }
+
+    func testWebDataConfirmationNamesTheShortcutAndWhatGoes() {
+        let confirmation = DeleteConfirmation.webData(shortcutName: "Chat")
+        XCTAssertEqual(confirmation.title, "Also remove web data (logins, cookies, cache)?")
+        XCTAssertEqual(
+            confirmation.message,
+            "Removing it signs “Chat” out of every site and deletes its cookies, cache and local storage from this Mac. Keeping it leaves them in place, so putting the shortcut back from the Trash brings the logins back."
+        )
+    }
+
+    func testDeleteRequestKeepsEverythingByDefault() {
+        XCTAssertEqual(DeleteRequest.keepAll, DeleteRequest(removeDataFolder: false, removeWebData: false))
+        XCTAssertNotEqual(DeleteRequest.keepAll, DeleteRequest(removeDataFolder: false, removeWebData: true))
+    }
 }

@@ -4,19 +4,22 @@ import SwiftUI
 /// Confirms a delete. The data-folder toggle appears only for a folder `AppState.dataFolderDeletionOption` approved
 /// (final review I1): never for Disabled mode, a missing folder, or a folder `DataPathGuard` refuses. Trashing a
 /// folder outside the data root takes a second, destructive confirmation that names it (re-review Minor 1, final
-/// review M24).
+/// review M24). A web app has no data folder; its second step asks whether to remove its web data too, and the
+/// default button keeps it.
 struct DeleteShortcutSheet: View {
     @Environment(\.dismiss) private var dismiss
     let record: ShortcutRecord
     let dataFolder: DataFolderDeletionOption
-    let onDelete: (Bool) async -> Void
+    let onDelete: (DeleteRequest) async -> Void
     @State private var removeData = false
     @State private var pendingConfirmation: DeleteConfirmation?
+
+    private var isWebApp: Bool { record.config.kind == .webApp }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Delete “\(record.name)”?").font(.headline)
-            Text("The shortcut is moved to the Trash. The target app is never touched.")
+            Text(isWebApp ? "The web app is moved to the Trash." : "The shortcut is moved to the Trash. The target app is never touched.")
             switch dataFolder {
             case .unavailable(let note):
                 Text(note).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -32,11 +35,15 @@ struct DeleteShortcutSheet: View {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Delete", role: .destructive) {
+                    if isWebApp {
+                        pendingConfirmation = DeleteConfirmation.webData(shortcutName: record.name)
+                        return
+                    }
                     let removesData = removeData && isDataFolderAvailable
                     if let confirmation = DeleteConfirmation(shortcutName: record.name, option: dataFolder, removeData: removesData) {
                         pendingConfirmation = confirmation
                     } else {
-                        delete(removeData: removesData)
+                        delete(DeleteRequest(removeDataFolder: removesData, removeWebData: false))
                     }
                 }
             }
@@ -49,7 +56,12 @@ struct DeleteShortcutSheet: View {
             titleVisibility: .visible,
             presenting: pendingConfirmation
         ) { _ in
-            Button("Move to Trash", role: .destructive) { delete(removeData: true) }
+            if isWebApp {
+                Button("Keep Web Data") { delete(.keepAll) }.keyboardShortcut(.defaultAction)
+                Button("Remove Web Data", role: .destructive) { delete(DeleteRequest(removeDataFolder: false, removeWebData: true)) }
+            } else {
+                Button("Move to Trash", role: .destructive) { delete(DeleteRequest(removeDataFolder: true, removeWebData: false)) }
+            }
             Button("Cancel", role: .cancel) {}
         } message: { confirmation in
             Text(confirmation.message)
@@ -60,9 +72,9 @@ struct DeleteShortcutSheet: View {
         if case .available = dataFolder { true } else { false }
     }
 
-    private func delete(removeData: Bool) {
+    private func delete(_ request: DeleteRequest) {
         Task {
-            await onDelete(removeData)
+            await onDelete(request)
             dismiss()
         }
     }

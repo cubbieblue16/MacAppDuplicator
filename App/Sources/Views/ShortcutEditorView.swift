@@ -107,8 +107,8 @@ struct ShortcutEditorView: View {
             DiagnosticsView(record: record, profileCatalog: appState.profiles.catalog)
         }
         .sheet(isPresented: $isDeletePresented) {
-            DeleteShortcutSheet(record: record, dataFolder: appState.dataFolderDeletionOption(for: record)) { removeData in
-                await appState.delete(record, removeData: removeData)
+            DeleteShortcutSheet(record: record, dataFolder: appState.dataFolderDeletionOption(for: record)) { request in
+                await appState.delete(record, removeData: request.removeDataFolder, removeWebData: request.removeWebData)
             }
         }
     }
