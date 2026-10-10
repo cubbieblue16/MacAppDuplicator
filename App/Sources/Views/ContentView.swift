@@ -28,6 +28,11 @@ struct ContentView: View {
                 Button("Rebuild All") { isRebuildAllPresented = true }
                     .disabled(appState.library.recordsNeedingRebuild.isEmpty)
             }
+            ToolbarItem {
+                Button("Check Profile Updates") { Task { await appState.checkProfileUpdates() } }
+                    .disabled(appState.profiles.isChecking)
+                    .help("Download the latest compatibility profiles from the profiles URL in Settings")
+            }
         }
         .sheet(isPresented: $appState.isWizardPresented) {
             NewShortcutWizard()
@@ -40,11 +45,21 @@ struct ContentView: View {
         .alert(item: $appState.pendingError) { error in
             Alert(title: Text(error.context), message: Text(error.message), dismissButton: .default(Text("OK")))
         }
+        .alert("Check Profile Updates", isPresented: isProfileUpdateAlertPresented) {
+            Button("OK") { appState.profileUpdateMessage = nil }
+        } message: {
+            Text(appState.profileUpdateMessage ?? "")
+        }
         .dropDestination(for: URL.self) { urls, _ in
             guard let app = urls.first(where: { $0.pathExtension == "app" }) else { return false }
             appState.wizardPrefillTarget = app
             appState.isWizardPresented = true
             return true
         }
+    }
+
+    /// Shows the Check Profile Updates result until it is dismissed.
+    private var isProfileUpdateAlertPresented: Binding<Bool> {
+        Binding(get: { appState.profileUpdateMessage != nil }, set: { if !$0 { appState.profileUpdateMessage = nil } })
     }
 }

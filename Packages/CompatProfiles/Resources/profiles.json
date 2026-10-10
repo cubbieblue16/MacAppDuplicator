@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-10-09",
+  "apps": {
+    "com.anthropic.claudefordesktop": {
+      "name": "Claude",
+      "status": "verified",
+      "family": "electron",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Each instance has its own claude_desktop_config.json inside the data folder."
+    },
+    "com.google.Chrome": {
+      "name": "Google Chrome",
+      "status": "partial",
+      "family": "chromium",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Chromium: Auto data mode adds --user-data-dir, so each instance has its own profile and single-instance lock. Not launch-tested yet."
+    },
+    "com.brave.Browser": {
+      "name": "Brave Browser",
+      "status": "partial",
+      "family": "chromium",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Chromium: Auto data mode adds --user-data-dir, so each instance has its own profile and single-instance lock. Not launch-tested yet."
+    },
+    "com.microsoft.edgemac": {
+      "name": "Microsoft Edge",
+      "status": "partial",
+      "family": "chromium",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Chromium: Auto data mode adds --user-data-dir, so each instance has its own profile and single-instance lock. Not launch-tested yet."
+    },
+    "org.mozilla.firefox": {
+      "name": "Firefox",
+      "status": "partial",
+      "family": "firefox",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Firefox: Auto data mode adds --profile and --no-remote, so each instance runs its own profile. Not launch-tested yet."
+    },
+    "com.microsoft.VSCode": {
+      "name": "Visual Studio Code",
+      "status": "partial",
+      "family": "electron",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Electron: Auto data mode adds --user-data-dir; files the app keeps under HOME (logs, updater cache) stay shared. Not launch-tested yet."
+    },
+    "com.todesktop.230313mzl4w4u92": {
+      "name": "Cursor",
+      "status": "partial",
+      "family": "todesktop",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "ToDesktop (Electron): Auto data mode adds --user-data-dir; files the app keeps under HOME stay shared. Not launch-tested yet."
+    },
+    "com.tinyspeck.slackmacgap": {
+      "name": "Slack",
+      "status": "partial",
+      "family": "electron",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Electron: Auto data mode adds --user-data-dir; files the app keeps under HOME (logs, updater cache) stay shared. Not launch-tested yet."
+    },
+    "com.hnc.Discord": {
+      "name": "Discord",
+      "status": "partial",
+      "family": "electron",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Electron: Auto data mode adds --user-data-dir; files the app keeps under HOME (logs, updater cache) stay shared. Not launch-tested yet."
+    },
+    "md.obsidian": {
+      "name": "Obsidian",
+      "status": "partial",
+      "family": "electron",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Electron: Auto data mode adds --user-data-dir; files the app keeps under HOME (logs, updater cache) stay shared. Not launch-tested yet."
+    },
+    "tv.plex.desktop": {
+      "name": "Plex",
+      "status": "partial",
+      "family": null,
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Family not set; App Duplicator uses the family it detects. Not launch-tested yet."
+    },
+    "com.spotify.client": {
+      "name": "Spotify",
+      "status": "partial",
+      "family": null,
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Family not set; App Duplicator uses the family it detects. Not launch-tested yet."
+    },
+    "org.whispersystems.signal-desktop": {
+      "name": "Signal",
+      "status": "partial",
+      "family": "electron",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Electron: Auto data mode adds --user-data-dir; files the app keeps under HOME (logs, updater cache) stay shared. Not launch-tested yet."
+    },
+    "ru.keepcoder.Telegram": {
+      "name": "Telegram",
+      "status": "partial",
+      "family": "native",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Native app. The Mac App Store build is sandboxed: its container cannot be moved, so Auto data mode separates nothing and instances share data. Not launch-tested yet."
+    },
+    "com.mitchellh.ghostty": {
+      "name": "Ghostty",
+      "status": "partial",
+      "family": "native",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Native app: Auto data mode falls back to a HOME override; preferences (CFPreferences) stay shared. Not launch-tested yet."
+    },
+    "com.googlecode.iterm2": {
+      "name": "iTerm2",
+      "status": "partial",
+      "family": "native",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Native app: Auto data mode falls back to a HOME override; preferences (CFPreferences) stay shared. Not launch-tested yet."
+    },
+    "com.apple.Terminal": {
+      "name": "Terminal",
+      "status": "partial",
+      "family": "native",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Apple platform binary, System Launch only."
+    },
+    "com.apple.dt.Xcode": {
+      "name": "Xcode",
+      "status": "partial",
+      "family": "native",
+      "args": [],
+      "env": {},
+      "newWindowCommand": null,
+      "notes": "Native app: Auto data mode falls back to a HOME override; preferences (CFPreferences) stay shared. Not launch-tested yet."
+    }
+  },
+  "webApps": {}
+}

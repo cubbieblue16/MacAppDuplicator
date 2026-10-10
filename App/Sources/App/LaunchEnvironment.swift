@@ -1,3 +1,4 @@
+import CompatProfiles
 import Foundation
 
 /// How the process was launched, for the choices `MacAppDuplicatorApp.init` makes (final review M15).
@@ -21,5 +22,14 @@ enum LaunchEnvironment {
         }
         suite.removePersistentDomain(forName: suiteName)
         return suite
+    }
+
+    /// The profiles cache Check Profile Updates writes (`~/Library/Application Support/App Duplicator/profiles.json`).
+    /// Under the test host, a file under the temporary directory, unique to this call, so the host never reads or
+    /// writes the real cache.
+    static func profilesCacheURL(isTestHost: Bool, home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
+        guard isTestHost else { return ProfilesConstants.defaultCacheURL(home: home) }
+        return FileManager.default.temporaryDirectory
+            .appending(path: "mad-testhost-profiles-\(UUID().uuidString).json", directoryHint: .notDirectory)
     }
 }

@@ -1,4 +1,6 @@
+import CompatProfiles
 import Foundation
+import Synchronization
 import XCTest
 @testable import DuplicatorCore
 @testable import MacAppDuplicator
@@ -75,4 +77,29 @@ extension XCTestCase {
             try? await Task.sleep(for: .milliseconds(50))
         }
     }
+}
+
+/// A `ProfilesFetching` that returns a canned result and records every URL it was asked for; never touches the network.
+final class StubProfilesFetcher: ProfilesFetching, Sendable {
+    let result: Result<Data, ProfilesError>
+    private let calls = Mutex<[URL]>([])
+
+    init(_ result: Result<Data, ProfilesError>) {
+        self.result = result
+    }
+
+    var requestedURLs: [URL] { calls.withLock { $0 } }
+
+    func fetch(from url: URL) async throws -> Data {
+        calls.withLock { $0.append(url) }
+        return try result.get()
+    }
+}
+
+/// `profiles.json` bytes (schema 1) dated `updated`, with one minimal entry per `apps` key (bundle identifier → status).
+func makeProfilesJSON(updated: String, apps: [String: String]) throws -> Data {
+    var entries: [String: Any] = [:]
+    for (identifier, status) in apps { entries[identifier] = ["name": identifier, "status": status] as [String: Any] }
+    let object: [String: Any] = ["schemaVersion": 1, "updated": updated, "apps": entries]
+    return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
 }

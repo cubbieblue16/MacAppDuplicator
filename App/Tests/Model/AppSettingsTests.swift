@@ -1,3 +1,4 @@
+import CompatProfiles
 import XCTest
 @testable import DuplicatorCore
 @testable import MacAppDuplicator
@@ -114,5 +115,27 @@ final class AppSettingsTests: XCTestCase {
         await settings.loadDefaultSigningIdentity { ["Apple Development: Test (DEVTEAM)"] }
         XCTAssertEqual(settings.signingIdentity, AppSettings.adHocIdentityName)
         XCTAssertNil(settings.signerIdentity)
+    }
+
+    func testProfilesURLDefaultsToTheConstantAndPersistsAChoice() {
+        let settings = AppSettings(defaults: defaults, defaultSigningIdentity: AppSettings.adHocIdentityName)
+        XCTAssertEqual(settings.profilesURLString, ProfilesConstants.defaultURLString)
+        XCTAssertEqual(settings.profilesURL?.absoluteString, ProfilesConstants.defaultURLString)
+        let fork = "https://raw.githubusercontent.com/example/fork/main/profiles.json"
+        settings.profilesURLString = fork
+        XCTAssertEqual(AppSettings(defaults: defaults, defaultSigningIdentity: AppSettings.adHocIdentityName).profilesURLString, fork)
+        settings.profilesURLString = ProfilesConstants.defaultURLString
+        XCTAssertNil(defaults.object(forKey: "profilesURLString"), "the default is not stored, so a later default still applies")
+    }
+
+    func testProfilesURLIsNilUnlessItIsAnAllowedAddress() {
+        let settings = AppSettings(defaults: defaults, defaultSigningIdentity: AppSettings.adHocIdentityName)
+        settings.profilesURLString = "  \(ProfilesConstants.defaultURLString)\n"
+        XCTAssertEqual(settings.profilesURL?.absoluteString, ProfilesConstants.defaultURLString, "surrounding whitespace is ignored")
+        for refused in ["http://raw.githubusercontent.com/example/fork/main/profiles.json",
+                        "https://example.com/profiles.json", "", "not a url"] {
+            settings.profilesURLString = refused
+            XCTAssertNil(settings.profilesURL, refused)
+        }
     }
 }

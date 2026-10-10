@@ -1,4 +1,5 @@
 import AppKit
+import CompatProfiles
 import DuplicatorCore
 import Observation
 
@@ -46,21 +47,40 @@ enum DataFolderDeletionOption: Equatable {
 final class AppState {
     let settings: AppSettings
     let library: ShortcutLibrary
+    let profiles: ProfilesModel
     private let launcherBinary: URL
 
     var selection: URL?
     var isWizardPresented = false
     var wizardPrefillTarget: URL?
     var pendingError: AppError?
+    /// The last Check Profile Updates result, shown in an alert until it is dismissed.
+    var profileUpdateMessage: String?
 
-    init(settings: AppSettings, library: ShortcutLibrary, launcherBinary: URL) {
+    init(settings: AppSettings, library: ShortcutLibrary, launcherBinary: URL, profiles: ProfilesModel? = nil) {
         self.settings = settings
         self.library = library
         self.launcherBinary = launcherBinary
+        // Main-actor types are never default argument values; nil means the inert model (no profiles, no network).
+        self.profiles = profiles ?? .inert()
     }
 
     var builder: ShortcutBuilder {
         ShortcutBuilder(launcherBinary: launcherBinary, signingIdentity: settings.signerIdentity)
+    }
+
+    /// The compatibility profile for a target bundle identifier, if the profiles in use have one.
+    func profile(forBundleIdentifier bundleIdentifier: String) -> AppProfile? {
+        profiles.profile(forBundleIdentifier: bundleIdentifier)
+    }
+
+    /// Check Profile Updates from the toolbar or the app menu: fetches from the Settings URL and keeps the result in
+    /// `profileUpdateMessage` for the alert.
+    @discardableResult
+    func checkProfileUpdates() async -> String {
+        let message = await profiles.checkForUpdates(from: settings.profilesURL)
+        profileUpdateMessage = message
+        return message
     }
 
     var selectedRecord: ShortcutRecord? {

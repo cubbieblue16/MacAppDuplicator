@@ -1,3 +1,4 @@
+import CompatProfiles
 import DuplicatorCore
 import Foundation
 import Observation
@@ -16,6 +17,7 @@ final class AppSettings {
         static let libraryFolders = "libraryFolderPaths"
         static let signingIdentity = "signingIdentity"
         static let homeSymlinkEntries = "homeSymlinkEntries"
+        static let profilesURL = "profilesURLString"
     }
 
     static func defaultOutputFolder(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
@@ -43,10 +45,28 @@ final class AppSettings {
     var homeSymlinkEntries: [String] {
         didSet { defaults.set(homeSymlinkEntries, forKey: Key.homeSymlinkEntries) }
     }
+    /// Settings → Profiles. Stored only when it differs from `ProfilesConstants.defaultURLString`, so a later default
+    /// reaches users who never changed it.
+    var profilesURLString: String {
+        didSet {
+            if profilesURLString == ProfilesConstants.defaultURLString {
+                defaults.removeObject(forKey: Key.profilesURL)
+            } else {
+                defaults.set(profilesURLString, forKey: Key.profilesURL)
+            }
+        }
+    }
 
     /// `Signer` argument: nil for ad hoc.
     var signerIdentity: String? {
         signingIdentity == Self.adHocIdentityName ? nil : signingIdentity
+    }
+
+    /// `profilesURLString` without surrounding whitespace, when it is an allowed profiles address; nil otherwise.
+    var profilesURL: URL? {
+        let trimmed = profilesURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed), ProfilesFetchPolicy.isAllowedSource(url) else { return nil }
+        return url
     }
 
     /// Output folder first, then user folders, without duplicates.
@@ -61,6 +81,7 @@ final class AppSettings {
         libraryFolders = (defaults.stringArray(forKey: Key.libraryFolders) ?? []).map { URL(fileURLWithPath: $0, isDirectory: true) }
         signingIdentity = defaults.string(forKey: Key.signingIdentity) ?? defaultSigningIdentity
         homeSymlinkEntries = defaults.stringArray(forKey: Key.homeSymlinkEntries) ?? HomeTreeBuilder.defaultSymlinkEntries
+        profilesURLString = defaults.string(forKey: Key.profilesURL) ?? ProfilesConstants.defaultURLString
     }
 
     /// Replaces the launch-time default (`init`'s `defaultSigningIdentity`) once the identities have loaded, unless the

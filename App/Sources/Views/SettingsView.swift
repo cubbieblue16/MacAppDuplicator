@@ -1,3 +1,4 @@
+import CompatProfiles
 import DuplicatorCore
 import SwiftUI
 
@@ -12,6 +13,8 @@ struct SettingsView: View {
                 .tabItem { Label("Signing", systemImage: "checkmark.seal") }
             DataSettingsTab(settings: appState.settings)
                 .tabItem { Label("Data", systemImage: "folder.badge.gearshape") }
+            ProfilesSettingsTab(settings: appState.settings, profiles: appState.profiles)
+                .tabItem { Label("Profiles", systemImage: "checkmark.shield") }
         }
         .frame(width: 560, height: 400)
         .padding()
@@ -122,5 +125,39 @@ private struct DataSettingsTab: View {
             }
         }
         .padding(.top, 8)
+    }
+}
+
+private struct ProfilesSettingsTab: View {
+    @Bindable var settings: AppSettings
+    let profiles: ProfilesModel
+
+    var body: some View {
+        Form {
+            TextField("Profiles URL", text: $settings.profilesURLString)
+            if settings.profilesURL == nil {
+                // Verbatim: a string literal would be read as Markdown and the address shown as a link.
+                Label {
+                    Text(verbatim: "Use an https://raw.githubusercontent.com address.")
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                }
+                .foregroundStyle(.orange)
+            }
+            HStack {
+                Button("Reset to Default") { settings.profilesURLString = ProfilesConstants.defaultURLString }
+                Spacer()
+                if profiles.isChecking { ProgressView().controlSize(.small) }
+                Button("Check Now") { Task { await profiles.checkForUpdates(from: settings.profilesURL) } }
+                    .disabled(profiles.isChecking || settings.profilesURL == nil)
+            }
+            if let status = profiles.statusMessage {
+                Text(status).font(.caption).foregroundStyle(.secondary)
+            }
+            LabeledContent("In use", value: profiles.catalogSummary)
+            Text("Profiles are downloaded only when you choose Check Profile Updates. A downloaded copy is used only when it is newer than the bundled one, and it never changes existing shortcuts: profile values are copied into a shortcut when it is created.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .formStyle(.grouped)
     }
 }

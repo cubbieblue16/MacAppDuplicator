@@ -1,3 +1,4 @@
+import CompatProfiles
 import XCTest
 @testable import DuplicatorCore
 @testable import MacAppDuplicator
@@ -170,5 +171,21 @@ final class AppStateTests: XCTestCase {
         let count = await state.rebuildAll()
         XCTAssertEqual(count, 1)
         XCTAssertTrue(library.recordsNeedingRebuild.isEmpty)
+    }
+
+    func testCheckProfileUpdatesUsesTheSettingsURLAndReportsTheResult() async throws {
+        let fork = "https://raw.githubusercontent.com/example/fork/main/profiles.json"
+        settings.profilesURLString = fork
+        let fetcher = StubProfilesFetcher(.success(try makeProfilesJSON(updated: "2026-10-11", apps: ["com.example.target": "verified"])))
+        let profiles = ProfilesModel(bundledURL: nil, cacheURL: dir.appending(path: "profiles.json", directoryHint: .notDirectory), fetcher: fetcher)
+        let checking = AppState(settings: settings, library: library, launcherBinary: dir.appending(path: "Launcher"), profiles: profiles)
+        XCTAssertNil(state.profile(forBundleIdentifier: "com.example.target"), "the default model is inert and empty")
+
+        let message = await checking.checkProfileUpdates()
+
+        XCTAssertEqual(message, "Downloaded profiles from 2026-10-11.")
+        XCTAssertEqual(checking.profileUpdateMessage, message)
+        XCTAssertEqual(fetcher.requestedURLs.map(\.absoluteString), [fork])
+        XCTAssertEqual(checking.profile(forBundleIdentifier: "com.example.target")?.status, .verified)
     }
 }

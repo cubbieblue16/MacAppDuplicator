@@ -36,4 +36,14 @@ final class LaunchEnvironmentTests: XCTestCase {
         XCTAssertEqual(Bundle.main.bundleIdentifier, "com.mikekuta.MacAppDuplicator")
         XCTAssertNotEqual(LaunchEnvironment.testHostSuiteName, Bundle.main.bundleIdentifier)
     }
+
+    func testProfilesCacheIsTheRealPathOnlyOutsideTheTestHost() {
+        let home = URL(filePath: "/Users/test", directoryHint: .isDirectory)
+        XCTAssertEqual(LaunchEnvironment.profilesCacheURL(isTestHost: false, home: home).path,
+                       "/Users/test/Library/Application Support/App Duplicator/profiles.json")
+        let hosted = LaunchEnvironment.profilesCacheURL(isTestHost: true, home: home)
+        XCTAssertTrue(hosted.path.hasPrefix(FileManager.default.temporaryDirectory.path), hosted.path)
+        XCTAssertNotEqual(hosted, LaunchEnvironment.profilesCacheURL(isTestHost: true, home: home), "unique per call")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: hosted.path))
+    }
 }

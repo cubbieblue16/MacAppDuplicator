@@ -1,3 +1,4 @@
+import CompatProfiles
 import SwiftUI
 
 @main
@@ -9,9 +10,16 @@ struct MacAppDuplicatorApp: App {
         let isTestHost = Self.isTestHost
         let settings = AppSettings(defaults: LaunchEnvironment.settingsDefaults(isTestHost: isTestHost),
                                    defaultSigningIdentity: AppSettings.adHocIdentityName)
+        // As the test host the app never fetches profiles, and its cache path is a temporary file nothing writes.
+        let fetcher: any ProfilesFetching = isTestHost ? DisabledProfilesFetcher() : URLSessionProfilesFetcher()
+        let profiles = ProfilesModel(bundledURL: Bundle.main.url(forResource: "profiles", withExtension: "json"),
+                                     cacheURL: LaunchEnvironment.profilesCacheURL(isTestHost: isTestHost),
+                                     fetcher: fetcher)
         if !isTestHost {
             // `security find-identity` runs off the main thread; until it returns, new shortcuts default to ad hoc.
             Task { await settings.loadDefaultSigningIdentity() }
+            // The profiles are read off the main thread too; until they load, no target has a profile.
+            Task { await profiles.load() }
         }
         let library = ShortcutLibrary(settings: settings)
         // `EmbeddedLauncher.url()` throws only when the Embed Launcher build phase did not run. Keep the expected path
@@ -24,7 +32,7 @@ struct MacAppDuplicatorApp: App {
             launcherBinary = Bundle.main.bundleURL.appending(path: "Contents/Resources/Launcher", directoryHint: .notDirectory)
             launcherError = error
         }
-        let state = AppState(settings: settings, library: library, launcherBinary: launcherBinary)
+        let state = AppState(settings: settings, library: library, launcherBinary: launcherBinary, profiles: profiles)
         if let launcherError { state.present(launcherError, context: "Could not find the launcher") }
         _appState = State(initialValue: state)
     }
@@ -44,6 +52,10 @@ struct MacAppDuplicatorApp: App {
                 }
         }
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check Profile Updates") { Task { await appState.checkProfileUpdates() } }
+                    .disabled(appState.profiles.isChecking)
+            }
             CommandGroup(replacing: .newItem) {
                 Button("New Shortcut…") { appState.isWizardPresented = true }
                     .keyboardShortcut("n", modifiers: .command)

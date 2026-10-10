@@ -32,9 +32,14 @@ targets:
     sources:
       - path: Sources
       - path: Resources
+      # The bundled compatibility profiles seed (spec §8), copied into Contents/Resources.
+      - path: ../Packages/CompatProfiles/Resources/profiles.json
+        buildPhase: resources
     dependencies:
       - package: DuplicatorCore
         product: DuplicatorCore
+      - package: DuplicatorCore
+        product: CompatProfiles
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mikekuta.MacAppDuplicator
@@ -95,6 +100,8 @@ targets:
       - target: MacAppDuplicator
       - package: DuplicatorCore
         product: DuplicatorCore
+      - package: DuplicatorCore
+        product: CompatProfiles
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mikekuta.MacAppDuplicatorTests
