@@ -74,6 +74,7 @@ final class WebShellAppDelegate: NSObject, NSApplicationDelegate {
     ) {
         let features = WebShellFeatures(
             webApp: webApp,
+            hostPolicy: shell.policy,
             menuBarIcon: shortcut.menuBarIcon,
             appName: StatusItemText.appName(infoDictionary: Bundle.main.infoDictionary, fallback: shortcut.name),
             logger: logger,

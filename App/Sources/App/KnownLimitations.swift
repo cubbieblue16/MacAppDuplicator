@@ -126,7 +126,7 @@ enum KnownLimitations {
         KnownLimitation(
             id: "web-notification-permission",
             title: "Web notifications are always allowed, but macOS decides whether they appear",
-            detail: "A web app tells every site that notification permission is granted, so sites never show their own permission prompt. Whether a banner actually appears is up to macOS: the first notification asks for permission for that shortcut, and you change it later in System Settings > Notifications. A site that checked permission before you allowed it in System Settings keeps its answer until you reload the page."
+            detail: "A web app tells every site that notification permission is granted, so sites never show their own permission prompt. Notifications are accepted only from the sites the web app keeps in its window (the app's own host and the hosts listed under Also open in app); a notification from any other site or frame is dropped. Whether a banner actually appears is up to macOS: the first notification asks for permission for that shortcut, and you change it later in System Settings > Notifications. A site that checked permission before you allowed it in System Settings keeps its answer until you reload the page."
         ),
         KnownLimitation(
             id: "web-popup-policy",

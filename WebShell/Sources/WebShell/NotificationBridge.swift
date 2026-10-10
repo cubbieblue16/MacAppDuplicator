@@ -14,8 +14,12 @@ struct NotificationTarget {
 @MainActor
 final class NotificationBridge: NSObject, WKScriptMessageHandler {
     let router: NotificationRouter<NotificationTarget>
+    private let hostPolicy: WebHostPolicy
+    private let logger: LaunchLogger
 
-    init(poster: NotificationPosting, logger: LaunchLogger, bringToFront: @escaping @MainActor () -> Void) {
+    init(poster: NotificationPosting, hostPolicy: WebHostPolicy, logger: LaunchLogger, bringToFront: @escaping @MainActor () -> Void) {
+        self.hostPolicy = hostPolicy
+        self.logger = logger
         router = NotificationRouter(poster: poster, logger: logger, bringToFront: bringToFront) { script, target in
             guard let webView = target.webView else {
                 logger.log("notification click: web view gone")
@@ -36,6 +40,11 @@ final class NotificationBridge: NSObject, WKScriptMessageHandler {
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == WebShellScripts.notificationHandlerName else { return }
+        let origin = message.frameInfo.securityOrigin
+        guard WebShellMessages.isTrustedOrigin(scheme: origin.protocol, host: origin.host, policy: hostPolicy) else {
+            logger.log("notification dropped origin=\(origin.host)")
+            return
+        }
         let target = NotificationTarget(webView: message.webView, frame: message.frameInfo, world: message.world)
         router.receive(message.body, from: target)
     }
@@ -93,7 +102,7 @@ final class UserNotificationPoster: NSObject, NotificationPosting, UNUserNotific
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([.banner, .sound])
+        completionHandler([.banner, .list, .sound])
     }
 
     nonisolated func userNotificationCenter(

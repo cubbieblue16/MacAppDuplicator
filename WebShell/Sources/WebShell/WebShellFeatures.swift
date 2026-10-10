@@ -14,6 +14,7 @@ final class WebShellFeatures {
 
     init(
         webApp: WebAppConfig,
+        hostPolicy: WebHostPolicy,
         menuBarIcon: Bool,
         appName: String,
         logger: LaunchLogger,
@@ -27,13 +28,14 @@ final class WebShellFeatures {
         badge = BadgeController(parser: BadgeTitleParser(pattern: webApp.badgeRegex), logger: logger) { label in
             NSApp.dockTile.badgeLabel = label
         }
-        notifications = NotificationBridge(poster: poster, logger: logger) {
+        notifications = NotificationBridge(poster: poster, hostPolicy: hostPolicy, logger: logger) {
             WebShellFeatures.bringAppToFront(showWindow: showWindow)
         }
     }
 
     /// Call once from `applicationDidFinishLaunching`, before the first page load.
     func install(on coordinator: WebViewCoordinator) {
+        badge.trustedWebView = coordinator.webView
         coordinator.addMessageHandler(badge, name: WebShellScripts.badgeHandlerName)
         coordinator.addMessageHandler(notifications, name: WebShellScripts.notificationHandlerName)
         let previous = coordinator.titleDidChange

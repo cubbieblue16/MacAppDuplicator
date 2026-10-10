@@ -36,6 +36,9 @@ final class BadgeController: NSObject, WKScriptMessageHandler {
 
     var count: Int { state.count }
 
+    /// The only web view whose main frame may post badge counts; set by `WebShellFeatures.install`.
+    weak var trustedWebView: WKWebView?
+
     init(parser: BadgeTitleParser, logger: LaunchLogger, setDockBadge: @escaping @MainActor (String?) -> Void) {
         self.parser = parser
         self.logger = logger
@@ -63,6 +66,13 @@ final class BadgeController: NSObject, WKScriptMessageHandler {
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == WebShellScripts.badgeHandlerName else { return }
+        guard message.frameInfo.isMainFrame, let trustedWebView, message.webView === trustedWebView else {
+            if !loggedInvalidMessage {
+                loggedInvalidMessage = true
+                logger.log("badge message dropped (not from the main frame)")
+            }
+            return
+        }
         handleMessageBody(message.body)
     }
 

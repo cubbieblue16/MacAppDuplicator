@@ -1,3 +1,4 @@
+import DuplicatorCore
 import Foundation
 
 /// Pure validation of the bodies the page posts to the `madBadge` and `madNotification` handlers.
@@ -9,6 +10,18 @@ enum WebShellMessages {
 
     static let maxTextLength = 1_024
     static let maxLoggedTitleLength = 120
+
+    /// True when a page-to-native message comes from a site the web app keeps in its window: an http(s) origin whose
+    /// host `policy` accepts (the app's host, its subdomains and the extra hosts).
+    static func isTrustedOrigin(scheme: String?, host: String?, policy: WebHostPolicy) -> Bool {
+        guard let scheme = scheme?.lowercased(), scheme == "http" || scheme == "https",
+              let host, !host.isEmpty else { return false }
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = host
+        guard let url = components.url else { return false }
+        return policy.allowsInPlace(url)
+    }
 
     /// `{count: n}` gives n; `{}` or `{count: null}` gives 0 (clear); anything else gives nil (drop).
     static func badgeCount(fromMessageBody body: Any) -> Int? {

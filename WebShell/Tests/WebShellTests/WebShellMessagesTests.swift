@@ -1,3 +1,4 @@
+import DuplicatorCore
 @testable import WebShell
 import XCTest
 
@@ -83,5 +84,27 @@ final class WebShellMessagesTests: XCTestCase {
     func testLoggableTitleFlattensControlCharactersAndTruncates() {
         XCTAssertEqual(WebShellMessages.loggableTitle("a\nb\tc\u{2028}d"), "a b c d")
         XCTAssertEqual(WebShellMessages.loggableTitle(String(repeating: "y", count: 500)).count, WebShellMessages.maxLoggedTitleLength)
+    }
+
+    // MARK: - isTrustedOrigin
+
+    private var originPolicy: WebHostPolicy {
+        WebHostPolicy(baseURL: URL(string: "https://app.example/")!, extraHosts: ["cdn.example"])
+    }
+
+    func testTrustedOriginAcceptsAppAndExtraHosts() {
+        XCTAssertTrue(WebShellMessages.isTrustedOrigin(scheme: "https", host: "app.example", policy: originPolicy))
+        XCTAssertTrue(WebShellMessages.isTrustedOrigin(scheme: "https", host: "Mail.APP.example", policy: originPolicy))
+        XCTAssertTrue(WebShellMessages.isTrustedOrigin(scheme: "http", host: "cdn.example", policy: originPolicy))
+    }
+
+    func testTrustedOriginRejectsForeignHostsAndSchemes() {
+        XCTAssertFalse(WebShellMessages.isTrustedOrigin(scheme: "https", host: "evil.example", policy: originPolicy))
+        XCTAssertFalse(WebShellMessages.isTrustedOrigin(scheme: "https", host: "app.example.evil.example", policy: originPolicy))
+        XCTAssertFalse(WebShellMessages.isTrustedOrigin(scheme: "https", host: nil, policy: originPolicy))
+        XCTAssertFalse(WebShellMessages.isTrustedOrigin(scheme: "https", host: "", policy: originPolicy))
+        XCTAssertFalse(WebShellMessages.isTrustedOrigin(scheme: nil, host: "app.example", policy: originPolicy))
+        XCTAssertFalse(WebShellMessages.isTrustedOrigin(scheme: "file", host: "app.example", policy: originPolicy))
+        XCTAssertFalse(WebShellMessages.isTrustedOrigin(scheme: "about", host: "app.example", policy: originPolicy))
     }
 }
