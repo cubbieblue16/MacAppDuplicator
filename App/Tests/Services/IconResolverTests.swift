@@ -121,3 +121,72 @@ final class IconResolverTests: XCTestCase {
         }
     }
 }
+
+/// Phase 5: icons for file, folder and command shortcuts. Every fixture lives in a per-test temp folder.
+final class IconResolverLauncherTests: XCTestCase {
+    private var dir: URL!
+    private var scratch: URL!
+
+    override func setUpWithError() throws {
+        dir = try makeAppTemporaryDirectory()
+        scratch = dir.appending(path: "scratch", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try FileManager.default.removeItem(at: dir)
+    }
+
+    private func launcherConfig(
+        kind: ShortcutKind, file: FileConfig? = nil, cli: CLIConfig? = nil, iconMode: IconMode = .copied, customIconPath: String? = nil
+    ) -> ShortcutConfig {
+        ShortcutConfig(
+            kind: kind, name: "Launcher Icon", slug: "launcher-icon", bundleIdentifier: ShortcutConfig.bundleIdentifier(forSlug: "launcher-icon"),
+            targetPath: "", targetBundleIdentifier: "", launchMode: .dockShortcut, dataMode: .disabled, dataPath: nil,
+            iconMode: iconMode, customIconPath: customIconPath, file: file, cli: cli
+        )
+    }
+
+    private func isICNS(_ url: URL) throws -> Bool {
+        String(decoding: try Data(contentsOf: url).prefix(4), as: UTF8.self) == "icns"
+    }
+
+    func testCopiedIconOfAFileIsRenderedToItemIcon() throws {
+        let item = dir.appending(path: "notes.txt")
+        try Data("notes".utf8).write(to: item)
+        let url = try XCTUnwrap(IconResolver.launcherIconFile(for: launcherConfig(kind: .file, file: FileConfig(path: item.path)), scratchDirectory: scratch))
+        XCTAssertEqual(url, scratch.appending(path: "item-icon.icns"))
+        XCTAssertTrue(try isICNS(url))
+    }
+
+    func testCopiedIconOfAFolderAndOfAnExecutable() throws {
+        let folder = dir.appending(path: "Projects", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let folderIcon = try XCTUnwrap(IconResolver.launcherIconFile(for: launcherConfig(kind: .folder, file: FileConfig(path: folder.path)), scratchDirectory: scratch))
+        XCTAssertTrue(try isICNS(folderIcon))
+        try FileManager.default.removeItem(at: folderIcon)
+
+        let tool = dir.appending(path: "tool")
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/echo"), to: tool)
+        let toolIcon = try XCTUnwrap(IconResolver.launcherIconFile(for: launcherConfig(kind: .cli, cli: CLIConfig(executablePath: tool.path)), scratchDirectory: scratch))
+        XCTAssertEqual(toolIcon.lastPathComponent, "item-icon.icns")
+        XCTAssertTrue(try isICNS(toolIcon))
+    }
+
+    func testGeneratedAndCustomModesWorkAsForAppShortcuts() throws {
+        let generated = try XCTUnwrap(IconResolver.launcherIconFile(for: launcherConfig(kind: .folder, file: FileConfig(path: dir.path), iconMode: .generated), scratchDirectory: scratch))
+        XCTAssertEqual(generated.lastPathComponent, "generated-icon.icns")
+        XCTAssertTrue(try isICNS(generated))
+
+        let missingCustom = dir.appending(path: "missing.png").path
+        let config = launcherConfig(kind: .file, file: FileConfig(path: dir.path), iconMode: .custom, customIconPath: missingCustom)
+        XCTAssertThrowsError(try IconResolver.launcherIconFile(for: config, scratchDirectory: scratch)) { error in
+            guard case IconResolver.IconError.customFileMissing(let path) = error, path == missingCustom else { return XCTFail("\(error)") }
+        }
+    }
+
+    func testCopiedIconWithoutSettingsIsNil() throws {
+        XCTAssertNil(try IconResolver.launcherIconFile(for: launcherConfig(kind: .cli), scratchDirectory: scratch))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: scratch.path), [])
+    }
+}

@@ -1,3 +1,4 @@
+import AppKit
 import DuplicatorCore
 import Foundation
 import os
@@ -24,12 +25,54 @@ enum IconResolver {
         switch config.iconMode {
         case .copied:
             return app.iconFileURL
+        case .custom, .generated:
+            return try madeIconFile(for: config, scratchDirectory: scratchDirectory)
+        }
+    }
+
+    /// Phase 5: the icon of a file, folder or command shortcut. `.copied` renders the Finder icon of the item (file and
+    /// folder) or of the executable (command) into `item-icon.icns`; `.custom` and `.generated` work as for app shortcuts.
+    /// - Returns: nil for `.copied` when the config has no `file`/`cli` settings (`ShortcutBuilder` refuses those first).
+    static func launcherIconFile(for config: ShortcutConfig, scratchDirectory: URL) throws -> URL? {
+        switch config.iconMode {
+        case .custom, .generated:
+            return try madeIconFile(for: config, scratchDirectory: scratchDirectory)
+        case .copied:
+            guard let path = launcherItemPath(of: config) else { return nil }
+            let image = NSWorkspace.shared.icon(forFile: path)
+            var proposed = CGRect(origin: .zero, size: NSSize(width: 1024, height: 1024))
+            guard let cgImage = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil) else {
+                throw IconError.renderFailed("No icon image for \(path)")
+            }
+            // Fixed scratch name, as for the other modes: the scratch directory is already per build.
+            let out = scratchDirectory.appending(path: "item-icon.icns")
+            do { try IconRenderer.writeICNS(from: cgImage, to: out) } catch {
+                throw IconError.renderFailed(error.localizedDescription)
+            }
+            return out
+        }
+    }
+
+    /// The path whose Finder icon a `.copied` launcher icon shows: the item for a file or folder, the executable for a command.
+    static func launcherItemPath(of config: ShortcutConfig) -> String? {
+        switch config.kind {
+        case .file, .folder: config.file?.path
+        case .cli: config.cli?.executablePath
+        case .app, .webApp: nil
+        }
+    }
+
+    /// `.custom` (a converted copy of `customIconPath`) and `.generated` (a letter tile for the name), shared by app and
+    /// launcher shortcuts. Fixed scratch names: the scratch directory is already per build, and a slug from a hand-edited
+    /// config (for example one containing "../") must never steer where the file is written.
+    private static func madeIconFile(for config: ShortcutConfig, scratchDirectory: URL) throws -> URL? {
+        switch config.iconMode {
+        case .copied:
+            return nil
         case .custom:
             guard let path = config.customIconPath, FileManager.default.fileExists(atPath: path) else {
                 throw IconError.customFileMissing(config.customIconPath ?? "")
             }
-            // Fixed scratch names: the scratch directory is already per build, and a slug from a hand-edited config
-            // (for example one containing "../") must never steer where the file is written.
             let out = scratchDirectory.appending(path: "custom-icon.icns")
             do { try IconRenderer.writeICNS(fromImageFile: URL(fileURLWithPath: path), to: out) } catch {
                 throw IconError.renderFailed(error.localizedDescription)
