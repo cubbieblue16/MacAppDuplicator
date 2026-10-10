@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "DuplicatorCore", targets: ["DuplicatorCore"]),
         .library(name: "CompatProfiles", targets: ["CompatProfiles"]),
         .executable(name: "Launcher", targets: ["Launcher"]),
+        .executable(name: "WebShell", targets: ["WebShell"]),
         .executable(name: "madctl", targets: ["madctl"]),
     ],
     dependencies: [
@@ -23,10 +24,12 @@ let package = Package(
         .testTarget(name: "CompatProfilesTests", dependencies: ["CompatProfiles", "DuplicatorCore"],
                     path: "Packages/CompatProfiles/Tests/CompatProfilesTests"),
         .executableTarget(name: "Launcher", dependencies: ["DuplicatorCore"], path: "Launcher/Sources/Launcher"),
+        // Web-app shortcut executable (Phase 4 skeleton decision 2). Programmatic AppKit + WebKit, no resources.
+        .executableTarget(name: "WebShell", dependencies: ["DuplicatorCore"], path: "WebShell/Sources/WebShell"),
         .executableTarget(name: "madctl",
                           dependencies: ["DuplicatorCore", .product(name: "ArgumentParser", package: "swift-argument-parser")],
                           path: "Tools/madctl/Sources/madctl"),
-        .testTarget(name: "IntegrationTests", path: "Tests/Integration"),
+        .testTarget(name: "IntegrationTests", dependencies: ["DuplicatorCore"], path: "Tests/Integration"),
     ],
     swiftLanguageModes: [.v6]
 )
