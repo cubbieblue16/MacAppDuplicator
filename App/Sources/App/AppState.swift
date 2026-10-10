@@ -48,6 +48,8 @@ final class AppState {
     let settings: AppSettings
     let library: ShortcutLibrary
     let profiles: ProfilesModel
+    /// The home folder data paths resolve against; a property so tests run against a temporary home.
+    let home: URL
     private let launcherBinary: URL
     private let webShellBinary: URL
 
@@ -65,7 +67,8 @@ final class AppState {
     @ObservationIgnored var webDataRemover: any WebDataRemoving = WebKitWebDataRemover()
 
     /// `webShellBinary` nil means "next to the launcher in Resources" (where the Embed Web Shell build phase puts it).
-    init(settings: AppSettings, library: ShortcutLibrary, launcherBinary: URL, webShellBinary: URL? = nil, profiles: ProfilesModel? = nil) {
+    init(settings: AppSettings, library: ShortcutLibrary, launcherBinary: URL, webShellBinary: URL? = nil, profiles: ProfilesModel? = nil, home: URL = FileManager.default.homeDirectoryForCurrentUser) {
+        self.home = home
         self.settings = settings
         self.library = library
         self.launcherBinary = launcherBinary
@@ -285,7 +288,7 @@ final class AppState {
     func validateDataPath(_ path: String, targetPath: String, excluding bundleURL: URL?, targetBundleIdentifier: String? = nil) -> Result<URL, DataPathGuardError> {
         DataPathGuard.validate(
             dataPath: path, targetPath: targetPath, outputFolder: settings.outputFolder, libraryFolders: settings.allLibraryFolders,
-            otherRecordDataPaths: dataPathsInUse(excluding: bundleURL), home: FileManager.default.homeDirectoryForCurrentUser,
+            otherRecordDataPaths: dataPathsInUse(excluding: bundleURL), home: home,
             resolvedTargetPath: targetBundleIdentifier.flatMap { TargetResolver().resolvedPath(targetPath: targetPath, targetBundleIdentifier: $0) },
             targetBundleIdentifier: targetBundleIdentifier, shortcutBundles: library.records.map(\.bundleURL)
         )
@@ -293,7 +296,6 @@ final class AppState {
 
     /// What the delete sheet offers for `record`'s data folder: only an existing folder that passes `DataPathGuard`.
     func dataFolderDeletionOption(for record: ShortcutRecord) -> DataFolderDeletionOption {
-        let home = FileManager.default.homeDirectoryForCurrentUser
         if record.config.kind == .webApp {
             return .unavailable(note: "A web app keeps its logins and cookies in web data, not in a data folder.")
         }
@@ -310,7 +312,15 @@ final class AppState {
                 return .unavailable(note: "No HOME folder exists at \(folder.path).")
             }
             let dataRoot = CanonicalPath(ShortcutConfig.dataRoot(home: home).path)
-            return .available(folder: folder, outsideDataRoot: !CanonicalPath(folder.path).isInside(dataRoot))
+            guard CanonicalPath(folder.path).isInside(dataRoot) else {
+                return .unavailable(note: "The HOME folder stays: \(folder.path) is outside App Duplicator's data folder.")
+            }
+            switch validateDataPath(folder.path, targetPath: record.config.cli?.executablePath ?? "", excluding: record.bundleURL) {
+            case .success:
+                return .available(folder: folder, outsideDataRoot: false)
+            case .failure(let error):
+                return .unavailable(note: "The HOME folder stays: \(error.localizedDescription)")
+            }
         }
         guard record.config.dataMode != .disabled else {
             return .unavailable(note: "Data mode is Disabled, so this shortcut has no data folder of its own.")
@@ -333,7 +343,6 @@ final class AppState {
 
     /// The data folder of every scanned shortcut except `bundleURL`.
     private func dataPathsInUse(excluding bundleURL: URL?) -> [String] {
-        let home = FileManager.default.homeDirectoryForCurrentUser
         let excluded = bundleURL?.standardizedFileURL.path
         return library.records
             .filter { $0.bundleURL.standardizedFileURL.path != excluded }
