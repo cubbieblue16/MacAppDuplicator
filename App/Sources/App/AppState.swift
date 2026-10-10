@@ -178,7 +178,10 @@ final class AppState {
     /// library is rescanned afterwards. Returns nil and sets `pendingError` on failure.
     func exportCopy(_ record: ShortcutRecord, to destination: URL) async -> ShortcutBuilder.ExportOutcome? {
         do {
-            let outcome = try builder.exportCopy(record: record, to: destination, resolvedTargetPath: TargetResolver().resolvedPath(for: record.config))
+            let outcome = try builder.exportCopy(
+                record: record, to: destination, resolvedTargetPath: TargetResolver().resolvedPath(for: record.config),
+                otherTargetPaths: library.records.map(\.config.targetPath)
+            )
             await library.rescan()
             return outcome
         } catch {

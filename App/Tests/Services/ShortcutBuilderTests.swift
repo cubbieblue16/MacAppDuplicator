@@ -205,7 +205,9 @@ final class ShortcutBuilderTests: XCTestCase {
         let record = try LibraryScanner.record(forBundleAt: bundle)
         let exportDir = dir.appending(path: "export", directoryHint: .isDirectory)
         let destination = exportDir.appending(path: "Exported.app", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        // The destination is a previous export (a shortcut bundle); a plain app there would be refused.
+        try FileManager.default.createDirectory(at: exportDir, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: bundle, to: destination)
         try Data("old".utf8).write(to: destination.appending(path: "old-marker"))
 
         let outcome = try builder.exportCopy(record: record, to: destination)
@@ -221,6 +223,70 @@ final class ShortcutBuilderTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: exportDir.path), ["Exported.app"], "no staging copy left behind")
     }
 
+    /// A plain app (no MADConfig) at `<tmp>/Foreign.app`, like Safari or any installed app.
+    private func makeForeignApp() throws -> URL {
+        try writeFakeTarget(named: "Foreign", bundleIdentifier: "com.example.foreign", version: "1.0", in: dir)
+    }
+
+    private func relativeFileList(under root: URL) throws -> [String] {
+        try (FileManager.default.subpathsOfDirectory(atPath: root.path)).sorted()
+    }
+
+    func testExportRefusesDestinationInsideForeignAppBundle() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: config(), in: out)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        let foreign = try makeForeignApp()
+        let before = try relativeFileList(under: foreign)
+
+        XCTAssertThrowsError(try builder.export(record: record, to: foreign.appending(path: "Contents/X.app", directoryHint: .isDirectory))) { error in
+            guard case ShortcutBuilder.BuilderError.exportIntoForeignApp(let app) = error else { return XCTFail("\(error)") }
+            XCTAssertEqual(app.standardizedFileURL.path, foreign.standardizedFileURL.path)
+        }
+        XCTAssertEqual(try relativeFileList(under: foreign), before, "nothing was written into the foreign app")
+    }
+
+    func testExportRefusesReplacingForeignAppBundle() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: config(), in: out)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        let foreign = try makeForeignApp()
+        let before = try relativeFileList(under: foreign)
+
+        XCTAssertThrowsError(try builder.export(record: record, to: foreign)) { error in
+            guard case ShortcutBuilder.BuilderError.exportIntoForeignApp = error else { return XCTFail("\(error)") }
+        }
+        XCTAssertEqual(try relativeFileList(under: foreign), before, "the foreign app was not trashed or changed")
+        XCTAssertNil(try FileManager.default.contentsOfDirectory(atPath: dir.path).first { ShortcutBuilder.isStagingName($0) }, "no staging copy left behind")
+    }
+
+    func testExportRefusesOverlapWithAnotherRecordsTarget() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: config(), in: out)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        let otherTarget = dir.appending(path: "Other Target.app", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: otherTarget, withIntermediateDirectories: true)
+
+        XCTAssertThrowsError(try builder.export(record: record, to: otherTarget, otherTargetPaths: ["not absolute", otherTarget.path])) { error in
+            guard case ShortcutBuilder.BuilderError.exportOverlapsTarget = error else { return XCTFail("\(error)") }
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: otherTarget.path), "the other record's target is never trashed")
+    }
+
+    func testExportStillReplacesPreviousExport() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: config(), in: out)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        let destination = dir.appending(path: "Exported.app", directoryHint: .isDirectory)
+
+        let first = try builder.exportCopy(record: record, to: destination)
+        XCTAssertNil(first.trashedExisting)
+        let second = try builder.exportCopy(record: record, to: destination, otherTargetPaths: ["/Applications/Elsewhere.app"])
+        let trashed = try XCTUnwrap(second.trashedExisting, "the previous export goes to the Trash")
+        addTeardownBlock { try FileManager.default.removeItem(at: trashed) }
+        XCTAssertTrue(TargetGuard.isShortcutBundle(at: destination))
+    }
+
     func testFailedExportKeepsTheSourceAndAnyExistingDestination() throws {
         let out = dir.appending(path: "out", directoryHint: .isDirectory)
         let bundle = try builder.create(config: config(), in: out)
@@ -233,7 +299,9 @@ final class ShortcutBuilderTests: XCTestCase {
         // The source is gone, so the copy fails; the existing destination must survive untouched.
         let exportDir = dir.appending(path: "export", directoryHint: .isDirectory)
         let destination = exportDir.appending(path: "Exported.app", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        // The destination is a previous export (a shortcut bundle); a plain app there would be refused.
+        try FileManager.default.createDirectory(at: exportDir, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: bundle, to: destination)
         try Data("old".utf8).write(to: destination.appending(path: "old-marker"))
         try FileManager.default.moveItem(at: bundle, to: dir.appending(path: "moved-away.app"))
         XCTAssertThrowsError(try builder.export(record: record, to: destination))

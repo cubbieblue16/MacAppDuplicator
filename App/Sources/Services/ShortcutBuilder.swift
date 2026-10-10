@@ -10,6 +10,8 @@ struct ShortcutBuilder: Sendable {
         case targetMissing(String)
         case exportOverlapsShortcut(URL)
         case exportOverlapsTarget(URL)
+        /// The destination is, or is inside, an existing `.app` that is not an App Duplicator shortcut; carries that app.
+        case exportIntoForeignApp(URL)
         /// The target is an App Duplicator shortcut (final review M5); carries the refused target path.
         case targetIsShortcut(String)
 
@@ -19,6 +21,8 @@ struct ShortcutBuilder: Sendable {
             case .targetMissing(let path): "The target app was not found at \(path)."
             case .exportOverlapsShortcut(let url): "Cannot export to \(url.path): it is, contains or is inside the shortcut itself."
             case .exportOverlapsTarget(let url): "Cannot export to \(url.path): it is, contains or is inside the target app."
+            case .exportIntoForeignApp(let url):
+                "The destination is inside “\(url.deletingPathExtension().lastPathComponent)”, which is not an App Duplicator shortcut. Choose a location outside other apps."
             case .targetIsShortcut(let path): TargetGuard.refusalMessage(forAppAt: URL(fileURLWithPath: path))
             }
         }
@@ -87,8 +91,10 @@ struct ShortcutBuilder: Sendable {
     /// `TargetResolver` finds the target now) is refused before any write (re-review Minor 4). Staging copies a
     /// crashed export left in the destination folder (`isStagingName`) are removed first. The copy is staged next to
     /// the destination; only once staging is complete does an item already at the destination go to the Trash (never
-    /// deleted), and it is put back if the final move fails (re-review Minor 5).
-    func exportCopy(record: ShortcutRecord, to destination: URL, resolvedTargetPath: String? = nil) throws -> ExportOutcome {
+    /// deleted), and it is put back if the final move fails (re-review Minor 5). Also refused before any write: a
+    /// destination that overlaps `otherTargetPaths` (the other records' targets), and one that is or is inside an
+    /// existing `.app` that is not a shortcut. Replacing a previous export is still allowed.
+    func exportCopy(record: ShortcutRecord, to destination: URL, resolvedTargetPath: String? = nil, otherTargetPaths: [String] = []) throws -> ExportOutcome {
         let canonicalDestination = CanonicalPath(destination.path)
         for targetPath in [record.config.targetPath, resolvedTargetPath ?? ""] where targetPath.hasPrefix("/") {
             if canonicalDestination.overlaps(CanonicalPath(targetPath)) { throw BuilderError.exportOverlapsTarget(destination) }
@@ -96,6 +102,10 @@ struct ShortcutBuilder: Sendable {
         if canonicalDestination.overlaps(CanonicalPath(record.bundleURL.path)) {
             throw BuilderError.exportOverlapsShortcut(destination)
         }
+        for targetPath in otherTargetPaths where targetPath.hasPrefix("/") {
+            if canonicalDestination.overlaps(CanonicalPath(targetPath)) { throw BuilderError.exportOverlapsTarget(destination) }
+        }
+        if let foreignApp = foreignAppContaining(canonicalDestination) { throw BuilderError.exportIntoForeignApp(foreignApp) }
         let folder = destination.deletingLastPathComponent()
         sweepStagingCopies(in: folder)
         let staging = folder.appending(path: ".\(destination.lastPathComponent).mad-export-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -124,9 +134,25 @@ struct ShortcutBuilder: Sendable {
         return ExportOutcome(exportedURL: destination, trashedExisting: trashedExisting)
     }
 
+    /// The existing `.app` that is `destination` or one of its ancestors and is not an App Duplicator shortcut, or nil.
+    /// Replacing a previous export (the destination is itself a shortcut) and a destination whose ancestors are plain
+    /// folders are both fine.
+    private func foreignAppContaining(_ destination: CanonicalPath) -> URL? {
+        var candidate = destination.url
+        while candidate.path != "/" {
+            if candidate.pathExtension.lowercased() == "app", fileManager.fileExists(atPath: candidate.path), !TargetGuard.isShortcutBundle(at: candidate) {
+                return candidate
+            }
+            candidate = candidate.deletingLastPathComponent()
+        }
+        return nil
+    }
+
     /// `exportCopy` checked against the target's current location as well as the stored one; returns where the copy is.
-    func export(record: ShortcutRecord, to destination: URL) throws -> URL {
-        try exportCopy(record: record, to: destination, resolvedTargetPath: TargetResolver().resolvedPath(for: record.config)).exportedURL
+    func export(record: ShortcutRecord, to destination: URL, otherTargetPaths: [String] = []) throws -> URL {
+        try exportCopy(
+            record: record, to: destination, resolvedTargetPath: TargetResolver().resolvedPath(for: record.config), otherTargetPaths: otherTargetPaths
+        ).exportedURL
     }
 
     /// Moves the bundle to the Trash; with `removeData`, also trashes the shortcut's data folder (never the target).
