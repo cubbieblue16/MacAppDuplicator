@@ -19,9 +19,9 @@ struct IdentitySection: View {
                         Text(WebEditorPolicy.iconLabel(mode)).tag(mode)
                     }
                 } else {
-                    Text("Copied from target").tag(IconMode.copied)
-                    Text("Custom file").tag(IconMode.custom)
-                    Text("Generated tile").tag(IconMode.generated)
+                    ForEach([IconMode.copied, .custom, .generated], id: \.self) { mode in
+                        Text(LauncherEditorPolicy.iconLabel(mode, kind: draft.kind)).tag(mode)
+                    }
                 }
             }
             if draft.iconMode == .custom {
@@ -255,5 +255,137 @@ struct ArgumentsEditor: View {
 
     private static func parse(_ text: String) -> [String] {
         text.split(whereSeparator: \.isNewline).map(String.init)
+    }
+}
+
+/// Phase 5: a file or folder shortcut's item and opener. Re-choosing keeps the kind (files for `.file`, folders for `.folder`).
+struct FileSection: View {
+    @Binding var draft: ShortcutConfig
+    @State private var choiceError: String?
+
+    var body: some View {
+        Section(draft.kind == .folder ? "Folder" : "File") {
+            LabeledContent("Opens") {
+                HStack {
+                    Text(draft.file?.path ?? "Nothing chosen").lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+                    Button("Choose…", action: chooseItem)
+                        .help(draft.kind == .folder ? "Choose the folder this shortcut opens" : "Choose the file this shortcut opens")
+                }
+            }
+            LabeledContent("Open with") {
+                HStack {
+                    Text(draft.file?.openerAppPath.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? "Default app")
+                    Button("Choose…", action: chooseOpener)
+                        .help("Open the item with a specific app instead of its default app")
+                    if draft.file?.openerAppPath != nil {
+                        Button("Use Default") { draft.file?.openerAppPath = nil }
+                            .help("Open the item with the app macOS picks for it")
+                    }
+                }
+            }
+            if let message = choiceError ?? LauncherEditorPolicy.validationMessage(for: draft) {
+                Text(message).font(.caption).foregroundStyle(.red)
+            }
+        }
+    }
+
+    private func chooseItem() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = draft.kind == .file
+        panel.canChooseDirectories = draft.kind == .folder
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard !TargetGuard.isShortcutBundle(at: url) else {
+            choiceError = TargetGuard.refusalMessage(forAppAt: url)
+            return
+        }
+        choiceError = nil
+        draft.file = FileConfig(path: FileConfig.normalizedPath(url.path), openerAppPath: draft.file?.openerAppPath)
+    }
+
+    private func chooseOpener() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.applicationBundle]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard !TargetGuard.isShortcutBundle(at: url) else {
+            choiceError = TargetGuard.refusalMessage(forAppAt: url)
+            return
+        }
+        choiceError = nil
+        draft.file?.openerAppPath = FileConfig.normalizedPath(url.path)
+    }
+}
+
+/// Phase 5: a command shortcut's program, arguments (one per line), working directory, terminal and own HOME.
+struct CommandSection: View {
+    @Binding var draft: ShortcutConfig
+    @State private var argumentsText = ""
+
+    var body: some View {
+        Section("Command") {
+            LabeledContent("Executable") {
+                HStack {
+                    TextField("Executable", text: executable, prompt: Text("/usr/local/bin/tool"))
+                        .labelsHidden()
+                        .help("The full path of the program or script to run")
+                    Button("Choose…", action: chooseExecutable)
+                        .help("Choose the program or script to run")
+                }
+            }
+            LabeledContent("Arguments") {
+                TextEditor(text: $argumentsText)
+                    .font(.body.monospaced())
+                    .frame(minHeight: 72)
+                    .help("One argument per line. Spaces and quotes are passed exactly as typed; empty lines are ignored.")
+            }
+            TextField("Working directory", text: workingDirectory, prompt: Text("Default"))
+                .help("The folder the command starts in")
+            Picker("Terminal", selection: terminal) {
+                ForEach(WizardModel.terminalChoices, id: \.self) { choice in
+                    Text(WizardModel.terminalLabel(choice)).tag(choice)
+                }
+            }
+            .help("Terminal and iTerm2 are driven through AppleScript, so macOS asks once for permission. No terminal runs the command in the background.")
+            Toggle("Give this command its own HOME", isOn: homeOverride)
+                .help("Runs the command with HOME set to a private folder under ~/Library/Application Support/App Duplicator")
+            if let message = LauncherEditorPolicy.validationMessage(for: draft) {
+                Text(message).font(.caption).foregroundStyle(.red)
+            }
+        }
+        .onAppear { argumentsText = draft.cli?.arguments.joined(separator: "\n") ?? "" }
+        .onChange(of: argumentsText) { _, text in draft.cli?.arguments = WizardModel.parseArguments(text) }
+    }
+
+    private var executable: Binding<String> {
+        Binding(get: { draft.cli?.executablePath ?? "" }, set: { draft.cli?.executablePath = $0 })
+    }
+
+    private var workingDirectory: Binding<String> {
+        Binding(get: { draft.cli?.workingDirectory ?? "" }, set: { draft.cli?.workingDirectory = $0.isEmpty ? nil : $0 })
+    }
+
+    private var terminal: Binding<TerminalChoice> {
+        Binding(get: { draft.cli?.terminal ?? .terminal }, set: { draft.cli?.terminal = $0 })
+    }
+
+    private var homeOverride: Binding<Bool> {
+        Binding(get: { draft.cli?.homeOverride ?? false }, set: { draft.cli?.homeOverride = $0 })
+    }
+
+    private func chooseExecutable() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.treatsFilePackagesAsDirectories = true
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        draft.cli?.executablePath = url.path
     }
 }

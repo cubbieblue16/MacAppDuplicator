@@ -220,12 +220,26 @@ final class AppState {
     func delete(_ record: ShortcutRecord, removeData: Bool, removeWebData removesWebData: Bool = false) async -> [URL] {
         if removesWebData, !(await self.removeWebData(for: record)) { return [] }
         let webDataRemoved = removesWebData && record.config.kind == .webApp && record.config.webApp != nil
+        let commandHome = record.config.kind == .cli && removeData ? dataFolderDeletionOption(for: record) : nil
         do {
-            let trashed = try builder.delete(
+            var trashed = try builder.delete(
                 record: record, removeData: removeData,
                 libraryFolders: settings.allLibraryFolders, otherRecordDataPaths: dataPathsInUse(excluding: record.bundleURL),
                 shortcutBundles: library.records.map(\.bundleURL)
             )
+            if case .available(let folder, _) = commandHome {
+                // The shortcut is already in the Trash here, so a failure must not read as "could not delete shortcut".
+                do {
+                    var resulting: NSURL?
+                    try FileManager.default.trashItem(at: folder, resultingItemURL: &resulting)
+                    trashed.append((resulting as URL?) ?? folder)
+                } catch {
+                    pendingError = AppError(
+                        context: "Could not remove the command's HOME folder",
+                        message: "The shortcut was moved to the Trash, but its HOME folder at \(folder.path) could not be. \(error.localizedDescription)"
+                    )
+                }
+            }
             selection = nil
             await library.rescan()
             return trashed
@@ -283,6 +297,21 @@ final class AppState {
         if record.config.kind == .webApp {
             return .unavailable(note: "A web app keeps its logins and cookies in web data, not in a data folder.")
         }
+        if record.config.kind == .file || record.config.kind == .folder {
+            return .unavailable(note: "A file or folder shortcut has no data folder.")
+        }
+        if record.config.kind == .cli {
+            guard let homePath = LauncherEditorPolicy.commandHomePath(for: record.config, home: home) else {
+                return .unavailable(note: "This command uses your HOME, so it has no data folder of its own.")
+            }
+            let folder = URL(fileURLWithPath: homePath, isDirectory: true)
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+                return .unavailable(note: "No HOME folder exists at \(folder.path).")
+            }
+            let dataRoot = CanonicalPath(ShortcutConfig.dataRoot(home: home).path)
+            return .available(folder: folder, outsideDataRoot: !CanonicalPath(folder.path).isInside(dataRoot))
+        }
         guard record.config.dataMode != .disabled else {
             return .unavailable(note: "Data mode is Disabled, so this shortcut has no data folder of its own.")
         }
@@ -308,7 +337,7 @@ final class AppState {
         let excluded = bundleURL?.standardizedFileURL.path
         return library.records
             .filter { $0.bundleURL.standardizedFileURL.path != excluded }
-            .compactMap { $0.config.effectiveDataPath(home: home) }
+            .compactMap { $0.config.effectiveDataPath(home: home) ?? LauncherEditorPolicy.commandHomePath(for: $0.config, home: home) }
     }
 
     /// Selects a bundle just written, using the scanned record's URL so the selection matches the sidebar row's tag

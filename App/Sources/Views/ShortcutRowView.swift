@@ -46,6 +46,12 @@ struct ShortcutRowView: View {
     private var subtitle: some View {
         if record.config.kind == .webApp {
             Text(record.webAppHost ?? "Web App").foregroundStyle(.secondary)
+        } else if LauncherEditorPolicy.isLauncherKind(record.config.kind) {
+            if record.targetExists {
+                Text(LauncherEditorPolicy.subtitle(for: record.config)).foregroundStyle(.secondary)
+            } else {
+                Text("Item missing").foregroundStyle(.red)
+            }
         } else if record.targetExists {
             let targetName = URL(fileURLWithPath: record.config.targetPath).deletingPathExtension().lastPathComponent
             Text([targetName, record.targetVersion].compactMap { $0 }.joined(separator: " "))

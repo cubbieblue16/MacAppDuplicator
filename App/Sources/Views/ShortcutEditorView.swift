@@ -31,6 +31,8 @@ struct ShortcutEditorView: View {
 
     private var isWebApp: Bool { record.config.kind == .webApp }
 
+    private var isLauncher: Bool { LauncherEditorPolicy.isLauncherKind(record.config.kind) }
+
     /// The profile for the draft's target, read from the profiles in use (never copied into the draft here).
     private var profile: AppProfile? { appState.profile(forBundleIdentifier: draft.targetBundleIdentifier) }
 
@@ -40,6 +42,13 @@ struct ShortcutEditorView: View {
             if isWebApp {
                 // A web app has no target, profile, launch mode or data folder; its options live in one section.
                 WebAppSection(draft: $draft, record: record, urlIsValid: $webURLIsValid).id(revertCount)
+            } else if isLauncher {
+                // A launcher has no target app, profile, launch mode or data mode; its settings live in one section.
+                if record.config.kind == .cli {
+                    CommandSection(draft: $draft).id(revertCount)
+                } else {
+                    FileSection(draft: $draft)
+                }
             } else {
                 TargetSection(draft: $draft, inspected: inspected, profile: profile)
                 ProfileSection(bundleIdentifier: draft.targetBundleIdentifier, profile: profile, detectedFamily: inspected?.family)
@@ -82,13 +91,16 @@ struct ShortcutEditorView: View {
                 .disabled(!(hasChanges || !webURLIsValid) || isSaving)
                 Button("Save") { save() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(!hasChanges || isSaving || !webURLIsValid || draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(
+                        !hasChanges || isSaving || !webURLIsValid || draft.name.trimmingCharacters(in: .whitespaces).isEmpty
+                            || (isLauncher && LauncherEditorPolicy.validationMessage(for: draft) != nil)
+                    )
             }
             .padding(12)
             .background(.bar)
         }
         .task(id: draft.targetPath) {
-            guard !isWebApp else {
+            guard draft.kind == .app else {
                 inspected = nil
                 return
             }
@@ -140,6 +152,9 @@ struct ShortcutEditorView: View {
             // The slug and bundle identifier stay on a rename (WebKit files the logins under the bundle id), and no icon
             // data is passed, so `regenerate` keeps the bundle's AppIcon.icns for `.copied` (Task 6 Deviation 2, A2).
             config = WebEditorPolicy.saveConfig(draft: draft, saved: record.config)
+        } else if isLauncher {
+            // Keeps the slug and bundle identifier on a rename, so a command's own HOME does not move.
+            config = LauncherEditorPolicy.saveConfig(draft: draft, saved: record.config)
         } else {
             config.name = config.name.trimmingCharacters(in: .whitespaces)
             if config.name != record.config.name {

@@ -16,15 +16,26 @@ struct DeleteShortcutSheet: View {
 
     private var isWebApp: Bool { record.config.kind == .webApp }
 
+    static func message(for kind: ShortcutKind) -> String {
+        switch kind {
+        case .webApp: "The web app is moved to the Trash."
+        case .app: "The shortcut is moved to the Trash. The target app is never touched."
+        case .file, .folder, .cli: "The shortcut is moved to the Trash. The file, folder or command it opens is never touched."
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Delete “\(record.name)”?").font(.headline)
-            Text(isWebApp ? "The web app is moved to the Trash." : "The shortcut is moved to the Trash. The target app is never touched.")
+            Text(Self.message(for: record.config.kind))
             switch dataFolder {
             case .unavailable(let note):
                 Text(note).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             case .available(let folder, let outsideDataRoot):
-                Toggle("Also move the data folder to the Trash", isOn: $removeData)
+                Toggle(
+                    record.config.kind == .cli ? "Also move the command's own HOME folder to the Trash" : "Also move the data folder to the Trash",
+                    isOn: $removeData
+                )
                 Text(folder.path).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle)
                 if outsideDataRoot {
                     Label("This folder is outside ~/Library/Application Support/App Duplicator: \(folder.path)", systemImage: "exclamationmark.triangle.fill")
