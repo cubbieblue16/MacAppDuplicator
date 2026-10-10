@@ -100,9 +100,21 @@ final class NavigationPolicyTests: XCTestCase {
         XCTAssertEqual(try popup("https://accounts.google.example/oauth", .other), .openInApp)
     }
 
-    func testPopupNonWebOrMissingURLIsIgnored() throws {
+    func testPopupNonWebSchemeIsIgnored() throws {
         XCTAssertEqual(try popup("mailto:a@example.com", .linkActivated), .ignore)
         XCTAssertEqual(try popup("file:///etc/hosts", .other), .ignore)
-        XCTAssertEqual(try popup(nil, .other), .ignore)
+        XCTAssertEqual(try popup("myapp://callback", .other), .ignore)
+    }
+
+    func testPopupBlankFirstFromScriptOpensInApp() throws {
+        // MSAL.js loginPopup opens about:blank first; auth0-spa-js opens '' first; previews open blob: URLs.
+        XCTAssertEqual(try popup(nil, .other), .openInApp)
+        XCTAssertEqual(try popup("about:blank", .other), .openInApp)
+        XCTAssertEqual(try popup("blob:https://app.example/0b7c", .other), .openInApp)
+    }
+
+    func testPopupBlankFromLinkClickIsIgnored() throws {
+        XCTAssertEqual(try popup(nil, .linkActivated), .ignore)
+        XCTAssertEqual(try popup("about:blank", .linkActivated), .ignore)
     }
 }

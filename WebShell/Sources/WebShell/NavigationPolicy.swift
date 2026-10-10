@@ -27,15 +27,23 @@ enum PopupDecision: Equatable {
 enum NavigationPolicy {
     /// Decision for a new-window request (`createWebViewWith`). A user's click on a link to a site the app does not
     /// keep in its window goes to the default browser; script-initiated `window.open` stays in-app so OAuth sign-in
-    /// popups complete. Anything that is not an http(s) address is refused.
+    /// popups complete. A script that opens a blank window first (`window.open('')`, `about:blank`, a `blob:` preview)
+    /// and navigates it later also stays in-app; the popup's own `decide()` polices that later navigation.
+    /// `file:` and custom schemes are refused.
     static func popupDecision(url: URL?, navigationType: WKNavigationType, policy: WebHostPolicy) -> PopupDecision {
-        guard let url, let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+        let scheme = url?.scheme?.lowercased() ?? ""
+        switch scheme {
+        case "", "about", "blob":
+            // A blank-first popup is only meaningful for script; a clicked link to about:blank has nothing to show.
+            return navigationType == .linkActivated ? .ignore : .openInApp
+        case "http", "https":
+            if let url, navigationType == .linkActivated, !policy.allowsInPlace(url) {
+                return .openExternally
+            }
+            return .openInApp
+        default:
             return .ignore
         }
-        if navigationType == .linkActivated, !policy.allowsInPlace(url) {
-            return .openExternally
-        }
-        return .openInApp
     }
 
     /// Pure navigation decision.
