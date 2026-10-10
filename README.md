@@ -51,7 +51,7 @@ Launcher events are logged to `~/Library/Logs/App Duplicator/<Name>.log` (rotate
 - Login items, background helpers and launch agents registered by the target run once, for the original bundle identifier; a shortcut gets no copy of them.
 - Updates: shortcuts point at the installed app, so a target update is picked up on the next launch. A shortcut built by an older engine version shows `Needs rebuild` in the library app; Rebuild All refreshes it.
 - Shortcut bundles declare no document types or URL schemes, so a shortcut is never the default handler for anything. Once a copy is running, macOS treats it as the target app: links for the target's URL schemes go to whichever instance registered the scheme last, and an opened document may land in a shortcut's copy.
-- Web shell: no passkeys.
+- Web apps: no passkeys; see Phase 4 web apps below.
 
 ## Phase 2 library app
 
@@ -71,11 +71,11 @@ The Xcode project under `App/` is generated from `App/project.yml` and git-ignor
 
 - Sidebar of shortcuts grouped by kind, with target version, running indicator and a `Needs rebuild` badge when the shortcut's `MADEngineVersion` is below the app's engine version (`ShortcutConfig.currentEngineVersion`). The folder watcher picks up bundles added, removed or renamed; after editing a bundle in place, choose View → Refresh (⌘R).
 - New Shortcut wizard: pick an installed app (grid of `/Applications` and `~/Applications`, search, drag-and-drop or Browse; apps in `/System/Applications` such as TextEdit need Browse), name and icon (copied, custom file or generated tile), data mode, and a review step with the masked launch plan.
-- Editor: name, icon, target app, launch mode, data mode and folder, appearance, language, arguments and environment (secret-looking keys masked). The per-shortcut HOME symlink list is not editable; a new shortcut takes the list from Settings. `Erase data on quit` and `Menu bar icon` show their stored values but stay disabled until Phase 6.
+- Editor: name, icon, target app, launch mode, data mode and folder, appearance, language, arguments and environment (secret-looking keys masked). The per-shortcut HOME symlink list is not editable; a new shortcut takes the list from Settings. `Erase data on quit` and `Menu bar icon` show their stored values but stay disabled for application shortcuts until Phase 6; a web app's `Menu bar icon` is live (see Phase 4 web apps).
 - Actions: Launch, Reveal in Finder, Regenerate, Duplicate, Export (with the quarantine-clearing command), Delete (Trash, optional data folder), Rebuild All.
 - Diagnostics sheet: resolved target path (plus the stored path when it differs), executable, launch mode, argv, masked environment, warnings and the last 200 log lines, copyable.
 - Settings: output and library folders (a change rescans the library), signing identity (Ad-hoc or any codesigning identity in the keychain; defaults to the first Developer ID Application identity), the HOME-override symlink list copied into new shortcuts, and Open Logs Folder.
-- Help → Known Limitations (20 entries since Phase 3; the six profile entries are listed under Phase 3 profiles).
+- Help → Known Limitations (24 entries since Phase 4; the six profile entries are listed under Phase 3 profiles and the four web entries under Phase 4 web apps).
 
 Acceptance checklist: `docs/acceptance/phase2-library-app.md`.
 
@@ -114,6 +114,18 @@ Also listed in Help → Known Limitations:
 - Exporting over an existing bundle moves the old one to the Trash.
 
 Acceptance checklist: `docs/acceptance/phase3-profiles.md`. Promotion procedure: `docs/acceptance/profile-promotion.md`.
+
+## Phase 4 web apps
+
+A web app is a Dock shortcut for a website: App Duplicator builds a bundle whose executable is a small embedded browser (WebKit) that opens one address in its own window, with its own bundle identifier, Dock icon and private website data store. Create one with ⌘N → `Web App`: pick a preset (WhatsApp, Teams, Outlook) or type an https address, then set the user agent, the badge pattern, the extra hosts that stay in the app, the menu bar icon and background mode.
+- Logins, cookies and cache live in a WebKit data store named by the id shown in the editor's `Web data` row, under `~/Library/WebKit/<shortcut bundle identifier>/WebsiteDataStore`. A duplicate gets a new id, so it has its own logins. The editor's `Remove Web Data…` and the second question when you delete a web app remove that store; the shortcut must be quit first.
+- The page title's unread count (default pattern `(3)`) and the site's own app-badge calls drive the Dock badge; notifications use macOS banners and a click fronts the window.
+- With `Menu bar icon` and `Keep running in the menu bar when the window closes` on, closing the window leaves the app running in the menu bar. For a web app the Menu bar icon is live in this phase; for application shortcuts it stays inert until Phase 6.
+- A rename keeps a web app's bundle identifier, so its logins survive. Editing never refetches the site icon; the icon stays as created unless you pick another.
+- Diagnostics shows the address (query and credentials removed), user agent, web data id, background and menu bar state, badge pattern, extra hosts, zoom and the shell's log tail.
+- Limits: no passkeys, zoom kept in the shell's own preferences, notification permission decided by macOS, and other sites open in your browser (four new Known Limitations entries).
+
+Acceptance checklist: `docs/acceptance/phase4-webshell.md`.
 
 ## Core API used by the app
 
