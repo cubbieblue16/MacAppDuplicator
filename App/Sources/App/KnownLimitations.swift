@@ -7,8 +7,10 @@ struct KnownLimitation: Identifiable, Hashable {
 }
 
 /// Spec §11 ("documented in-app and README"): one entry per §11 bullet, plus the app-specific limits that the README's
-/// list also carries (single instance, login items, updates). The web-shell bullet (no passkeys) arrives with the web
-/// shell phase. Shown in the Known Limitations window and linked from the wizard's compatibility line.
+/// list also carries (single instance, login items, updates). Phase 3 adds the profile limits (advisory badges, partial
+/// profiles, manual updates from one host, sandboxed badges, numbered slugs, export's Trash replacement). The web-shell
+/// bullet (no passkeys) arrives with the web shell phase. Shown in the Known Limitations window and linked from the
+/// wizard's compatibility line.
 enum KnownLimitations {
     static let all: [KnownLimitation] = [
         KnownLimitation(
@@ -80,6 +82,36 @@ enum KnownLimitations {
             id: "electron-dark-mode",
             title: "Forcing dark mode only works for Chromium-based apps",
             detail: "Force dark (Chromium/Electron only, best effort) adds Chromium's --force-dark-mode flag, which Chromium, Electron and ToDesktop apps honour; an app with its own theme setting may still override it. The option is unavailable for other apps, which follow the system appearance. Light works for every app through -NSRequiresAquaSystemAppearance YES."
+        ),
+        KnownLimitation(
+            id: "profiles-advisory",
+            title: "Compatibility profiles are advisory",
+            detail: "A profile suggests launch arguments, environment variables and a status for one app. A Verified badge means the profile was checked on one Mac with the app version available then; it is not a guarantee that it works with your version or setup. App Duplicator still inspects the app and builds the launch plan itself, and every value a profile fills in can be changed in the wizard or the editor."
+        ),
+        KnownLimitation(
+            id: "profiles-partial",
+            title: "Partial profiles need manual review",
+            detail: "A partial profile has not been through the full check (a second account, a separate data folder and two Dock icons), so its arguments and environment may be incomplete. The badge ignores a partial profile and shows Auto, HOME only or Unknown as if there were none. Check the filled-in values and confirm that the copy keeps its own data before you rely on it."
+        ),
+        KnownLimitation(
+            id: "profile-updates",
+            title: "Check Profile Updates is manual and fetches from one host",
+            detail: "Profiles change only when you choose Check Profile Updates; it never runs automatically and nothing checks in the background. It downloads only from an https address on raw.githubusercontent.com, any other host is refused, and a failed or invalid download leaves the cached profiles untouched. Between checks the app uses the cached copy only when its updated date is later than the profiles bundled with the app."
+        ),
+        KnownLimitation(
+            id: "sandboxed-badge",
+            title: "Sandboxed native apps cannot be separated",
+            detail: "A sandboxed native app keeps its data in its App Sandbox container whatever the HOME override says, so App Duplicator cannot give a copy its own data. Without a profile its badge is Unknown, never HOME only, and a profile can mark it Unsupported. A shortcut can still give such an app a second Dock icon when the app allows a second instance, but both copies share one set of data."
+        ),
+        KnownLimitation(
+            id: "slug-suffix",
+            title: "Shortcuts whose names match get a numbered slug",
+            detail: "Each shortcut's bundle identifier and default data folder are built from a slug of its name. When another shortcut already uses that slug, App Duplicator appends -2, -3 and so on, so shortcuts whose names match never share a bundle identifier or a default data folder."
+        ),
+        KnownLimitation(
+            id: "export-replaces",
+            title: "Export replaces an existing shortcut by moving it to the Trash",
+            detail: "When the export destination already holds a bundle with the same name, App Duplicator moves that bundle to the Trash and writes the exported copy in its place; nothing is deleted outright. If you exported over the wrong bundle, put it back from the Trash."
         ),
     ]
 }
