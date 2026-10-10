@@ -11,7 +11,9 @@ final class WebShellFeatures {
     private let logger: LaunchLogger
     private let showWindow: @MainActor () -> Void
     private var statusItem: StatusItemController?
-    private weak var coordinator: WebViewCoordinator?
+    /// Shared with the front-bringing closures built in `init`, which run before `install` supplies the coordinator.
+    private let coordinatorBox = CoordinatorBox()
+    private var coordinator: WebViewCoordinator? { coordinatorBox.coordinator }
 
     init(
         webApp: WebAppConfig,
@@ -22,6 +24,7 @@ final class WebShellFeatures {
         poster: NotificationPosting,
         showWindow: @escaping @MainActor () -> Void
     ) {
+        let box = coordinatorBox
         policy = BackgroundModePolicy(backgroundMode: webApp.backgroundMode, menuBarIcon: menuBarIcon)
         self.appName = appName
         self.logger = logger
@@ -30,15 +33,19 @@ final class WebShellFeatures {
             NSApp.dockTile.badgeLabel = label
         }
         notifications = NotificationBridge(poster: poster, hostPolicy: hostPolicy, logger: logger) {
-            WebShellFeatures.bringAppToFront(showWindow: showWindow)
+            WebShellFeatures.bringAppToFront(showWindow: showWindow, revealPopups: { box.coordinator?.revealHiddenPopups() })
         }
     }
 
     /// Call once from `applicationDidFinishLaunching`, before the first page load.
     func install(on coordinator: WebViewCoordinator) {
-        self.coordinator = coordinator
+        coordinatorBox.coordinator = coordinator
         let showWindow = self.showWindow
-        coordinator.bringToFront = { WebShellFeatures.bringAppToFront(showWindow: showWindow) }
+        let box = coordinatorBox
+        let bringForward: @MainActor () -> Void = {
+            WebShellFeatures.bringAppToFront(showWindow: showWindow, revealPopups: { box.coordinator?.revealHiddenPopups() })
+        }
+        coordinator.bringToFront = bringForward
         badge.trustedWebView = coordinator.webView
         coordinator.addMessageHandler(badge, name: WebShellScripts.badgeHandlerName)
         coordinator.addMessageHandler(notifications, name: WebShellScripts.notificationHandlerName)
@@ -50,9 +57,7 @@ final class WebShellFeatures {
         }
         notifications.start()
         if policy.showsStatusItem {
-            let item = StatusItemController(appName: appName, icon: NSApp.applicationIconImage) {
-                WebShellFeatures.bringAppToFront(showWindow: showWindow)
-            }
+            let item = StatusItemController(appName: appName, icon: NSApp.applicationIconImage, onShow: bringForward)
             item.update(count: badge.count)
             badge.countDidChange = { [weak item] count in
                 item?.update(count: count)
@@ -76,14 +81,24 @@ final class WebShellFeatures {
 
     /// Show menu item, Dock click and notification click all land here.
     func bringToFront() {
-        WebShellFeatures.bringAppToFront(showWindow: showWindow)
+        WebShellFeatures.bringAppToFront(showWindow: showWindow, revealPopups: { [coordinatorBox] in
+            coordinatorBox.coordinator?.revealHiddenPopups()
+        })
     }
 
-    static func bringAppToFront(showWindow: @MainActor () -> Void) {
+    /// Activates the app, restores the Dock icon, then shows the main window and any popups background mode hid.
+    static func bringAppToFront(showWindow: @MainActor () -> Void, revealPopups: @MainActor () -> Void) {
         if NSApp.activationPolicy() != .regular {
             NSApp.setActivationPolicy(.regular)
         }
         NSApp.activate()
         showWindow()
+        revealPopups()
     }
+}
+
+/// A weak reference to the coordinator that exists before the coordinator does.
+@MainActor
+private final class CoordinatorBox {
+    weak var coordinator: WebViewCoordinator?
 }

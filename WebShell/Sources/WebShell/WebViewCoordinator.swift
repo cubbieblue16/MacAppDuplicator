@@ -22,6 +22,8 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
     private let logger: LaunchLogger
     private let userContentController: WKUserContentController
     private var popupWindows: [NSWindow] = []
+    /// Popups `hidePopupWindows()` hid, so `revealHiddenPopups()` can show them again.
+    private var hiddenPopups = HiddenWindowRegistry<NSWindow>()
     private var titleObservation: NSKeyValueObservation?
     /// Termination times of the main web view's content process inside `crashWindow`.
     private var crashDates: [Date] = []
@@ -243,6 +245,14 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
         for window in popupWindows {
             window.orderOut(nil)
         }
+        hiddenPopups.remember(popupWindows)
+    }
+
+    /// Orders front the popups that background mode hid; the counterpart of `hidePopupWindows()`.
+    func revealHiddenPopups() {
+        for window in hiddenPopups.takeAll() {
+            window.orderFront(nil)
+        }
     }
 
     func webViewDidClose(_ webView: WKWebView) {
@@ -256,5 +266,6 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
             popupCrashDates[ObjectIdentifier(popup)] = nil
         }
         popupWindows.removeAll { $0 === window }
+        hiddenPopups.forget(window)
     }
 }

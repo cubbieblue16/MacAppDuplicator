@@ -111,10 +111,12 @@ extension WebViewCoordinator {
         return alert
     }
 
-    /// A sheet on a hidden window (background mode) would leave page JavaScript waiting invisibly; bring the app forward.
+    /// A sheet on a hidden window (background mode) would leave page JavaScript waiting invisibly; bring the app
+    /// forward and show the sheet's host window itself (it may be a hidden popup rather than the main window).
     private func revealIfHidden(_ window: NSWindow) {
         if !window.isVisible {
             bringToFront?()
+            window.orderFront(nil)
         }
     }
 
