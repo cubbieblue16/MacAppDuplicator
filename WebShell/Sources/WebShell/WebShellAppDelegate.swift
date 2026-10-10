@@ -10,6 +10,8 @@ final class WebShellAppDelegate: NSObject, NSApplicationDelegate {
     private(set) var windowController: MainWindowController?
     /// Retained here: menu item targets are weak.
     private var zoomController: PageZoomController?
+    /// Task 3: badge, notifications, background mode and the status item.
+    private var features: WebShellFeatures?
 
     init(shell: ShellConfig, logger: LaunchLogger) {
         self.shell = shell
@@ -37,15 +39,20 @@ final class WebShellAppDelegate: NSObject, NSApplicationDelegate {
         )
         // LaunchServices activates a normal launch; not calling NSApp.activate() keeps `activates = false` honest.
         controller.window.makeKeyAndOrderFront(nil)
+        installFeatures(webApp: shell.webApp, shortcut: shell.shortcut, logger: logger, windowController: controller, coordinator: coordinator)
         coordinator.loadHome()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        features?.terminatesAfterLastWindowClosed ?? true
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        windowController?.showWindow()
+        if let features {
+            features.bringToFront()
+        } else {
+            windowController?.showWindow()
+        }
         return false
     }
 
@@ -55,5 +62,26 @@ final class WebShellAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         logger.log("quit")
+    }
+
+    /// Task 3: badge, notifications, background mode and the status item (skeleton decisions 7, 8, 9).
+    private func installFeatures(
+        webApp: WebAppConfig,
+        shortcut: ShortcutConfig,
+        logger: LaunchLogger,
+        windowController: MainWindowController,
+        coordinator: WebViewCoordinator
+    ) {
+        let features = WebShellFeatures(
+            webApp: webApp,
+            menuBarIcon: shortcut.menuBarIcon,
+            appName: StatusItemText.appName(infoDictionary: Bundle.main.infoDictionary, fallback: shortcut.name),
+            logger: logger,
+            poster: UserNotificationPoster(logger: logger),
+            showWindow: { [weak windowController] in windowController?.showWindow() }
+        )
+        features.install(on: coordinator)
+        windowController.shouldClose = { [weak features] window in features?.windowShouldClose(window) ?? true }
+        self.features = features
     }
 }

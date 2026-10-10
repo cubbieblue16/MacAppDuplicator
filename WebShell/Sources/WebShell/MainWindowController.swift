@@ -88,6 +88,13 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
+    /// Task 3: background mode hides the window instead of closing it (see WebShellFeatures.windowShouldClose).
+    var shouldClose: (@MainActor (NSWindow) -> Bool)?
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        shouldClose?(sender) ?? true
+    }
+
     func showError(_ error: Error) {
         retryURL = (error as NSError).userInfo[NSURLErrorFailingURLErrorKey] as? URL
         errorDetail.stringValue = error.localizedDescription
