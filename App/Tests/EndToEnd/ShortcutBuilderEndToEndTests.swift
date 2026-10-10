@@ -16,7 +16,7 @@ final class ShortcutBuilderEndToEndTests: XCTestCase {
         try XCTSkipUnless(FileManager.default.fileExists(atPath: fixture.appending(path: "Contents/MacOS/FixtureApp").path),
                           "FixtureApp missing; run Tools/build-fixture.sh")
         dir = try makeAppTemporaryDirectory()
-        builder = ShortcutBuilder(launcherBinary: try EmbeddedLauncher.url(), signingIdentity: nil)
+        builder = ShortcutBuilder(launcherBinary: try EmbeddedLauncher.url(), webShellBinary: try EmbeddedWebShell.url(), signingIdentity: nil)
     }
 
     override func tearDownWithError() throws {

@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import DuplicatorCore
 @testable import MacAppDuplicator
@@ -6,6 +7,7 @@ final class ShortcutBuilderTests: XCTestCase {
     private var dir: URL!
     private var target: URL!
     private var launcher: URL!
+    private var webShell: URL!
     private var builder: ShortcutBuilder!
 
     override func setUpWithError() throws {
@@ -16,7 +18,9 @@ final class ShortcutBuilderTests: XCTestCase {
         try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/ls"), to: target.appending(path: "Contents/MacOS/Target"))
         launcher = dir.appending(path: "Launcher")
         try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/echo"), to: launcher)
-        builder = ShortcutBuilder(launcherBinary: launcher, signingIdentity: nil)
+        webShell = dir.appending(path: "WebShell")
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/ls"), to: webShell)
+        builder = ShortcutBuilder(launcherBinary: launcher, webShellBinary: webShell, signingIdentity: nil)
     }
 
     override func tearDownWithError() throws { try FileManager.default.removeItem(at: dir) }
@@ -424,5 +428,89 @@ final class ShortcutBuilderTests: XCTestCase {
         XCTAssertEqual(Set(try FileManager.default.contentsOfDirectory(atPath: exportDir.path)), Set(kept + ["Exported.app"]))
         XCTAssertTrue(ShortcutBuilder.isStagingName(stale[0]))
         XCTAssertFalse(ShortcutBuilder.isStagingName(kept[0]))
+    }
+
+    private func pngData() throws -> Data {
+        let rep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 64, bitsPerSample: 8, samplesPerPixel: 4,
+                                                 hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        return try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+    }
+
+    /// True for a copy of `/bin/ls` (the web shell stand-in), false for `/bin/echo` (the launcher stand-in). Signing keeps
+    /// the `__TEXT` strings, and the copies cannot be run once moved out of `/bin`, so the embedded `what` string is read.
+    private func isLsStandIn(_ url: URL) throws -> Bool {
+        try Data(contentsOf: url).range(of: Data("PROGRAM:ls ".utf8)) != nil
+    }
+
+    func testCreateWebAppCopiesWebShellSignsAndRoundTripsConfig() throws {
+        XCTAssertTrue(try isLsStandIn(webShell))
+        XCTAssertFalse(try isLsStandIn(launcher), "stand-ins must be distinguishable")
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let config = makeWebConfig(name: "Chat Work", url: "https://chat.example.test/")
+        let bundle = try builder.create(config: config, in: out, webIconData: try pngData())
+
+        XCTAssertEqual(bundle.lastPathComponent, "Chat Work.app")
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        XCTAssertEqual(record.config.kind, .webApp)
+        XCTAssertEqual(record.config.webApp?.url, "https://chat.example.test/")
+        XCTAssertEqual(record.config.webApp?.dataStoreID, config.webApp?.dataStoreID)
+        let executable = bundle.appending(path: "Contents/MacOS", directoryHint: .isDirectory)
+        let name = try XCTUnwrap(try FileManager.default.contentsOfDirectory(atPath: executable.path).first)
+        XCTAssertTrue(try isLsStandIn(executable.appending(path: name)), "the executable is the web shell, not the launcher")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: bundle.appending(path: "Contents/Resources/AppIcon.icns").path))
+        let verify = Process()
+        verify.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+        verify.arguments = ["--verify", "--strict", bundle.path]
+        try verify.run()
+        verify.waitUntilExit()
+        XCTAssertEqual(verify.terminationStatus, 0)
+    }
+
+    func testCreateWebAppWithoutBytesOrWithGarbageGetsALetterTile() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let none = try builder.create(config: makeWebConfig(name: "One Work"), in: out)
+        let garbage = try builder.create(config: makeWebConfig(name: "Two Work"), in: out, webIconData: Data("nope".utf8))
+        for bundle in [none, garbage] {
+            let icon = try Data(contentsOf: bundle.appending(path: "Contents/Resources/AppIcon.icns"))
+            XCTAssertEqual(String(decoding: icon.prefix(4), as: UTF8.self), "icns")
+        }
+    }
+
+    func testRegenerateWebAppWithoutNewBytesKeepsTheIconBytes() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: makeWebConfig(name: "Chat Work"), in: out, webIconData: try pngData())
+        let before = try Data(contentsOf: bundle.appending(path: "Contents/Resources/AppIcon.icns"))
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        var edited = record.config
+        edited.webApp?.pageZoom = 1.5
+
+        let rewritten = try builder.regenerate(record: record, config: edited)
+
+        XCTAssertEqual(try Data(contentsOf: rewritten.appending(path: "Contents/Resources/AppIcon.icns")), before)
+        XCTAssertEqual(try LibraryScanner.record(forBundleAt: rewritten).config.webApp?.pageZoom, 1.5)
+    }
+
+    func testDuplicateWebAppGetsFreshDataStoreAndKeepsUrlAndIcon() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: makeWebConfig(name: "Chat Work"), in: out, webIconData: try pngData())
+        let original = try LibraryScanner.record(forBundleAt: bundle)
+
+        let copy = try builder.duplicate(record: original, newName: "Chat Home", in: out, takenSlugs: [original.config.slug])
+
+        let copied = try LibraryScanner.record(forBundleAt: copy)
+        XCTAssertNotEqual(copied.config.webApp?.dataStoreID, original.config.webApp?.dataStoreID)
+        XCTAssertEqual(copied.config.webApp?.url, original.config.webApp?.url)
+        XCTAssertNotEqual(copied.config.bundleIdentifier, original.config.bundleIdentifier)
+        XCTAssertEqual(try Data(contentsOf: copy.appending(path: "Contents/Resources/AppIcon.icns")),
+                       try Data(contentsOf: bundle.appending(path: "Contents/Resources/AppIcon.icns")))
+    }
+
+    func testWebAppKindWithoutWebAppSettingsIsRefused() throws {
+        var config = makeWebConfig()
+        config.webApp = nil
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        XCTAssertThrowsError(try builder.create(config: config, in: out)) { error in
+            guard case ShortcutBuilder.BuilderError.webAppConfigMissing = error else { return XCTFail("\(error)") }
+        }
     }
 }

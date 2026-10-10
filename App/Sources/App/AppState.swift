@@ -68,7 +68,11 @@ final class AppState {
     }
 
     var builder: ShortcutBuilder {
-        ShortcutBuilder(launcherBinary: launcherBinary, signingIdentity: settings.signerIdentity)
+        ShortcutBuilder(
+            launcherBinary: launcherBinary,
+            webShellBinary: launcherBinary.deletingLastPathComponent().appending(path: "WebShell", directoryHint: .notDirectory),
+            signingIdentity: settings.signerIdentity
+        )
     }
 
     /// The compatibility profile for a target bundle identifier, if the profiles in use have one.

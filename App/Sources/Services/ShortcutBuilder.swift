@@ -14,6 +14,8 @@ struct ShortcutBuilder: Sendable {
         case exportIntoForeignApp(URL)
         /// The target is an App Duplicator shortcut (final review M5); carries the refused target path.
         case targetIsShortcut(String)
+        /// A `.webApp` config without its `webApp` settings.
+        case webAppConfigMissing
 
         var errorDescription: String? {
             switch self {
@@ -24,6 +26,7 @@ struct ShortcutBuilder: Sendable {
             case .exportIntoForeignApp(let url):
                 "The destination is inside “\(url.deletingPathExtension().lastPathComponent)”, which is not an App Duplicator shortcut. Choose a location outside other apps."
             case .targetIsShortcut(let path): TargetGuard.refusalMessage(forAppAt: URL(fileURLWithPath: path))
+            case .webAppConfigMissing: "The shortcut has no web app settings."
             }
         }
     }
@@ -40,33 +43,49 @@ struct ShortcutBuilder: Sendable {
     private static let logger = Logger(subsystem: "com.mikekuta.MacAppDuplicator", category: "ShortcutBuilder")
 
     let launcherBinary: URL
+    /// The embedded `WebShell` executable web app bundles run (Task 2).
+    let webShellBinary: URL
     /// Codesign identity display name, or nil for ad hoc.
     let signingIdentity: String?
     // FileManager is not Sendable, so it is not a stored property of this Sendable struct (Rebuild All runs the
     // builder in a detached task). Nothing ever set it; every use reads the shared instance.
     var fileManager: FileManager { .default }
 
-    init(launcherBinary: URL, signingIdentity: String?) {
+    init(launcherBinary: URL, webShellBinary: URL, signingIdentity: String?) {
         self.launcherBinary = launcherBinary
+        self.webShellBinary = webShellBinary
         self.signingIdentity = signingIdentity
     }
 
     /// Writes `<name>.app` into `directory`. Throws `alreadyExists` rather than replacing a bundle it did not make.
-    func create(config: ShortcutConfig, in directory: URL) throws -> URL {
+    /// `webIconData` is the site icon fetched by the wizard (PNG, JPEG or ICO bytes); it is only used for a `.webApp`
+    /// shortcut whose `iconMode` is `.copied`, and a missing or undecodable image gives the first-letter tile.
+    func create(config: ShortcutConfig, in directory: URL, webIconData: Data? = nil) throws -> URL {
+        try createBundle(config: config, in: directory, webIconData: webIconData, existingIcon: nil)
+    }
+
+    private func createBundle(config: ShortcutConfig, in directory: URL, webIconData: Data?, existingIcon: URL?) throws -> URL {
         let destination = directory.appending(path: "\(ShortcutConfig.fileSystemName(for: config.name)).app", directoryHint: .isDirectory)
         if fileManager.fileExists(atPath: destination.path) { throw BuilderError.alreadyExists(destination) }
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        return try write(config: config, in: directory)
+        return try write(config: config, in: directory, webIconData: webIconData, existingIcon: existingIcon)
+    }
+
+    /// The `AppIcon.icns` inside a shortcut bundle, or nil when it has none.
+    private static func bundledIcon(of bundleURL: URL) -> URL? {
+        let icon = bundleURL.appending(path: "Contents/Resources/AppIcon.icns", directoryHint: .notDirectory)
+        return FileManager.default.fileExists(atPath: icon.path) ? icon : nil
     }
 
     /// Rewrites an existing shortcut in place with `config` (same folder; the name may change the bundle file name).
-    func regenerate(record: ShortcutRecord, config: ShortcutConfig) throws -> URL {
+    /// A web app without new `webIconData` keeps the icon already in its bundle.
+    func regenerate(record: ShortcutRecord, config: ShortcutConfig, webIconData: Data? = nil) throws -> URL {
         let directory = record.bundleURL.deletingLastPathComponent()
         let newURL = directory.appending(path: "\(ShortcutConfig.fileSystemName(for: config.name)).app", directoryHint: .isDirectory)
         if newURL.standardizedFileURL != record.bundleURL.standardizedFileURL, fileManager.fileExists(atPath: newURL.path) {
             throw BuilderError.alreadyExists(newURL)
         }
-        let written = try write(config: config, in: directory)
+        let written = try write(config: config, in: directory, webIconData: webIconData, existingIcon: Self.bundledIcon(of: record.bundleURL))
         if written.standardizedFileURL != record.bundleURL.standardizedFileURL {
             try fileManager.removeItem(at: record.bundleURL)
         }
@@ -83,7 +102,9 @@ struct ShortcutBuilder: Sendable {
         config.slug = SlugAllocator.uniqueSlug(proposed: ShortcutConfig.slug(for: newName), taken: takenSlugs.union([record.config.slug]))
         config.bundleIdentifier = ShortcutConfig.bundleIdentifier(forSlug: config.slug)
         config.dataPath = nil
-        return try create(config: config, in: directory)
+        // A duplicate web app is a separate logins container: same address and look, new website data store.
+        config.webApp?.dataStoreID = UUID()
+        return try createBundle(config: config, in: directory, webIconData: nil, existingIcon: Self.bundledIcon(of: record.bundleURL))
     }
 
     /// Copies the bundle to `destination` (an `.app` path chosen by the user). The copy keeps its signature.
@@ -233,7 +254,10 @@ struct ShortcutBuilder: Sendable {
     ///
     /// Every bundle this build writes carries this build's engine version; `BundleWriter` mirrors it into
     /// `MADEngineVersion`, so rewriting a stale shortcut with its stored config would otherwise leave it stale forever.
-    private func write(config: ShortcutConfig, in directory: URL) throws -> URL {
+    private func write(config: ShortcutConfig, in directory: URL, webIconData: Data?, existingIcon: URL?) throws -> URL {
+        if config.kind == .webApp {
+            return try writeWebApp(config: config, in: directory, webIconData: webIconData, existingIcon: existingIcon)
+        }
         var config = config.resolvingDefaultDataPath(home: fileManager.homeDirectoryForCurrentUser)
         config.engineVersion = ShortcutConfig.currentEngineVersion
         let targetURL = URL(fileURLWithPath: config.targetPath)
@@ -241,12 +265,39 @@ struct ShortcutBuilder: Sendable {
         // Final review M5: a shortcut target chains launchers, and a self-target makes the launcher exec itself again.
         guard !TargetGuard.isShortcutBundle(at: targetURL) else { throw BuilderError.targetIsShortcut(config.targetPath) }
         let app = try AppInspector().inspect(appAt: targetURL)
-        let scratch = fileManager.temporaryDirectory.appending(path: "mad-build-\(UUID().uuidString)", directoryHint: .isDirectory)
-        try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
-        defer { try? fileManager.removeItem(at: scratch) }
+        let scratch = try makeScratch()
+        defer { removeScratch(scratch) }
         let icon = try IconResolver.iconFile(for: config, app: app, scratchDirectory: scratch)
         let bundle = try BundleWriter(fileManager: fileManager).write(config: config, app: app, launcherBinary: launcherBinary, iconFile: icon, to: directory)
         try Signer().sign(bundle: bundle, identity: signingIdentity)
         return bundle
+    }
+
+    /// A web app bundle: the embedded web shell as its executable, no target app and no data-folder resolution.
+    private func writeWebApp(config: ShortcutConfig, in directory: URL, webIconData: Data?, existingIcon: URL?) throws -> URL {
+        guard config.webApp != nil else { throw BuilderError.webAppConfigMissing }
+        var config = config
+        config.engineVersion = ShortcutConfig.currentEngineVersion
+        let scratch = try makeScratch()
+        defer { removeScratch(scratch) }
+        let icon = try IconResolver.webAppIconFile(for: config, webIconData: webIconData, existingIcon: existingIcon, scratchDirectory: scratch)
+        let bundle = try BundleWriter(fileManager: fileManager).write(config: config, executable: webShellBinary, iconFile: icon, to: directory)
+        try Signer().sign(bundle: bundle, identity: signingIdentity)
+        return bundle
+    }
+
+    private func makeScratch() throws -> URL {
+        let scratch = fileManager.temporaryDirectory.appending(path: "mad-build-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)
+        return scratch
+    }
+
+    /// Best-effort removal of a build scratch folder; a failure is only logged.
+    private func removeScratch(_ scratch: URL) {
+        do {
+            try fileManager.removeItem(at: scratch)
+        } catch {
+            Self.logger.warning("Could not remove build scratch folder \(scratch.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 }
