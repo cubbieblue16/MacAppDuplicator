@@ -49,6 +49,7 @@ final class AppState {
     let library: ShortcutLibrary
     let profiles: ProfilesModel
     private let launcherBinary: URL
+    private let webShellBinary: URL
 
     var selection: URL?
     var isWizardPresented = false
@@ -59,20 +60,18 @@ final class AppState {
     /// Rebuild All progress while it runs; nil otherwise.
     var rebuildProgress: RebuildProgress?
 
-    init(settings: AppSettings, library: ShortcutLibrary, launcherBinary: URL, profiles: ProfilesModel? = nil) {
+    /// `webShellBinary` nil means "next to the launcher in Resources" (where the Embed Web Shell build phase puts it).
+    init(settings: AppSettings, library: ShortcutLibrary, launcherBinary: URL, webShellBinary: URL? = nil, profiles: ProfilesModel? = nil) {
         self.settings = settings
         self.library = library
         self.launcherBinary = launcherBinary
+        self.webShellBinary = webShellBinary ?? launcherBinary.deletingLastPathComponent().appending(path: "WebShell", directoryHint: .notDirectory)
         // Main-actor types are never default argument values; nil means the inert model (no profiles, no network).
         self.profiles = profiles ?? .inert()
     }
 
     var builder: ShortcutBuilder {
-        ShortcutBuilder(
-            launcherBinary: launcherBinary,
-            webShellBinary: launcherBinary.deletingLastPathComponent().appending(path: "WebShell", directoryHint: .notDirectory),
-            signingIdentity: settings.signerIdentity
-        )
+        ShortcutBuilder(launcherBinary: launcherBinary, webShellBinary: webShellBinary, signingIdentity: settings.signerIdentity)
     }
 
     /// The compatibility profile for a target bundle identifier, if the profiles in use have one.

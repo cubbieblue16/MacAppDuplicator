@@ -22,8 +22,8 @@ struct MacAppDuplicatorApp: App {
             Task { await profiles.load() }
         }
         let library = ShortcutLibrary(settings: settings)
-        // `EmbeddedLauncher.url()` throws only when the Embed Launcher build phase did not run. Keep the expected path
-        // so the window still opens, and say up front why every write will fail.
+        // `EmbeddedLauncher.url()` / `EmbeddedWebShell.url()` throw only when the matching build phase did not run. Keep
+        // the expected paths so the window still opens, and say up front why every write will fail.
         let launcherBinary: URL
         var launcherError: Error?
         do {
@@ -32,8 +32,20 @@ struct MacAppDuplicatorApp: App {
             launcherBinary = Bundle.main.bundleURL.appending(path: "Contents/Resources/Launcher", directoryHint: .notDirectory)
             launcherError = error
         }
-        let state = AppState(settings: settings, library: library, launcherBinary: launcherBinary, profiles: profiles)
-        if let launcherError { state.present(launcherError, context: "Could not find the launcher") }
+        let webShellBinary: URL
+        var webShellError: Error?
+        do {
+            webShellBinary = try EmbeddedWebShell.url()
+        } catch {
+            webShellBinary = Bundle.main.bundleURL.appending(path: "Contents/Resources/WebShell", directoryHint: .notDirectory)
+            webShellError = error
+        }
+        let state = AppState(settings: settings, library: library, launcherBinary: launcherBinary, webShellBinary: webShellBinary, profiles: profiles)
+        if let launcherError {
+            state.present(launcherError, context: "Could not find the launcher")
+        } else if let webShellError {
+            state.present(webShellError, context: "Could not find the web shell")
+        }
         _appState = State(initialValue: state)
     }
 
