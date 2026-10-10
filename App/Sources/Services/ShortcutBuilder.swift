@@ -16,6 +16,10 @@ struct ShortcutBuilder: Sendable {
         case targetIsShortcut(String)
         /// A `.webApp` config without its `webApp` settings.
         case webAppConfigMissing
+        /// Phase 5: a `.file`, `.folder` or `.cli` config without its `file`/`cli` settings; carries the kind.
+        case launcherConfigMissing(ShortcutKind)
+        /// Phase 5: the file, folder or command executable a launcher shortcut opens does not exist; carries the path.
+        case itemMissing(String)
 
         var errorDescription: String? {
             switch self {
@@ -27,6 +31,8 @@ struct ShortcutBuilder: Sendable {
                 "The destination is inside “\(url.deletingPathExtension().lastPathComponent)”, which is not an App Duplicator shortcut. Choose a location outside other apps."
             case .targetIsShortcut(let path): TargetGuard.refusalMessage(forAppAt: URL(fileURLWithPath: path))
             case .webAppConfigMissing: "The shortcut has no web app settings."
+            case .launcherConfigMissing: "The shortcut has no file, folder or command settings."
+            case .itemMissing(let path): "Nothing exists at \(path)."
             }
         }
     }
@@ -255,8 +261,13 @@ struct ShortcutBuilder: Sendable {
     /// Every bundle this build writes carries this build's engine version; `BundleWriter` mirrors it into
     /// `MADEngineVersion`, so rewriting a stale shortcut with its stored config would otherwise leave it stale forever.
     private func write(config: ShortcutConfig, in directory: URL, webIconData: Data?, existingIcon: URL?) throws -> URL {
-        if config.kind == .webApp {
+        switch config.kind {
+        case .webApp:
             return try writeWebApp(config: config, in: directory, webIconData: webIconData, existingIcon: existingIcon)
+        case .file, .folder, .cli:
+            return try writeLauncherKind(config: config, in: directory, existingIcon: existingIcon)
+        case .app:
+            break
         }
         var config = config.resolvingDefaultDataPath(home: fileManager.homeDirectoryForCurrentUser)
         config.engineVersion = ShortcutConfig.currentEngineVersion
@@ -288,6 +299,47 @@ struct ShortcutBuilder: Sendable {
         defer { removeScratch(scratch) }
         let icon = try IconResolver.webAppIconFile(for: config, webIconData: webIconData, existingIcon: existingIcon, scratchDirectory: scratch)
         let bundle = try BundleWriter(fileManager: fileManager).write(config: config, executable: webShellBinary, iconFile: icon, to: directory)
+        try Signer().sign(bundle: bundle, identity: signingIdentity)
+        return bundle
+    }
+
+    /// Phase 5: a file, folder or command shortcut. The Launcher binary is the executable (it reads `kind` from the config
+    /// and opens the item or spawns the command). There is no target app, no data-folder resolution and no launch-mode
+    /// choice, and only the sub-config matching the kind is kept; the wizard and the editor enforce the same invariants.
+    /// `duplicate`, `regenerate` and `exportCopy` need no launcher-specific code: they go through `write` or copy the bundle.
+    private func writeLauncherKind(config: ShortcutConfig, in directory: URL, existingIcon: URL?) throws -> URL {
+        var config = config
+        let itemPath: String
+        switch config.kind {
+        case .file, .folder:
+            guard let file = config.file else { throw BuilderError.launcherConfigMissing(config.kind) }
+            itemPath = file.path
+            config.cli = nil
+        case .cli:
+            guard let cli = config.cli else { throw BuilderError.launcherConfigMissing(config.kind) }
+            itemPath = cli.executablePath
+            config.file = nil
+        case .app, .webApp:
+            throw BuilderError.launcherConfigMissing(config.kind)
+        }
+        guard fileManager.fileExists(atPath: itemPath) else { throw BuilderError.itemMissing(itemPath) }
+        config.webApp = nil
+        config.targetPath = ""
+        config.targetBundleIdentifier = ""
+        config.launchMode = .dockShortcut
+        config.dataMode = .disabled
+        config.dataPath = nil
+        config.engineVersion = ShortcutConfig.currentEngineVersion
+        let scratch = try makeScratch()
+        defer { removeScratch(scratch) }
+        var icon = try IconResolver.launcherIconFile(for: config, scratchDirectory: scratch)
+        if icon == nil, let existingIcon {
+            // Copied into scratch first: a regenerate rewrites the bundle that holds `existingIcon`.
+            let kept = scratch.appending(path: "existing-icon.icns")
+            try fileManager.copyItem(at: existingIcon, to: kept)
+            icon = kept
+        }
+        let bundle = try BundleWriter(fileManager: fileManager).write(config: config, executable: launcherBinary, iconFile: icon, to: directory)
         try Signer().sign(bundle: bundle, identity: signingIdentity)
         return bundle
     }

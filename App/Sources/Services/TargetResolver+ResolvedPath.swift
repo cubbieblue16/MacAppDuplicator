@@ -17,9 +17,10 @@ extension TargetResolver {
     }
 
     func resolvedPath(for config: ShortcutConfig) -> String? {
-        // A web app has no target app (its targetPath and targetBundleIdentifier are empty): export, delete and the
-        // data-path guard must never go looking for one, whatever a hand-edited plist left in the bundle id.
-        guard config.kind != .webApp else { return nil }
+        // Only application shortcuts have a target app. Web apps (Phase 4) and file, folder and command shortcuts (Phase 5)
+        // store empty targetPath and targetBundleIdentifier: export, delete and the data-path guard must never go looking
+        // for one, whatever a hand-edited plist left in the bundle id.
+        guard config.kind == .app else { return nil }
         return resolvedPath(targetPath: config.targetPath, targetBundleIdentifier: config.targetBundleIdentifier)
     }
 }

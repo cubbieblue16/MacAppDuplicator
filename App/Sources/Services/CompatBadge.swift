@@ -12,9 +12,9 @@ enum CompatBadge: String, Sendable {
 
     var label: String { rawValue }
 
-    /// Whether a shortcut of `kind` shows a compatibility badge. A web app has no target app to rate (skeleton
-    /// decision 14); every kind that runs another app keeps its badge.
-    static func isShown(for kind: ShortcutKind) -> Bool { kind != .webApp }
+    /// Whether a shortcut of `kind` shows a compatibility badge. Badges rate how a target app is launched, so only
+    /// application shortcuts show one: a web app (skeleton decision 14) and file, folder and command shortcuts (Phase 5) have no target app.
+    static func isShown(for kind: ShortcutKind) -> Bool { kind == .app }
 
     /// Evaluated in this order: no inspected app → `unknown`; a profile marked `unsupported` → `unsupported`; a
     /// `verified` profile → `verified`; a sandboxed native app → `unknown` (its container ignores a HOME override,
