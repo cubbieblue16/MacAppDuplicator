@@ -109,7 +109,8 @@ final class WebWizardModelTests: XCTestCase {
         let model = WizardModel()
         XCTAssertEqual(model.steps, [.kind, .target, .identity, .data, .review])
         model.kind = .folder
-        XCTAssertFalse(model.canAdvance, "the other kinds stay disabled")
+        XCTAssertTrue(model.canAdvance, "Phase 5 enabled the file, folder and command kinds")
+        XCTAssertEqual(model.steps, [.kind, .target, .identity, .review], "a file or folder has no Data step")
     }
 
     // MARK: presets

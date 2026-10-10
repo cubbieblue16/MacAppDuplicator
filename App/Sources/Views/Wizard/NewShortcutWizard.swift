@@ -22,9 +22,15 @@ struct NewShortcutWizard: View {
                 switch model.step {
                 case .kind: KindStep(model: model)
                 case .target:
-                    if model.kind == .webApp { WebTargetStep(model: model) } else { TargetStep(model: model) }
+                    switch model.kind {
+                    case .webApp: WebTargetStep(model: model)
+                    case .file, .folder: FileTargetStep(model: model)
+                    case .cli: CommandTargetStep(model: model)
+                    case .app: TargetStep(model: model)
+                    }
                 case .identity: IdentityStep(model: model)
-                case .data: DataStep(model: model)
+                case .data:
+                    if model.kind == .cli { CommandDataStep(model: model) } else { DataStep(model: model) }
                 case .webOptions: WebAppOptionsStep(model: model)
                 case .review: ReviewStep(model: model)
                 }

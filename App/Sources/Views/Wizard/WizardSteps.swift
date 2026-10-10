@@ -10,8 +10,8 @@ struct KindStep: View {
     private let options = [
         Option(kind: .app, title: "Application", subtitle: "Run a second copy of an installed app with its own data", enabled: true, symbol: "app.badge"),
         Option(kind: .webApp, title: "Web App", subtitle: "Any website as its own app", enabled: true, symbol: "globe"),
-        Option(kind: .folder, title: "File or Folder", subtitle: "Coming in a later phase", enabled: false, symbol: "folder"),
-        Option(kind: .cli, title: "Command", subtitle: "Coming in a later phase", enabled: false, symbol: "terminal"),
+        Option(kind: .folder, title: "File or Folder", subtitle: "Open a document or folder from the Dock", enabled: true, symbol: "folder"),
+        Option(kind: .cli, title: "Command", subtitle: "Run a program or script, in a terminal or in the background", enabled: true, symbol: "terminal"),
     ]
 
     var body: some View {
@@ -19,7 +19,7 @@ struct KindStep: View {
             Text("What do you want to duplicate?").font(.title3)
             ForEach(options, id: \.kind) { option in
                 Button {
-                    model.kind = option.kind
+                    model.chooseKind(option.kind)
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: option.symbol).font(.title2).frame(width: 32)
@@ -28,15 +28,20 @@ struct KindStep: View {
                             Text(option.subtitle).font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        if model.kind == option.kind { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor) }
+                        if isSelected(option) { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor) }
                     }
                     .padding(10)
-                    .background(model.kind == option.kind ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                    .background(isSelected(option) ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
                 .disabled(!option.enabled)
             }
         }
+    }
+
+    /// "File or Folder" is offered as `.folder` but stays selected once a chosen file made the kind `.file`.
+    private func isSelected(_ option: Option) -> Bool {
+        option.kind == .folder ? (model.kind == .file || model.kind == .folder) : model.kind == option.kind
     }
 }
 
@@ -101,7 +106,7 @@ struct IdentityStep: View {
             TextField("Name", text: $model.name)
                 .help("This becomes the Dock title and the bundle name")
             Picker("Icon", selection: $model.iconMode) {
-                Text(model.kind == .webApp ? "Fetched from site" : "Copied from target").tag(IconMode.copied)
+                Text(model.copiedIconLabel).tag(IconMode.copied)
                 Text("Custom file").tag(IconMode.custom)
                 Text("Generated tile").tag(IconMode.generated)
             }
@@ -117,7 +122,7 @@ struct IdentityStep: View {
             if model.kind == .webApp, let status = model.webIconStatusText {
                 Text(status).font(.caption).foregroundStyle(.secondary)
             }
-            if model.kind != .webApp {
+            if model.kind == .app {
                 Picker("Launch mode", selection: $model.launchMode) {
                     Text("Dock Shortcut").tag(LaunchMode.dockShortcut)
                     Text("System Launch").tag(LaunchMode.systemLaunch)
@@ -129,11 +134,20 @@ struct IdentityStep: View {
         .formStyle(.columns)
     }
 
+    /// A launcher's Copied icon is the Finder icon of its item or executable, the same image the builder renders.
+    @ViewBuilder private var launcherIconPreview: some View {
+        if let path = model.launcherIconPath {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: path)).resizable()
+        } else {
+            Image(systemName: "app.dashed").resizable()
+        }
+    }
+
     @ViewBuilder
     private var preview: some View {
         switch model.iconMode {
         case .copied:
-            if model.kind == .webApp {
+            if model.isLauncherKind { launcherIconPreview } else if model.kind == .webApp {
                 if let data = model.webIconData, let image = NSImage(data: data) {
                     Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
                 } else if model.webIconFetchState == .fetching {
@@ -245,6 +259,8 @@ struct ReviewStep: View {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
                     if model.kind == .webApp {
                         ForEach(model.webReviewRows, id: \.label) { row($0.label, $0.value) }
+                    } else if model.isLauncherKind {
+                        ForEach(model.launcherReviewRows, id: \.label) { row($0.label, $0.value) }
                     } else {
                         row("Name", model.name)
                         row("Target", model.targetURL?.path ?? "")
@@ -263,7 +279,7 @@ struct ReviewStep: View {
                 if let error = model.previewError {
                     Label(error, systemImage: "xmark.octagon").foregroundStyle(.red).font(.caption)
                 }
-                if model.kind != .webApp, let profile = model.profile {
+                if model.kind == .app, let profile = model.profile {
                     DisclosureGroup("Profile defaults", isExpanded: $showProfile) {
                         VStack(alignment: .leading, spacing: 6) {
                             ProfileSummaryView(rows: ProfileSummary.rows(for: profile, detectedFamily: model.inspected?.family))

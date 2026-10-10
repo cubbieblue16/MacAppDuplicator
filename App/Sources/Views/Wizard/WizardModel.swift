@@ -79,6 +79,23 @@ final class WizardModel {
     /// another target may replace it.
     private var suggestedName = ""
 
+    // MARK: Launcher state (Phase 5)
+
+    /// The file or folder a `.file`/`.folder` shortcut opens; `selectItem` sets it and picks the kind.
+    var itemPath: String?
+    /// The app that opens the item; nil opens it with the app macOS picks.
+    var openerAppPath: String?
+    /// The program a `.cli` shortcut runs, as typed; `validatedCLIExecutable` is the checked form.
+    var cliExecutable = ""
+    /// One argument per entry, already trimmed and without empty entries (see `parseArguments`).
+    var cliArguments: [String] = []
+    var cliWorkingDirectory: String?
+    var terminal: TerminalChoice = .terminal
+    var cliHomeOverride = false
+    private(set) var itemError: String?
+    private(set) var openerError: String?
+    private var itemIsDirectory = false
+
     /// True while `launchMode` is System Launch only because a protected target forced it, so a later unprotected
     /// target can restore the default.
     private var launchModeWasForced = false
@@ -126,9 +143,14 @@ final class WizardModel {
     var isLastStep: Bool { step == .review }
 
     /// The steps this kind of shortcut goes through. A web app has no Data step (its data lives in a private web data
-    /// store); Web App Options takes that slot.
+    /// store); Web App Options takes that slot. A file or folder shortcut has no data at all; a command's Data step only
+    /// offers its own HOME.
     var steps: [Step] {
-        kind == .webApp ? [.kind, .target, .identity, .webOptions, .review] : [.kind, .target, .identity, .data, .review]
+        switch kind {
+        case .webApp: [.kind, .target, .identity, .webOptions, .review]
+        case .file, .folder: [.kind, .target, .identity, .review]
+        case .app, .cli: [.kind, .target, .identity, .data, .review]
+        }
     }
 
     /// 1-based position of `step` in `steps`, for the "Step N of M" header.
@@ -162,13 +184,21 @@ final class WizardModel {
 
     var canAdvance: Bool {
         switch step {
-        case .kind: kind == .app || kind == .webApp
-        case .target: kind == .webApp ? validatedWebURL != nil : inspected != nil
+        case .kind: true
+        case .target:
+            switch kind {
+            case .app: inspected != nil
+            case .webApp: validatedWebURL != nil
+            case .file, .folder: itemPath != nil
+            case .cli: validatedCLIExecutable != nil
+            }
         case .identity: !name.trimmingCharacters(in: .whitespaces).isEmpty && (iconMode != .custom || customIconPath != nil)
         case .data, .webOptions: true
         case .review:
-            // A web app has no launch plan to wait for; it waits for an in-flight icon fetch instead.
-            kind == .webApp ? (!isCreating && webIconFetchState != .fetching) : (preview != nil && !isCreating)
+            switch kind {
+            case .webApp: !isCreating && webIconFetchState != .fetching
+            case .app, .file, .folder, .cli: preview != nil && !isCreating
+            }
         }
     }
 
@@ -215,6 +245,7 @@ final class WizardModel {
         guard canAdvance, let i = steps.firstIndex(of: step), i + 1 < steps.count else { return }
         step = steps[i + 1]
         if step == .identity, kind == .webApp { startIconFetch() }
+        if step == .identity, isLauncherKind { suggestLauncherName() }
         if step == .review { refreshPreview() }
     }
 
@@ -228,6 +259,8 @@ final class WizardModel {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         let finalSlug = slug
         if kind == .webApp { return makeWebConfig(name: trimmed, slug: finalSlug) }
+        if kind == .file || kind == .folder { return makeFileConfig() }
+        if kind == .cli { return makeCLIConfig() }
         return ShortcutConfig(
             kind: kind,
             name: trimmed,
@@ -338,7 +371,7 @@ final class WizardModel {
     /// What the icon row says. For a web app Copied means "Fetched from site".
     var iconDescription: String {
         switch iconMode {
-        case .copied: kind == .webApp ? "Fetched from site" : "Copied from target"
+        case .copied: copiedIconLabel
         case .custom: customIconPath.map { "Custom: \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? "Custom file"
         case .generated: "Generated tile"
         }
@@ -455,5 +488,206 @@ final class WizardModel {
                 backgroundMode: backgroundMode && menuBarIcon
             )
         )
+    }
+
+    // MARK: Launchers (Phase 5)
+
+    /// The terminal picker's order: Terminal first, background last.
+    static let terminalChoices: [TerminalChoice] = [.terminal, .iterm2, .ghostty, .none]
+
+    /// The picker label for a terminal choice. Nonisolated so Diagnostics (built off the main actor) could share it.
+    nonisolated static func terminalLabel(_ choice: TerminalChoice) -> String {
+        switch choice {
+        case .terminal: "Terminal"
+        case .iterm2: "iTerm2"
+        case .ghostty: "Ghostty"
+        case .none: "No terminal (run in background)"
+        }
+    }
+
+    /// One argument per line: each line trimmed, empty lines dropped. Quotes are kept as typed (no shell parsing).
+    static func parseArguments(_ text: String) -> [String] {
+        text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    var isLauncherKind: Bool { kind == .file || kind == .folder || kind == .cli }
+
+    /// What the identity step's Copied option is called for this kind.
+    var copiedIconLabel: String {
+        switch kind {
+        case .webApp: "Fetched from site"
+        case .file, .folder: "Copied from item"
+        case .cli: "Copied from executable"
+        case .app: "Copied from target"
+        }
+    }
+
+    /// The path whose Finder icon the identity step previews for a launcher kind.
+    var launcherIconPath: String? {
+        switch kind {
+        case .file, .folder: itemPath
+        case .cli: validatedCLIExecutable
+        case .app, .webApp: nil
+        }
+    }
+
+    /// Where a command's own HOME would live (`ShortcutConfig.defaultDataPath` for the current slug).
+    var commandHomePath: String {
+        ShortcutConfig.defaultDataPath(forSlug: slug, home: FileManager.default.homeDirectoryForCurrentUser)
+    }
+
+    /// The kind step's options. "File or Folder" is offered as `.folder`; choosing it keeps the kind an already chosen item decided.
+    func chooseKind(_ chosen: ShortcutKind) {
+        guard chosen == .file || chosen == .folder else {
+            kind = chosen
+            return
+        }
+        kind = itemPath != nil && !itemIsDirectory ? .file : .folder
+    }
+
+    /// Picks the item a launcher opens. A folder that is not a package becomes `.folder`; a file or a package (an app, a
+    /// document bundle) becomes `.file`. App Duplicator shortcuts are refused: opening one would chain launchers.
+    func selectItem(_ url: URL) {
+        itemError = nil
+        guard !TargetGuard.isShortcutBundle(at: url) else {
+            itemPath = nil
+            itemError = TargetGuard.refusalMessage(forAppAt: url)
+            return
+        }
+        let values: URLResourceValues
+        do {
+            values = try url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+        } catch {
+            itemPath = nil
+            itemError = "Could not read \(url.lastPathComponent): \(error.localizedDescription)"
+            return
+        }
+        itemIsDirectory = values.isDirectory == true && values.isPackage != true
+        kind = itemIsDirectory ? .folder : .file
+        itemPath = FileConfig.normalizedPath(url.path)
+    }
+
+    /// The app that opens the item, or nil for the default app. Only `.app` bundles that are not shortcuts are accepted.
+    func selectOpener(_ url: URL?) {
+        openerError = nil
+        guard let url else {
+            openerAppPath = nil
+            return
+        }
+        guard url.pathExtension == "app" else {
+            openerError = "\(url.lastPathComponent) is not an app."
+            return
+        }
+        guard !TargetGuard.isShortcutBundle(at: url) else {
+            openerError = TargetGuard.refusalMessage(forAppAt: url)
+            return
+        }
+        openerAppPath = FileConfig.normalizedPath(url.path)
+    }
+
+    /// Why the executable field does not validate, or nil when it does.
+    var cliExecutableError: String? {
+        let path = Self.expandedPath(cliExecutable)
+        if path.isEmpty { return "Choose the program to run." }
+        guard path.hasPrefix("/") else { return "Use a full path that starts with /." }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else { return "Nothing exists at \(path)." }
+        guard !isDirectory.boolValue else { return "\(path) is a folder, not a program." }
+        guard FileManager.default.isExecutableFile(atPath: path) else { return "\(path) is not executable." }
+        return nil
+    }
+
+    /// The executable once it is an absolute path to an existing, executable file (trimmed, `~` expanded); nil otherwise.
+    var validatedCLIExecutable: String? {
+        cliExecutableError == nil ? Self.expandedPath(cliExecutable) : nil
+    }
+
+    func makeFileConfig() -> ShortcutConfig {
+        let finalSlug = slug
+        return ShortcutConfig(
+            kind: kind == .folder ? .folder : .file,
+            name: name.trimmingCharacters(in: .whitespaces),
+            slug: finalSlug,
+            bundleIdentifier: ShortcutConfig.bundleIdentifier(forSlug: finalSlug),
+            targetPath: "",
+            targetBundleIdentifier: "",
+            launchMode: .dockShortcut,
+            dataMode: .disabled,
+            dataPath: nil,
+            iconMode: iconMode,
+            customIconPath: iconMode == .custom ? customIconPath : nil,
+            file: FileConfig(path: itemPath ?? "", openerAppPath: openerAppPath)
+        )
+    }
+
+    func makeCLIConfig() -> ShortcutConfig {
+        let finalSlug = slug
+        return ShortcutConfig(
+            kind: .cli,
+            name: name.trimmingCharacters(in: .whitespaces),
+            slug: finalSlug,
+            bundleIdentifier: ShortcutConfig.bundleIdentifier(forSlug: finalSlug),
+            targetPath: "",
+            targetBundleIdentifier: "",
+            launchMode: .dockShortcut,
+            dataMode: .disabled,
+            dataPath: nil,
+            iconMode: iconMode,
+            customIconPath: iconMode == .custom ? customIconPath : nil,
+            cli: CLIConfig(
+                executablePath: validatedCLIExecutable ?? Self.expandedPath(cliExecutable),
+                arguments: cliArguments.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty },
+                workingDirectory: trimmedWorkingDirectory,
+                terminal: terminal,
+                homeOverride: cliHomeOverride
+            )
+        )
+    }
+
+    /// The review step's rows for file, folder and command shortcuts. Arguments are masked like the launch plan.
+    var launcherReviewRows: [ReviewRow] {
+        let trimmedName = name.trimmingCharacters(in: .whitespaces)
+        switch kind {
+        case .file, .folder:
+            return [
+                ReviewRow("Name", trimmedName),
+                ReviewRow(kind == .folder ? "Folder" : "File", itemPath ?? "None"),
+                ReviewRow("Open with", openerAppPath.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? "Default app"),
+                ReviewRow("Icon", iconDescription),
+            ]
+        case .cli:
+            let arguments = SecretMasking.maskArguments(cliArguments).map { $0.contains(" ") ? "\"\($0)\"" : $0 }
+            return [
+                ReviewRow("Name", trimmedName),
+                ReviewRow("Executable", validatedCLIExecutable ?? cliExecutable),
+                ReviewRow("Arguments", arguments.isEmpty ? "None" : arguments.joined(separator: " ")),
+                ReviewRow("Working directory", trimmedWorkingDirectory ?? "Default"),
+                ReviewRow("Terminal", Self.terminalLabel(terminal)),
+                ReviewRow("HOME", cliHomeOverride ? "Own HOME: \(commandHomePath)" : "Your HOME"),
+                ReviewRow("Icon", iconDescription),
+            ]
+        case .app, .webApp:
+            return []
+        }
+    }
+
+    private var trimmedWorkingDirectory: String? {
+        guard let raw = cliWorkingDirectory?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return nil }
+        return raw
+    }
+
+    private static func expandedPath(_ raw: String) -> String {
+        NSString(string: raw.trimmingCharacters(in: .whitespaces)).expandingTildeInPath
+    }
+
+    /// Fills the name from the item (without its extension for a file) or the executable, unless the user typed one.
+    private func suggestLauncherName() {
+        guard let source = kind == .cli ? validatedCLIExecutable : itemPath else { return }
+        let url = URL(fileURLWithPath: source)
+        let candidate = kind == .file ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
+        if name.isEmpty || name == suggestedName {
+            name = candidate
+            suggestedName = name
+        }
     }
 }
