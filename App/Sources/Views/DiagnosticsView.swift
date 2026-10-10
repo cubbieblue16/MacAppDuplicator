@@ -4,7 +4,11 @@ import SwiftUI
 struct DiagnosticsModel {
     let shortcutName: String
     let bundlePath: String
-    let targetPath: String
+    /// The target path stored in the shortcut's config.
+    let storedTargetPath: String
+    /// The target the launcher would start (spec §7 "resolved target path"): the stored path while its bundle id
+    /// still matches, else the Launch Services match for the bundle id (`TargetResolver`); nil when neither exists.
+    let resolvedTargetPath: String?
     let executablePath: String
     let launchMode: String
     let arguments: [String]
@@ -15,14 +19,23 @@ struct DiagnosticsModel {
 
     static func make(record: ShortcutRecord, logReader: LogReader = LogReader()) -> DiagnosticsModel {
         let logLines = logReader.tail(name: record.name)
+        var config = record.config.resolvingDefaultDataPath(home: FileManager.default.homeDirectoryForCurrentUser)
+        let resolvedTarget: URL
         do {
-            let config = record.config.resolvingDefaultDataPath(home: FileManager.default.homeDirectoryForCurrentUser)
+            resolvedTarget = try TargetResolver().resolve(config: config)
+        } catch {
+            return failed(record: record, resolvedTargetPath: nil, logLines: logLines, error: error)
+        }
+        // Preview exactly what the launcher would inspect: the resolved bundle, not a stale stored path.
+        config.targetPath = resolvedTarget.path
+        do {
             let preview = try LaunchPlanPreview.make(config: config, bundleURL: record.bundleURL)
             let env = preview.maskedEnvironment.keys.sorted().map { (key: $0, value: preview.maskedEnvironment[$0] ?? "") }
             return DiagnosticsModel(
                 shortcutName: record.name,
                 bundlePath: record.bundleURL.path,
-                targetPath: record.config.targetPath,
+                storedTargetPath: record.config.targetPath,
+                resolvedTargetPath: resolvedTarget.path,
                 executablePath: preview.executablePath,
                 launchMode: preview.launchMode == .systemLaunch ? "System Launch" : "Dock Shortcut",
                 arguments: preview.arguments,
@@ -32,26 +45,37 @@ struct DiagnosticsModel {
                 planError: nil
             )
         } catch {
-            return DiagnosticsModel(
-                shortcutName: record.name,
-                bundlePath: record.bundleURL.path,
-                targetPath: record.config.targetPath,
-                executablePath: "",
-                launchMode: record.config.launchMode == .systemLaunch ? "System Launch" : "Dock Shortcut",
-                arguments: [],
-                environment: [],
-                warnings: [],
-                logLines: logLines,
-                planError: error.localizedDescription
-            )
+            return failed(record: record, resolvedTargetPath: resolvedTarget.path, logLines: logLines, error: error)
         }
     }
+
+    private static func failed(record: ShortcutRecord, resolvedTargetPath: String?, logLines: [String], error: Error) -> DiagnosticsModel {
+        DiagnosticsModel(
+            shortcutName: record.name,
+            bundlePath: record.bundleURL.path,
+            storedTargetPath: record.config.targetPath,
+            resolvedTargetPath: resolvedTargetPath,
+            executablePath: "",
+            launchMode: record.config.launchMode == .systemLaunch ? "System Launch" : "Dock Shortcut",
+            arguments: [],
+            environment: [],
+            warnings: [],
+            logLines: logLines,
+            planError: error.localizedDescription
+        )
+    }
+
+    /// True when the launcher would start something other than the stored path (moved target or no target).
+    var storedPathDiffers: Bool { resolvedTargetPath != storedTargetPath }
 
     var reportText: String {
         var lines: [String] = []
         lines.append("App Duplicator diagnostics — \(shortcutName)")
         lines.append("Bundle: \(bundlePath)")
-        lines.append("Target: \(targetPath)")
+        lines.append("Target: \(resolvedTargetPath ?? "not found")")
+        if storedPathDiffers {
+            lines.append("Stored target path: \(storedTargetPath)")
+        }
         if let planError {
             lines.append("Launch plan error: \(planError)")
         } else {
@@ -89,7 +113,10 @@ struct DiagnosticsView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         section("Shortcut") {
                             row("Bundle", model.bundlePath)
-                            row("Target", model.targetPath)
+                            row("Target", model.resolvedTargetPath ?? "Not found")
+                            if model.storedPathDiffers {
+                                row("Stored path", model.storedTargetPath)
+                            }
                             if let error = model.planError {
                                 Label(error, systemImage: "xmark.octagon").foregroundStyle(.red)
                             } else {
@@ -120,9 +147,7 @@ struct DiagnosticsView: View {
                     NSPasteboard.general.setString(model.reportText, forType: .string)
                 }
                 .disabled(model == nil)
-                Button("Open Log Folder") {
-                    NSWorkspace.shared.open(LogReader().logFolder())
-                }
+                Button("Open Log Folder") { LogFolderOpener.open() }
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             }

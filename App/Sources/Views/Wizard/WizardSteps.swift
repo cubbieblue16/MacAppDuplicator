@@ -97,7 +97,7 @@ struct IdentityStep: View {
                 .help("This becomes the Dock title and the bundle name")
             Picker("Icon", selection: $model.iconMode) {
                 Text("Copied from target").tag(IconMode.copied)
-                Text("Custom file…").tag(IconMode.custom)
+                Text("Custom file").tag(IconMode.custom)
                 Text("Generated tile").tag(IconMode.generated)
             }
             if model.iconMode == .custom {
@@ -257,7 +257,7 @@ struct ReviewStep: View {
     private var iconDescription: String {
         switch model.iconMode {
         case .copied: "Copied from target"
-        case .custom: model.customIconPath.map { "Custom: \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? "Custom file…"
+        case .custom: model.customIconPath.map { "Custom: \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? "Custom file"
         case .generated: "Generated tile"
         }
     }

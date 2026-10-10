@@ -25,13 +25,15 @@ enum IconResolver {
             guard let path = config.customIconPath, FileManager.default.fileExists(atPath: path) else {
                 throw IconError.customFileMissing(config.customIconPath ?? "")
             }
-            let out = scratchDirectory.appending(path: "\(config.slug)-custom.icns")
+            // Fixed scratch names: the scratch directory is already per build, and a slug from a hand-edited config
+            // (for example one containing "../") must never steer where the file is written.
+            let out = scratchDirectory.appending(path: "custom-icon.icns")
             do { try IconRenderer.writeICNS(fromImageFile: URL(fileURLWithPath: path), to: out) } catch {
                 throw IconError.renderFailed(error.localizedDescription)
             }
             return out
         case .generated:
-            let out = scratchDirectory.appending(path: "\(config.slug)-generated.icns")
+            let out = scratchDirectory.appending(path: "generated-icon.icns")
             do { try IconRenderer.writeICNS(generatedFor: config.name, to: out) } catch {
                 throw IconError.renderFailed(error.localizedDescription)
             }

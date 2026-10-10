@@ -11,7 +11,7 @@ struct IdentitySection: View {
             TextField("Name", text: $draft.name)
             Picker("Icon", selection: $draft.iconMode) {
                 Text("Copied from target").tag(IconMode.copied)
-                Text("Custom file…").tag(IconMode.custom)
+                Text("Custom file").tag(IconMode.custom)
                 Text("Generated tile").tag(IconMode.generated)
             }
             if draft.iconMode == .custom {
@@ -82,14 +82,28 @@ struct LaunchSection: View {
     @Environment(AppState.self) private var appState
     @Binding var draft: ShortcutConfig
     let record: ShortcutRecord
+    /// The editor's inspection of the current target; nil while it runs or when the target cannot be read.
+    let inspected: InspectedApp?
     @State private var dataFolderError: String?
 
     var body: some View {
         let defaultPath = ShortcutConfig.defaultDataPath(forSlug: draft.slug, home: FileManager.default.homeDirectoryForCurrentUser)
+        let requiresSystemLaunch = inspected?.requiresSystemLaunch ?? false
+        // Spec §4.5: the dark override exists only for these families; unknown targets get no promise either.
+        let isForcedDarkAvailable = inspected?.family.supportsForcedDarkMode ?? false
         Section("Launch") {
-            Picker("Launch mode", selection: $draft.launchMode) {
+            // Spec §4.1, the wizard's rule: a protected target always starts through System Launch, so the picker
+            // shows what will happen and is locked. The stored value is left alone; the planner forces it at launch.
+            Picker("Launch mode", selection: Binding(
+                get: { requiresSystemLaunch ? LaunchMode.systemLaunch : draft.launchMode },
+                set: { draft.launchMode = $0 }
+            )) {
                 Text("Dock Shortcut").tag(LaunchMode.dockShortcut)
                 Text("System Launch").tag(LaunchMode.systemLaunch)
+            }
+            .disabled(requiresSystemLaunch)
+            if let reason = inspected?.dockShortcutUnavailableReason {
+                Label(reason, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
             }
             Picker("Data", selection: $draft.dataMode) {
                 Text("Auto").tag(DataMode.auto)
@@ -114,9 +128,17 @@ struct LaunchSection: View {
                 Label(dataFolderError, systemImage: "xmark.octagon").font(.caption).foregroundStyle(.red)
             }
             Picker("Appearance", selection: $draft.appearance) {
-                Text("System").tag(Appearance.system)
+                Text("Follow System").tag(Appearance.system)
                 Text("Light").tag(Appearance.light)
-                Text("Dark").tag(Appearance.dark)
+                Text("Force dark (Chromium/Electron only, best effort)").tag(Appearance.dark)
+                    .disabled(!isForcedDarkAvailable)
+            }
+            if draft.appearance == .dark, let inspected, !inspected.family.supportsForcedDarkMode {
+                Label(
+                    "Force dark has no effect for this app: only Chromium, Electron and ToDesktop apps honour it. Choose Follow System or Light.",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .font(.caption).foregroundStyle(.orange)
             }
             TextField("Language", text: Binding(
                 get: { draft.languageCode ?? "" },
@@ -154,6 +176,8 @@ struct AdvancedSection: View {
             EnvironmentTableView(environment: $draft.environment)
             Toggle("Erase data on quit", isOn: $draft.eraseOnQuit).disabled(true).help("Coming in Phase 6")
             Toggle("Menu bar icon", isOn: $draft.menuBarIcon).disabled(true).help("Coming in Phase 6")
+            // GC-22: the editor says inline that these settings are stored but inert until Phase 6.
+            Text("Stored now; takes effect in Phase 6").font(.caption).foregroundStyle(.secondary)
         }
     }
 }

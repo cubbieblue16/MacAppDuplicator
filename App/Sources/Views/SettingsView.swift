@@ -52,7 +52,7 @@ private struct GeneralSettingsTab: View {
                     Button { addLibraryFolder() } label: { Image(systemName: "plus") }
                 }
             }
-            Button("Open Logs Folder") { openLogsFolder() }
+            Button("Open Logs Folder") { LogFolderOpener.open() }
             Text("Shortcuts are rescanned at launch, when this list changes, and when a bundle is added, removed or renamed in one of these folders. After editing a bundle in place, choose View → Refresh (⌘R).")
                 .font(.caption).foregroundStyle(.secondary)
         }
@@ -74,17 +74,6 @@ private struct GeneralSettingsTab: View {
         panel.canChooseFiles = false
         if panel.runModal() == .OK, let url = panel.url, url != settings.outputFolder, !settings.libraryFolders.contains(url) {
             settings.libraryFolders.append(url)
-        }
-    }
-
-    /// The folder does not exist until the first launch logs; create it so the Finder window opens either way.
-    private func openLogsFolder() {
-        let folder = LogReader().logFolder()
-        do {
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            NSWorkspace.shared.open(folder)
-        } catch {
-            NSWorkspace.shared.open(folder.deletingLastPathComponent())
         }
     }
 }

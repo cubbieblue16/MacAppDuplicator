@@ -49,4 +49,56 @@ final class DiagnosticsModelTests: XCTestCase {
         XCTAssertEqual(model.logLines, [])
         XCTAssertTrue(model.reportText.contains("Launch plan error"))
     }
+
+    // Final review M13 / spec §7: Diagnostics shows the target path the launcher would resolve, not only the stored one.
+
+    func testResolvedTargetEqualsTheStoredPathWhenItStillMatches() throws {
+        let target = try writeFakeTarget(named: "Target", bundleIdentifier: "com.example.target", version: "1.0", in: dir)
+        try FileManager.default.removeItem(at: target.appending(path: "Contents/MacOS/Target"))
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/ls"), to: target.appending(path: "Contents/MacOS/Target"))
+        let config = makeConfig(name: "Target Work", targetPath: target.path)
+        let bundle = try writeShortcutBundle(named: "Target Work", in: dir, config: config)
+        let record = try XCTUnwrap(LibraryScanner.record(forBundleAt: bundle, fileManager: .default))
+
+        let model = DiagnosticsModel.make(record: record, logReader: LogReader(folder: dir))
+        XCTAssertEqual(model.resolvedTargetPath, target.path)
+        XCTAssertEqual(model.storedTargetPath, target.path)
+        XCTAssertNil(model.planError)
+        XCTAssertTrue(model.reportText.contains("Target: \(target.path)"))
+        XCTAssertFalse(model.reportText.contains("Stored target path"))
+    }
+
+    func testUnresolvableTargetIsReportedAsNotFound() throws {
+        let missing = dir.appending(path: "Missing.app").path
+        // A bundle id no app registers, so the Launch Services fallback finds nothing either.
+        let config = makeConfig(name: "Gone", targetPath: missing, targetBundleIdentifier: "com.example.unregistered-\(UUID().uuidString)")
+        let bundle = try writeShortcutBundle(named: "Gone", in: dir, config: config)
+        let record = try XCTUnwrap(LibraryScanner.record(forBundleAt: bundle, fileManager: .default))
+
+        let model = DiagnosticsModel.make(record: record, logReader: LogReader(folder: dir))
+        XCTAssertNil(model.resolvedTargetPath)
+        XCTAssertEqual(model.storedTargetPath, missing)
+        XCTAssertNotNil(model.planError)
+        XCTAssertTrue(model.reportText.contains("Target: not found"))
+        XCTAssertTrue(model.reportText.contains("Stored target path: \(missing)"))
+    }
+
+    /// The launcher falls back to Launch Services when the stored path is stale (spec §3.4 step 3). Read-only lookup of an
+    /// app every Mac has; nothing is launched or written.
+    func testStaleStoredPathResolvesThroughLaunchServices() throws {
+        let stale = dir.appending(path: "Moved/TextEdit.app").path
+        let config = makeConfig(name: "Editor Copy", targetPath: stale, targetBundleIdentifier: "com.apple.TextEdit")
+        let bundle = try writeShortcutBundle(named: "Editor Copy", in: dir, config: config)
+        let record = try XCTUnwrap(LibraryScanner.record(forBundleAt: bundle, fileManager: .default))
+
+        let model = DiagnosticsModel.make(record: record, logReader: LogReader(folder: dir))
+        let resolved = try XCTUnwrap(model.resolvedTargetPath)
+        XCTAssertTrue(resolved.hasSuffix("/TextEdit.app"), resolved)
+        XCTAssertNotEqual(resolved, stale)
+        XCTAssertEqual(model.storedTargetPath, stale)
+        XCTAssertNil(model.planError)
+        XCTAssertEqual(model.launchMode, "System Launch")
+        XCTAssertTrue(model.reportText.contains("Target: \(resolved)"))
+        XCTAssertTrue(model.reportText.contains("Stored target path: \(stale)"))
+    }
 }

@@ -39,7 +39,12 @@ struct EnvironmentTableView: View {
                 }
                 HStack {
                     TextField("Name", text: $newName).font(.body.monospaced()).frame(width: 160)
-                    TextField("Value", text: $newValue).font(.body.monospaced())
+                    // A value for a secret-looking name is never shown while it is typed (final review M14).
+                    if SecretMasking.isSecretKey(newName) {
+                        SecureField("Value", text: $newValue).font(.body.monospaced())
+                    } else {
+                        TextField("Value", text: $newValue).font(.body.monospaced())
+                    }
                     Button { add() } label: { Image(systemName: "plus.circle") }
                         .buttonStyle(.borderless)
                         .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)

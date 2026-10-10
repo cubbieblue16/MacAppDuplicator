@@ -43,10 +43,10 @@ final class WizardModel {
 
     var isLastStep: Bool { step == .review }
 
-    /// Dock Shortcut cannot exec a protected binary (spec §4.4); the picker is locked to System Launch.
+    /// Dock Shortcut cannot exec a protected binary (spec §4.1); the picker is locked to System Launch.
+    /// Same rule as the editor's (`InspectedApp.requiresSystemLaunch`).
     var requiresSystemLaunch: Bool {
-        guard let inspected else { return false }
-        return inspected.hasLaunchConstraints || inspected.isPlatformBinary
+        inspected?.requiresSystemLaunch ?? false
     }
 
     var canAdvance: Bool {

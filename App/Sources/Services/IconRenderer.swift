@@ -33,7 +33,7 @@ enum IconRenderer {
         return letters.isEmpty ? "?" : letters.joined()
     }
 
-    /// A rounded indigo tile with white initials, hue derived from the initials so different shortcuts differ.
+    /// A rounded tile with white initials; the hue is derived from the initials so different shortcuts differ.
     static func generatedTile(initials: String, size: Int) -> CGImage {
         let scale = CGFloat(size) / 1024
         let hue = CGFloat(initials.unicodeScalars.reduce(0) { ($0 * 31 + Int($1.value)) % 360 }) / 360

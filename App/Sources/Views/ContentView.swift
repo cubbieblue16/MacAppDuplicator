@@ -21,7 +21,7 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { appState.isWizardPresented = true } label: { Label("New Shortcut", systemImage: "plus") }
+                Button { appState.isWizardPresented = true } label: { Label("New", systemImage: "plus") }
                     .help("New Shortcut (⌘N)")
             }
             ToolbarItem {

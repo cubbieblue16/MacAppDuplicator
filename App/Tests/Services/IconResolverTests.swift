@@ -42,6 +42,30 @@ final class IconResolverTests: XCTestCase {
         }
     }
 
+    /// Final review M12: a hand-edited slug such as `../../escaped` must not steer scratch files out of the scratch folder.
+    func testScratchNamesAreFixedAndIgnoreTheSlug() throws {
+        let scratch = dir.appending(path: "nested/scratch", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        let source = dir.appending(path: "source.icns")
+        try Data("icns-fake".utf8).write(to: source)
+        var config = makeConfig(name: "Claude Work")
+        config.slug = "../../escaped"
+
+        config.iconMode = .custom
+        config.customIconPath = source.path
+        let custom = try XCTUnwrap(try IconResolver.iconFile(for: config, app: app(iconFile: nil), scratchDirectory: scratch))
+        XCTAssertEqual(custom.deletingLastPathComponent().standardizedFileURL.path, scratch.standardizedFileURL.path)
+        XCTAssertEqual(custom.lastPathComponent, "custom-icon.icns")
+
+        config.iconMode = .generated
+        let generated = try XCTUnwrap(try IconResolver.iconFile(for: config, app: app(iconFile: nil), scratchDirectory: scratch))
+        XCTAssertEqual(generated.deletingLastPathComponent().standardizedFileURL.path, scratch.standardizedFileURL.path)
+        XCTAssertEqual(generated.lastPathComponent, "generated-icon.icns")
+
+        XCTAssertEqual(Set(try FileManager.default.contentsOfDirectory(atPath: scratch.path)), ["custom-icon.icns", "generated-icon.icns"])
+        XCTAssertEqual(Set(try FileManager.default.contentsOfDirectory(atPath: dir.path)), ["nested", "source.icns"])
+    }
+
     func testGeneratedRendersTile() throws {
         var config = makeConfig(name: "Claude Work")
         config.iconMode = .generated

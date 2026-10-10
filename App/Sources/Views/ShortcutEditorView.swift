@@ -26,7 +26,7 @@ struct ShortcutEditorView: View {
         Form {
             IdentitySection(draft: $draft, record: record)
             TargetSection(draft: $draft, inspected: inspected)
-            LaunchSection(draft: $draft, record: record)
+            LaunchSection(draft: $draft, record: record, inspected: inspected)
             AdvancedSection(draft: $draft)
             Section("Actions") {
                 HStack {
@@ -34,13 +34,13 @@ struct ShortcutEditorView: View {
                         .disabled(!record.targetExists)
                     Button("Reveal in Finder") { appState.reveal(record) }
                     Button("Regenerate") { Task { await appState.regenerate(record) } }
-                    Button("Duplicate…") {
+                    Button("Duplicate") {
                         duplicateName = "\(record.name) Copy"
                         isDuplicatePromptPresented = true
                     }
                     Button("Export…") { exportPanel() }
                     Button("Diagnostics…") { isDiagnosticsPresented = true }
-                    Button("Delete…", role: .destructive) { isDeletePresented = true }
+                    Button("Delete", role: .destructive) { isDeletePresented = true }
                 }
             }
         }
@@ -49,7 +49,10 @@ struct ShortcutEditorView: View {
         .safeAreaInset(edge: .bottom) {
             HStack {
                 if record.needsRebuild {
-                    Label("Built with an older launcher. Regenerate to update.", systemImage: "exclamationmark.triangle")
+                    Label(
+                        "Built by an older engine version (\(record.engineVersion), current \(ShortcutConfig.currentEngineVersion)). Regenerate to update.",
+                        systemImage: "exclamationmark.triangle"
+                    )
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -77,7 +80,7 @@ struct ShortcutEditorView: View {
                 .disabled(duplicateName.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .sheet(item: $exportedURL) { url in
-            ExportSheet(exportedURL: url)
+            ExportSheet(exportedURL: url, environment: record.config.environment)
         }
         .sheet(isPresented: $isDiagnosticsPresented) {
             DiagnosticsView(record: record)
