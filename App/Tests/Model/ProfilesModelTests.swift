@@ -1,5 +1,6 @@
 import CompatProfiles
 import XCTest
+@testable import DuplicatorCore
 @testable import MacAppDuplicator
 
 @MainActor
@@ -99,5 +100,33 @@ final class ProfilesModelTests: XCTestCase {
         XCTAssertNil(model.bundledURL)
         XCTAssertTrue(model.cacheURL.path.hasPrefix(FileManager.default.temporaryDirectory.path), model.cacheURL.path)
         XCTAssertFalse(FileManager.default.fileExists(atPath: model.cacheURL.path))
+    }
+
+    func testWebAppPresetsAreSortedByNameAndEmptyWithoutProfiles() async throws {
+        XCTAssertEqual(ProfilesModel.inert().webAppPresets, [])
+
+        let document: [String: Any] = [
+            "schemaVersion": 1, "updated": "2026-10-10", "apps": [String: Any](),
+            "webApps": [
+                "z": ["name": "zulu", "url": "https://z.example.test/"],
+                "a": ["name": "Alpha", "url": "https://a.example.test/", "userAgent": "chrome"],
+                "m": ["name": "mike", "url": "https://m.example.test/"],
+            ] as [String: Any],
+        ]
+        try JSONSerialization.data(withJSONObject: document).write(to: bundledURL)
+        let (model, _) = makeModel()
+        await model.load()
+
+        XCTAssertEqual(model.webAppPresets.map(\.name), ["Alpha", "mike", "zulu"])
+        XCTAssertEqual(model.webAppPresets.first?.userAgent, "chrome")
+    }
+
+    func testUserAgentPresetMapsChromeAndEverythingElseToSafari() {
+        func preset(_ userAgent: String?) -> WebAppPreset { WebAppPreset(name: "A", url: "https://a.example.test/", userAgent: userAgent) }
+        XCTAssertEqual(ProfilesModel.userAgentPreset(for: preset("chrome")), .chrome)
+        XCTAssertEqual(ProfilesModel.userAgentPreset(for: preset("Chrome")), .chrome)
+        XCTAssertEqual(ProfilesModel.userAgentPreset(for: preset("safari")), .safari)
+        XCTAssertEqual(ProfilesModel.userAgentPreset(for: preset("firefox")), .safari)
+        XCTAssertEqual(ProfilesModel.userAgentPreset(for: preset(nil)), .safari)
     }
 }

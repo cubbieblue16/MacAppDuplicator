@@ -1,4 +1,5 @@
 import CompatProfiles
+import DuplicatorCore
 import Foundation
 import Observation
 
@@ -41,6 +42,16 @@ final class ProfilesModel {
 
     func profile(forBundleIdentifier bundleIdentifier: String) -> AppProfile? {
         catalog.profile(forBundleIdentifier: bundleIdentifier)
+    }
+
+    /// The `webApps` presets of the profiles in use, sorted by name for the wizard's preset grid.
+    var webAppPresets: [WebAppPreset] {
+        catalog.document.webApps.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// `"chrome"` (any case) selects the Chrome desktop user agent; nil or any other value keeps Safari's.
+    static func userAgentPreset(for preset: WebAppPreset) -> UserAgentPreset {
+        preset.userAgent?.lowercased() == "chrome" ? .chrome : .safari
     }
 
     /// "18 apps, updated 2026-10-09 (bundled)", or "No profiles loaded."
