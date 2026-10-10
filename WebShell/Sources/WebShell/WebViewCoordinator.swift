@@ -19,6 +19,10 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
     private let userContentController: WKUserContentController
     private var popupWindows: [NSWindow] = []
     private var titleObservation: NSKeyValueObservation?
+    /// Termination times of the main web view's content process inside `crashWindow`.
+    private var crashDates: [Date] = []
+    private static let crashWindow: TimeInterval = 60
+    private static let crashLimit = 3
 
     init(shell: ShellConfig, logger: LaunchLogger) {
         self.shell = shell
@@ -64,21 +68,26 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
     // MARK: - Navigation policy (skeleton decision 6)
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-        guard let url = navigationAction.request.url else { return .allow }
-        if WebHostPolicy.isInternalScheme(url) {
+        // Frame exemption first: popups (no target frame) and subframes are never redirected or opened externally.
+        guard let targetFrame = navigationAction.targetFrame, targetFrame.isMainFrame else {
             return .allow
         }
+        guard let url = navigationAction.request.url else { return .allow }
         let scheme = url.scheme?.lowercased() ?? ""
+        if scheme == "about" || WebHostPolicy.isInternalScheme(url) {
+            return .allow
+        }
         guard scheme == "http" || scheme == "https" else {
-            openExternally(url)
+            // Never forward file: to the workspace, and only open other schemes for a real link click.
+            if scheme != "file", navigationAction.navigationType == .linkActivated {
+                openExternally(url)
+            } else {
+                logger.log("blocked scheme=\(scheme)")
+            }
             return .cancel
         }
-        guard let targetFrame = navigationAction.targetFrame else {
-            // A new-window request (target=_blank, window.open): allow so WebKit asks for a popup.
-            return .allow
-        }
-        if !targetFrame.isMainFrame || webView !== self.webView {
-            // Subframes are never redirected; popup windows are exempt so OAuth completes.
+        if webView !== self.webView {
+            // Popup windows are exempt from the in-place policy so OAuth completes.
             return .allow
         }
         if shell.policy.allowsInPlace(url) {
@@ -123,7 +132,35 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         logger.log("error web content process terminated")
-        webView.reload()
+        guard webView === self.webView else {
+            webView.reload()
+            return
+        }
+        let now = Date()
+        crashDates.removeAll { now.timeIntervalSince($0) > Self.crashWindow }
+        crashDates.append(now)
+        if crashDates.count >= Self.crashLimit {
+            logger.log("error web content process crashed \(crashDates.count) times within \(Int(Self.crashWindow))s; not reloading")
+            provisionalLoadDidFail?(NSError(
+                domain: "WebShell",
+                code: 1,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "The page's web content process keeps crashing.",
+                    NSURLErrorFailingURLErrorKey: webView.url ?? shell.baseURL,
+                ]
+            ))
+            return
+        }
+        if webView.url == nil {
+            loadHome()
+        } else {
+            webView.reload()
+        }
+    }
+
+    /// Forgets recorded content-process crashes; called when the user presses Retry on the error view.
+    func resetCrashCount() {
+        crashDates.removeAll()
     }
 
     /// Cancellations caused by this shell (external redirects) or by a newer load are not load failures.

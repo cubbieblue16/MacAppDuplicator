@@ -102,6 +102,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
     @objc private func retryLoad(_ sender: Any?) {
         errorDetail.stringValue = "Retrying…"
+        coordinator.resetCrashCount()
         coordinator.load(retryURL ?? shell.baseURL)
     }
 

@@ -53,7 +53,7 @@ final class WebShellLaunchTests: XCTestCase {
     private func processPath(_ pid: pid_t) -> String {
         var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
         let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
-        return length > 0 ? String(cString: buffer) : ""
+        return length > 0 ? String(decoding: buffer.prefix(Int(length)).map { UInt8(bitPattern: $0) }, as: UTF8.self) : ""
     }
 
     /// PIDs of every running process whose executable resolves to `executable`.
@@ -129,6 +129,27 @@ final class WebShellLaunchTests: XCTestCase {
         let logURL = home.appendingPathComponent(
             "Library/Logs/App Duplicator/\(ShortcutConfig.fileSystemName(for: shortcutName)).log"
         )
+
+        // Teardown blocks run last-in-first-out: the reap registered below runs before this domain removal,
+        // so the shell cannot rewrite its preferences plist after it is cleared. Only the shortcut's own
+        // domain is touched.
+        let shortcutDomain = config.bundleIdentifier
+        addTeardownBlock {
+            UserDefaults(suiteName: shortcutDomain)?.removePersistentDomain(forName: shortcutDomain)
+            CFPreferencesAppSynchronize(shortcutDomain as CFString)
+            // Clearing the domain leaves an empty plist that cfprefsd flushes asynchronously; let that
+            // flush land, then remove that one file.
+            try await Task.sleep(for: .milliseconds(500))
+            let plist = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Preferences/\(shortcutDomain).plist")
+            if FileManager.default.fileExists(atPath: plist.path) {
+                try FileManager.default.removeItem(at: plist)
+            }
+        }
+        // Always terminate and reap the launched shell, including when the wait loop below throws.
+        addTeardownBlock { @MainActor [self] in
+            try await reapLeftovers(runningFrom: executable)
+        }
 
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
