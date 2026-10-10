@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import ImageIO
 
 /// Generated tile icons and ICNS writing (spec §7 icon modes). ICNS files are produced with `/usr/bin/iconutil`
 /// from a temporary `.iconset`, the same route Xcode uses; an `.icns` source is copied as is.
@@ -33,6 +34,11 @@ enum IconRenderer {
         return letters.isEmpty ? "?" : letters.joined()
     }
 
+    /// The first letter of the first word, upper-cased; "?" for an empty name. Web app tiles show one letter.
+    static func firstLetter(for name: String) -> String {
+        name.split(whereSeparator: \.isWhitespace).first.flatMap { $0.first }.map { String($0).uppercased() } ?? "?"
+    }
+
     /// A rounded tile with white initials; the hue is derived from the initials so different shortcuts differ.
     static func generatedTile(initials: String, size: Int) -> CGImage {
         let scale = CGFloat(size) / 1024
@@ -58,6 +64,44 @@ enum IconRenderer {
     static func writeICNS(generatedFor name: String, to url: URL) throws {
         let tile = generatedTile(initials: initials(for: name), size: 1024)
         try writeICNS(from: tile, to: url)
+    }
+
+    /// The letter tile of a web app (first letter of `name`) as an `.icns`.
+    static func writeICNS(letterTileFor name: String, to url: URL) throws {
+        try writeICNS(from: generatedTile(initials: firstLetter(for: name), size: 1024), to: url)
+    }
+
+    /// Converts image bytes (PNG, JPEG or ICO, as fetched from a site) into an `.icns`. ICO files hold several
+    /// sizes; the largest frame is used. A non-square image is centred on a transparent square so it is not stretched.
+    static func writeICNS(fromImageData data: Data, to url: URL) throws {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+            throw RenderError.unreadableImage("the fetched site icon")
+        }
+        var largest: CGImage?
+        for index in 0..<CGImageSourceGetCount(source) {
+            guard let frame = CGImageSourceCreateImageAtIndex(source, index, nil) else { continue }
+            if let current = largest, current.width * current.height >= frame.width * frame.height { continue }
+            largest = frame
+        }
+        guard let largest, let square = squareCanvas(containing: largest, side: 1024) else {
+            throw RenderError.unreadableImage("the fetched site icon")
+        }
+        try writeICNS(from: square, to: url)
+    }
+
+    /// `image` scaled to fit, centred, on a transparent `side` x `side` canvas.
+    private static func squareCanvas(containing image: CGImage, side: Int) -> CGImage? {
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return nil
+        }
+        context.interpolationQuality = .high
+        let scale = CGFloat(side) / CGFloat(max(image.width, image.height))
+        let width = CGFloat(image.width) * scale
+        let height = CGFloat(image.height) * scale
+        context.draw(image, in: CGRect(x: (CGFloat(side) - width) / 2, y: (CGFloat(side) - height) / 2, width: width, height: height))
+        return context.makeImage()
     }
 
     /// `.icns` sources are copied; any other image readable by `NSImage` is resampled into an iconset.
