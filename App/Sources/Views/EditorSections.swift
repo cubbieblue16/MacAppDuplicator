@@ -68,11 +68,13 @@ struct TargetSection: View {
                 Label(targetError, systemImage: "xmark.octagon").foregroundStyle(.red).font(.caption)
             }
             LabeledContent("Bundle ID", value: draft.targetBundleIdentifier)
-            LabeledContent("Compatibility") {
-                Text(CompatBadge.badge(for: inspected, profile: profile).label)
-                    .font(.caption)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(.quaternary, in: Capsule())
+            if CompatBadge.isShown(for: draft.kind) {
+                LabeledContent("Compatibility") {
+                    Text(CompatBadge.badge(for: inspected, profile: profile).label)
+                        .font(.caption)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(.quaternary, in: Capsule())
+                }
             }
             if let inspected, !inspected.warnings.isEmpty {
                 ForEach(inspected.warnings, id: \.self) { warning in

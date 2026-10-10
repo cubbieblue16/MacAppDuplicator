@@ -195,4 +195,16 @@ final class AppStateWebTests: XCTestCase {
 
         XCTAssertTrue(remover.calls.isEmpty, "Save keeps the logins; only Remove Web Data and Delete remove them")
     }
+
+    func testExportCopyOfAWebAppNeedsNoTargetAndIgnoresOtherWebRecordsEmptyTargets() async throws {
+        let record = try await makeWebRecord(name: "Chat")
+        _ = try await makeWebRecord(name: "Chat Other")
+        let destination = dir.appending(path: "Chat Export.app")
+
+        let outcome = await state.exportCopy(record, to: destination)
+
+        XCTAssertEqual(outcome?.exportedURL, destination)
+        XCTAssertNil(state.pendingError)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destination.appending(path: "Contents/Info.plist").path))
+    }
 }

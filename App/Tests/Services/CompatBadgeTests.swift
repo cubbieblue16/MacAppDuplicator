@@ -50,4 +50,10 @@ final class CompatBadgeTests: XCTestCase {
         // A profile still decides first.
         XCTAssertEqual(CompatBadge.badge(for: app(family: .native, sandboxed: true), profile: AppProfile(name: "X", status: .verified)), .verified)
     }
+
+    /// A web app has no target app, so there is nothing to badge (skeleton decision 14).
+    func testBadgeIsShownOnlyForShortcutsThatHaveATarget() {
+        XCTAssertTrue(CompatBadge.isShown(for: .app))
+        XCTAssertFalse(CompatBadge.isShown(for: .webApp))
+    }
 }

@@ -65,7 +65,7 @@ struct TargetStep: View {
             if let error = model.inspectError {
                 Label(error, systemImage: "xmark.octagon").foregroundStyle(.red).font(.caption)
             }
-            if let app = model.inspected {
+            if let app = model.inspected, CompatBadge.isShown(for: model.kind) {
                 Text("\(app.name) \(app.version) · \(CompatBadge.badge(for: app, profile: model.profile).label)")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -248,7 +248,9 @@ struct ReviewStep: View {
                     } else {
                         row("Name", model.name)
                         row("Target", model.targetURL?.path ?? "")
-                        row("Compatibility", CompatBadge.badge(for: model.inspected, profile: model.profile).label)
+                        if CompatBadge.isShown(for: model.kind) {
+                            row("Compatibility", CompatBadge.badge(for: model.inspected, profile: model.profile).label)
+                        }
                         row("Profile", model.profile.map { "\($0.name) · \(ProfileSummary.statusLabel($0.status))" } ?? "None")
                         row("Launch mode", model.requiresSystemLaunch || model.launchMode == .systemLaunch ? "System Launch" : "Dock Shortcut")
                         row("Data", dataDescription)
