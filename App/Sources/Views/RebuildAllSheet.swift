@@ -8,7 +8,7 @@ struct RebuildAllSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Rebuild \(count) shortcuts?").font(.headline)
+            Text(count == 1 ? "Rebuild 1 shortcut?" : "Rebuild \(count) shortcuts?").font(.headline)
             Text("Each shortcut is rewritten with the current launcher and signed again. Settings are kept.")
             HStack {
                 if isWorking { ProgressView().controlSize(.small) }

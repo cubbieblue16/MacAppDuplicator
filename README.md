@@ -55,7 +55,7 @@ Launcher events are logged to `~/Library/Logs/App Duplicator/<Name>.log` (rotate
 
 ## Phase 2 library app
 
-`MacAppDuplicator.app` is a SwiftUI library window over the shortcut bundles in `~/Applications/App Duplicator` (plus any folders added in Settings). There is no database: each shortcut's `Info.plist` `MADConfig` dictionary is the record.
+`macOS App Duplicator.app` is a SwiftUI library window over the shortcut bundles in `~/Applications/App Duplicator` (plus any folders added in Settings). There is no database: each shortcut's `Info.plist` `MADConfig` dictionary is the record.
 
 ### Build and test
 

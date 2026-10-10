@@ -101,7 +101,7 @@ struct ShortcutBuilder {
     func delete(record: ShortcutRecord, removeData: Bool, libraryFolders: [URL] = [], otherRecordDataPaths: [String] = []) throws -> [URL] {
         var dataFolder: URL?
         let home = fileManager.homeDirectoryForCurrentUser
-        if removeData, let dataPath = record.config.effectiveDataPath(home: home) {
+        if removeData, record.config.dataMode != .disabled, let dataPath = record.config.effectiveDataPath(home: home) {
             dataFolder = try DataPathGuard.validate(
                 dataPath: dataPath, targetPath: record.config.targetPath, outputFolder: record.bundleURL.deletingLastPathComponent(),
                 libraryFolders: libraryFolders, otherRecordDataPaths: otherRecordDataPaths, home: home

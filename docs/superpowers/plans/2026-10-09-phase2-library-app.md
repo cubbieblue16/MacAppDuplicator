@@ -5101,6 +5101,8 @@ Expected: 2 passed, `** TEST SUCCEEDED **`. Then run without the filter: 55 + 2 
 
 - [ ] **Step 4: Acceptance checklist**
 
+> Note (2026-10-09, post final review): the block below is the Task 9 draft. The maintained checklist is `docs/acceptance/phase2-library-app.md`; where they differ, the doc governs.
+
 `docs/acceptance/phase2-library-app.md`:
 
 ```markdown
