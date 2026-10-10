@@ -151,6 +151,9 @@ enum WebIconHTMLParser {
 /// request to another machine on the user's network. A refused redirect ends the request with the 3xx response, which
 /// `get()` treats as "no icon".
 final class RedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
+    /// Attached per task (not per session): a session that owns a delegate stays alive until it is invalidated.
+    static let shared = RedirectGuard()
+
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
@@ -187,7 +190,7 @@ struct URLSessionWebIconFetcher: WebIconFetching {
         configuration.timeoutIntervalForResource = requestTimeout * 2
         configuration.httpCookieStorage = nil
         configuration.urlCache = nil
-        return URLSession(configuration: configuration, delegate: RedirectGuard(), delegateQueue: nil)
+        return URLSession(configuration: configuration)
     }
 
     func fetchIcon(for pageURL: URL) async throws -> Data? {
@@ -232,7 +235,7 @@ struct URLSessionWebIconFetcher: WebIconFetching {
         var request = URLRequest(url: url, timeoutInterval: Self.requestTimeout)
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("text/html,image/*;q=0.9,*/*;q=0.5", forHTTPHeaderField: "Accept")
-        let (bytes, response) = try await session.bytes(for: request)
+        let (bytes, response) = try await session.bytes(for: request, delegate: RedirectGuard.shared)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
         var data = Data()
         for try await byte in bytes {

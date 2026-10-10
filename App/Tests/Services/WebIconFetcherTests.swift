@@ -1,4 +1,5 @@
 import AppKit
+import os
 import XCTest
 @testable import MacAppDuplicator
 
@@ -100,10 +101,23 @@ final class WebIconHTMLParserTests: XCTestCase {
         XCTAssertFalse(try allowed("http://192.168.1.2/", from: "http://192.168.1.1/"), "a different private host is not")
     }
 
-    func testTheFetcherSessionRefusesUnfetchableRedirects() throws {
+    func testTheRedirectGuardCancelsUnfetchableRedirectsAndFollowsOthers() throws {
         let session = URLSessionWebIconFetcher.makeSession()
         defer { session.invalidateAndCancel() }
-        XCTAssertTrue(session.delegate is RedirectGuard)
+        let original = try XCTUnwrap(URL(string: "https://www.example.test/favicon.ico"))
+        let task = session.dataTask(with: URLRequest(url: original))
+        let response = try XCTUnwrap(HTTPURLResponse(url: original, statusCode: 302, httpVersion: nil, headerFields: nil))
+        func decision(for target: String) throws -> URLRequest? {
+            let next = URLRequest(url: try XCTUnwrap(URL(string: target)))
+            let answer = OSAllocatedUnfairLock<URLRequest??>(initialState: nil)
+            RedirectGuard.shared.urlSession(session, task: task, willPerformHTTPRedirection: response, newRequest: next) { decided in
+                answer.withLock { $0 = .some(decided) }
+            }
+            return try XCTUnwrap(answer.withLock { $0 }, "the guard must answer synchronously")
+        }
+        XCTAssertEqual(try decision(for: "https://cdn.example.test/favicon.ico")?.url?.host, "cdn.example.test")
+        XCTAssertNil(try decision(for: "http://169.254.169.254/latest/meta-data/"))
+        XCTAssertNil(try decision(for: "http://127.1/"))
     }
 
     func testUnusableLinksAreSkipped() {
