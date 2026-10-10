@@ -74,4 +74,18 @@ final class LibraryScannerTests: XCTestCase {
         try writeShortcutBundle(named: "Alpha", in: root, config: makeConfig(name: "Alpha"))
         XCTAssertEqual(LibraryScanner().scan(folders: [root]).records.map(\.name), ["Alpha", "beta"])
     }
+
+    func testScanListsWebAppWithoutReadingATarget() throws {
+        let config = makeWebConfig(name: "Chat Work", url: "https://chat.example.test/inbox")
+        _ = try writeShortcutBundle(named: "Chat Work", in: root, config: config)
+
+        let result = LibraryScanner().scan(folders: [root])
+
+        let record = try XCTUnwrap(result.records.first)
+        XCTAssertEqual(result.warnings, [])
+        XCTAssertTrue(record.targetExists, "a web app has no target to be missing")
+        XCTAssertNil(record.targetVersion)
+        XCTAssertEqual(record.webAppHost, "chat.example.test")
+        XCTAssertNil(ShortcutRecord(bundleURL: root, config: makeConfig(), engineVersion: 1, iconURL: nil, targetVersion: nil, targetExists: true, modifiedDate: .distantPast).webAppHost)
+    }
 }

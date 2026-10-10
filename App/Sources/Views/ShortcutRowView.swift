@@ -44,7 +44,9 @@ struct ShortcutRowView: View {
 
     @ViewBuilder
     private var subtitle: some View {
-        if record.targetExists {
+        if record.config.kind == .webApp {
+            Text(record.webAppHost ?? "Web App").foregroundStyle(.secondary)
+        } else if record.targetExists {
             let targetName = URL(fileURLWithPath: record.config.targetPath).deletingPathExtension().lastPathComponent
             Text([targetName, record.targetVersion].compactMap { $0 }.joined(separator: " "))
                 .foregroundStyle(.secondary)

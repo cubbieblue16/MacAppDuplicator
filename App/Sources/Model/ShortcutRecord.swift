@@ -17,4 +17,10 @@ struct ShortcutRecord: Identifiable, Hashable, Sendable {
 
     var name: String { config.name }
     var needsRebuild: Bool { engineVersion < ShortcutConfig.currentEngineVersion }
+
+    /// The host of a web app's address (`chat.example.test`), shown under its name in the sidebar; nil for a native shortcut.
+    var webAppHost: String? {
+        guard config.kind == .webApp, let address = config.webApp?.url else { return nil }
+        return URL(string: address)?.host(percentEncoded: false)
+    }
 }
