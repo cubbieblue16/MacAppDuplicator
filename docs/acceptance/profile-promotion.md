@@ -58,6 +58,8 @@ swift test --filter CompatProfilesTests 2>&1 | grep -E 'Executed|error:' | tail 
 
 Expected: `Executed … tests, with 0 failures` and no `error:` lines.
 
+If the promotion also added `args`, `env` or `newWindowCommand` for the app, update `testSeedCarriesNoLaunchValuesYet` in `SeedProfilesTests.swift` to exempt that app before running the tests.
+
 ### 7. Commit
 
 ```bash

@@ -44,9 +44,10 @@ final class SeedProfilesTests: XCTestCase {
         }
     }
 
-    func testOnlyClaudeIsVerifiedAndTerminalIsSystemLaunchOnly() throws {
+    func testClaudeIsVerifiedAndTerminalIsSystemLaunchOnly() throws {
         let apps = try seed().apps
-        XCTAssertEqual(apps.filter { $0.value.status == .verified }.map(\.key), ["com.anthropic.claudefordesktop"])
+        let verifiedKeys = apps.filter { $0.value.status == .verified }.map(\.key)
+        XCTAssertTrue(verifiedKeys.contains("com.anthropic.claudefordesktop"))
         XCTAssertFalse(apps.values.contains { $0.status == .unsupported })
         XCTAssertEqual(apps["com.apple.Terminal"]?.status, .partial)
         XCTAssertEqual(apps["com.apple.Terminal"]?.notes, "Apple platform binary, System Launch only.")
@@ -60,7 +61,8 @@ final class SeedProfilesTests: XCTestCase {
     func testSeedCarriesNoLaunchValuesYet() throws {
         let document = try seed()
         XCTAssertEqual(document.schemaVersion, 1)
-        XCTAssertEqual(document.updated, "2026-10-09")
+        XCTAssertNotNil(document.updated.wholeMatch(of: /^\d{4}-\d{2}-\d{2}$/), "updated is a YYYY-MM-DD date")
+        XCTAssertGreaterThanOrEqual(document.updated, "2026-10-09")
         XCTAssertTrue(document.webApps.isEmpty, "web app presets arrive with the Phase 4 web shell")
         for (identifier, profile) in document.apps {
             XCTAssertEqual(profile.args, [], identifier)
