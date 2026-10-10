@@ -27,8 +27,9 @@ protocol WebDataRemoving: Sendable {
 }
 
 /// Deletes `<webKitRoot>/<bundle id>/WebsiteDataStore/<store id>`, the one directory WebKit keeps per identified store
-/// (Cookies, NetworkCache, LocalStorage and the rest). Calling `WKWebsiteDataStore.remove(forIdentifier:)` from this
-/// app would resolve to this app's own bundle identifier and miss the shell's store (Task 6 Deviation 1).
+/// (Cookies, NetworkCache, LocalStorage and the rest). A probe of the shell found nothing for an identified store under
+/// `~/Library/Caches`: the HTTP cache lives inside this directory. Calling `WKWebsiteDataStore.remove(forIdentifier:)`
+/// from this app would resolve to this app's own bundle identifier and miss the shell's store (Task 6 Deviation 1).
 struct WebKitWebDataRemover: WebDataRemoving {
     let webKitRoot: URL
 

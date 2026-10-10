@@ -69,9 +69,9 @@ Select `Acceptance Chat` in the library.
 Quit `Acceptance Chat` first if it is running. Replace `<ID>` below with `com.mikekuta.appduplicator.acceptance-chat`.
 
 - [ ] **8.1** Launch `Acceptance Chat` (still signed in), keep it running, and click `Remove Web Data…` in the editor, then `Remove Web Data` in the confirmation. Expected: an alert titled `Could not remove web data` with the text `Quit “Acceptance Chat” before removing its web data.` and nothing is removed. Quit `Acceptance Chat`.
-- [ ] **8.2** Before: run `ls ~/Library/WebKit/<ID>/WebsiteDataStore` (one folder named `<UUID>` in lowercase) and `ls ~/Library/Caches/<ID>`. Note both.
+- [ ] **8.2** Before: run `ls ~/Library/WebKit/<ID>/WebsiteDataStore` (one folder named `<UUID>` in lowercase) and `ls ~/Library/WebKit/<ID>/WebsiteDataStore/<UUID>` (it lists `Cookies`, `LocalStorage`, `NetworkCache` and more). WebKit keeps the web cache inside that folder, so `~/Library/Caches/<ID>` is not used for the store. Note both listings.
 - [ ] **8.3** Click `Remove Web Data…`, read the confirmation (it says this signs the shortcut out of every site and cannot be undone), and click `Remove Web Data`. Expected: no alert.
-- [ ] **8.4** After: `ls ~/Library/WebKit/<ID>/WebsiteDataStore` no longer lists the `<UUID>` folder (it may report no such directory or print nothing). `ls ~/Library/Caches/<ID>` shows the web cache is gone or empty. The shortcut is still in the library and `Web data` still shows `<UUID>`.
+- [ ] **8.4** After: `ls ~/Library/WebKit/<ID>/WebsiteDataStore` no longer lists the `<UUID>` folder (it may report no such directory or print nothing). The whole `<UUID>` folder, including its `NetworkCache`, is gone. The shortcut is still in the library and `Web data` still shows `<UUID>`.
 - [ ] **8.5** Launch `Acceptance Chat`. Expected: WhatsApp shows a QR code again (signed out). Quit it. If it is still signed in after 8.3, or 8.4 shows the folder, the web data store location assumed in Deviation 1 of the Phase 4 plan is wrong: stop and report it instead of ticking the box.
 
 ## Step 9: Duplicate and Delete
