@@ -177,4 +177,83 @@ final class DiagnosticsModelTests: XCTestCase {
         XCTAssertFalse(failed.profileRows.contains { $0.label == "Family note" })
         XCTAssertTrue(failed.reportText.contains("Profile: \(goneID) · Verified"), failed.reportText)
     }
+
+    // MARK: Phase 4 web apps
+
+    func testWebAppModelShowsTheRedactedAddressAndNoTargetPlan() throws {
+        let storeID = try XCTUnwrap(UUID(uuidString: "11111111-2222-3333-4444-555555555555"))
+        var config = makeWebShortcutConfig(
+            name: "Chat Inbox", url: "https://chat.example.com/inbox?token=abc#top", dataStoreID: storeID,
+            menuBarIcon: true, backgroundMode: true)
+        config.webApp?.userAgent = .chrome
+        config.webApp?.extraHosts = ["login.example.com"]
+        let bundle = try writeShortcutBundle(named: "Chat Inbox", in: dir, config: config)
+        let record = try LibraryScanner.record(forBundleAt: bundle, fileManager: .default)
+        let logs = dir.appending(path: "logs")
+        try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+        try "started\nbadge=3\n".write(to: logs.appending(path: "Chat Inbox.log"), atomically: true, encoding: .utf8)
+
+        let model = DiagnosticsModel.make(record: record, logReader: LogReader(folder: logs))
+
+        XCTAssertNil(model.planError, "a web app has no launch plan to fail")
+        XCTAssertEqual(model.launchMode, "Web Shell")
+        XCTAssertNil(model.resolvedTargetPath)
+        XCTAssertEqual(model.logLines, ["started", "badge=3"])
+        let web = try XCTUnwrap(model.web)
+        XCTAssertEqual(web.url, "https://chat.example.com/inbox", "query and fragment are dropped: the report gets pasted into tickets")
+        XCTAssertEqual(web.userAgent, "Chrome")
+        XCTAssertEqual(web.dataStoreID, "11111111-2222-3333-4444-555555555555")
+        XCTAssertEqual(web.backgroundMode, "On")
+        XCTAssertEqual(web.menuBarIcon, "On")
+        XCTAssertEqual(web.badgePattern, "\(BadgeTitleParser.defaultPattern) (default)")
+        XCTAssertEqual(web.extraHosts, ["login.example.com"])
+        XCTAssertEqual(web.zoom, "100%")
+
+        let report = model.reportText
+        XCTAssertTrue(report.contains("URL: https://chat.example.com/inbox\n"))
+        XCTAssertTrue(report.contains("User agent: Chrome"))
+        XCTAssertTrue(report.contains("Data store id: 11111111-2222-3333-4444-555555555555"))
+        XCTAssertTrue(report.contains("Also open in app: login.example.com"))
+        XCTAssertTrue(report.contains("Recent log (last 2 lines):\nstarted\nbadge=3"))
+        XCTAssertFalse(report.contains("token=abc"), "the address query must not reach the report")
+        XCTAssertFalse(report.contains("Target:"))
+        XCTAssertFalse(report.contains("Arguments:"))
+        XCTAssertFalse(report.contains("Launch plan error"))
+    }
+
+    func testWebAppBadgePatternTextSaysWhichPatternIsInUse() throws {
+        var config = makeWebShortcutConfig(name: "Chat Badge")
+        config.webApp?.badgeRegex = #"\[(\d+)\]"#
+        let good = try LibraryScanner.record(forBundleAt: writeShortcutBundle(named: "Chat Badge", in: dir, config: config), fileManager: .default)
+        XCTAssertEqual(DiagnosticsModel.make(record: good, logReader: LogReader(folder: dir)).web?.badgePattern, #"\[(\d+)\]"#)
+
+        // Written to a second folder so both bundles can be called "Chat Badge".
+        let other = dir.appending(path: "other", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        config.webApp?.badgeRegex = "("
+        let bad = try LibraryScanner.record(forBundleAt: writeShortcutBundle(named: "Chat Badge", in: other, config: config), fileManager: .default)
+        XCTAssertEqual(
+            DiagnosticsModel.make(record: bad, logReader: LogReader(folder: dir)).web?.badgePattern,
+            "\(BadgeTitleParser.defaultPattern) (the saved pattern is invalid; the default is used)")
+    }
+
+    func testRedactedURLDropsCredentialsQueryAndFragment() {
+        XCTAssertEqual(
+            DiagnosticsModel.redactedURL("https://user:secret@chat.example.com:8443/inbox/?token=abc#top"),
+            "https://chat.example.com:8443/inbox/")
+        XCTAssertEqual(DiagnosticsModel.redactedURL("https://chat.example.com"), "https://chat.example.com")
+        XCTAssertEqual(DiagnosticsModel.redactedURL("not a url"), "(unreadable address)")
+    }
+
+    func testWebAppWithoutSettingsReportsAPlanErrorInsteadOfCrashing() throws {
+        var config = makeWebShortcutConfig(name: "Chat Broken")
+        config.webApp = nil
+        let record = ShortcutRecord(
+            bundleURL: dir.appending(path: "Chat Broken.app"), config: config, engineVersion: ShortcutConfig.currentEngineVersion,
+            iconURL: nil, targetVersion: nil, targetExists: true, modifiedDate: Date())
+        let model = DiagnosticsModel.make(record: record, logReader: LogReader(folder: dir))
+        XCTAssertNil(model.web)
+        XCTAssertEqual(model.planError, "This web app has no web address saved. Regenerate the shortcut or recreate it.")
+        XCTAssertTrue(model.reportText.contains("Launch plan error: This web app has no web address saved."))
+    }
 }
