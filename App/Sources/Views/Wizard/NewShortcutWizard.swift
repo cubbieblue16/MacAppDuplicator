@@ -4,6 +4,8 @@ struct NewShortcutWizard: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var model: WizardModel
+    /// Set once `onAppear` has built the model, so a second `onAppear` in the same presentation keeps the user's progress.
+    @State private var isSetUp = false
 
     init() {
         _model = State(initialValue: WizardModel())
@@ -53,10 +55,13 @@ struct NewShortcutWizard: View {
         .padding(20)
         .frame(width: 560, height: 520)
         .onAppear {
-            if let prefill = appState.wizardPrefillTarget {
-                model = WizardModel(prefillTarget: prefill)
-                appState.wizardPrefillTarget = nil
-            }
+            // The environment is available from here on: build the model once per presentation with the profile
+            // lookup and the dropped app, if any.
+            guard !isSetUp else { return }
+            isSetUp = true
+            model = WizardModel(prefillTarget: appState.wizardPrefillTarget,
+                                profileLookup: { [appState] in appState.profile(forBundleIdentifier: $0) })
+            appState.wizardPrefillTarget = nil
         }
     }
 

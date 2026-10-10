@@ -1,3 +1,4 @@
+import CompatProfiles
 import DuplicatorCore
 import SwiftUI
 import UniformTypeIdentifiers
@@ -43,6 +44,8 @@ struct IdentitySection: View {
 struct TargetSection: View {
     @Binding var draft: ShortcutConfig
     let inspected: InspectedApp?
+    /// The compatibility profile for `draft.targetBundleIdentifier`, if any; it can turn the badge `Verified` or `Unsupported`.
+    let profile: AppProfile?
 
     var body: some View {
         Section("Target") {
@@ -54,7 +57,7 @@ struct TargetSection: View {
             }
             LabeledContent("Bundle ID", value: draft.targetBundleIdentifier)
             LabeledContent("Compatibility") {
-                Text(CompatBadge.badge(for: inspected).label)
+                Text(CompatBadge.badge(for: inspected, profile: profile).label)
                     .font(.caption)
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(.quaternary, in: Capsule())
@@ -75,6 +78,28 @@ struct TargetSection: View {
               let identifier = InstalledApps.infoDictionary(ofAppAt: url)?["CFBundleIdentifier"] as? String else { return }
         draft.targetPath = url.path
         draft.targetBundleIdentifier = identifier
+    }
+}
+
+/// Read-only view of the compatibility profile for the draft's target (spec §8); it never edits the shortcut.
+struct ProfileSection: View {
+    let bundleIdentifier: String
+    let profile: AppProfile?
+    let detectedFamily: AppFamily?
+
+    var body: some View {
+        Section {
+            if let profile {
+                ProfileSummaryView(rows: ProfileSummary.rows(for: profile, detectedFamily: detectedFamily))
+            } else {
+                Text(verbatim: "No compatibility profile for \(bundleIdentifier).").foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Profile")
+        } footer: {
+            Text("A profile's arguments and environment are copied into a shortcut only when it is created; Check Profile Updates never changes an existing shortcut.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
     }
 }
 

@@ -12,6 +12,8 @@ struct LaunchPlanPreview: Sendable {
     var environmentAdditions: [String: String]
     var warnings: [String]
     var launchMode: LaunchMode
+    /// The family AppInspector detected for the target, the one the planner used.
+    var family: AppFamily
 
     static func make(config: ShortcutConfig, bundleURL: URL?) throws -> LaunchPlanPreview {
         let app = try AppInspector().inspect(appAt: URL(fileURLWithPath: config.targetPath))
@@ -23,7 +25,8 @@ struct LaunchPlanPreview: Sendable {
             maskedEnvironment: SecretMasking.mask(plan.environment),
             environmentAdditions: SecretMasking.mask(plan.environmentAdditions(relativeTo: base)),
             warnings: plan.warnings,
-            launchMode: plan.launchMode
+            launchMode: plan.launchMode,
+            family: app.family
         )
     }
 }

@@ -29,6 +29,7 @@ final class LaunchPlanPreviewTests: XCTestCase {
         XCTAssertNil(preview.environmentAdditions["PATH"], "inherited variables are not additions")
         XCTAssertEqual(preview.launchMode, .systemLaunch, "/bin/ls is a platform binary; the planner forces System Launch")
         XCTAssertFalse(preview.warnings.isEmpty)
+        XCTAssertEqual(preview.family, .native, "/bin/ls has no Electron, Chromium, Firefox or Eclipse markers")
     }
 
     func testPreviewMissingTargetThrows() {

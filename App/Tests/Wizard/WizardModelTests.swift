@@ -1,3 +1,4 @@
+import CompatProfiles
 import XCTest
 @testable import DuplicatorCore
 @testable import MacAppDuplicator
@@ -103,5 +104,50 @@ final class WizardModelTests: XCTestCase {
         let model = WizardModel()
         model.back()
         XCTAssertEqual(model.step, .kind)
+    }
+
+    func testProfileDefaultsArePrefilledAndShownMaskedInThePreview() throws {
+        let profile = AppProfile(name: "Target", status: .verified, family: .native,
+                                 args: ["--api-key", "hunter2", "--plain"], env: ["API_TOKEN": "leaked", "TARGET_MODE": "work"],
+                                 notes: "Profile notes.")
+        let model = WizardModel(prefillTarget: target, profileLookup: { $0 == "com.example.target" ? profile : nil })
+        XCTAssertEqual(model.profile, profile)
+        XCTAssertEqual(model.arguments, ["--api-key", "hunter2", "--plain"])
+        XCTAssertEqual(model.environment, ["API_TOKEN": "leaked", "TARGET_MODE": "work"])
+        let config = model.makeConfig()
+        XCTAssertEqual(config.arguments, ["--api-key", "hunter2", "--plain"])
+        XCTAssertEqual(config.environment, ["API_TOKEN": "leaked", "TARGET_MODE": "work"])
+
+        model.next() // data
+        model.next() // review
+        let preview = try XCTUnwrap(model.preview)
+        XCTAssertEqual(preview.arguments, ["--api-key", "••••••", "--plain"])
+        XCTAssertEqual(preview.environmentAdditions["API_TOKEN"], SecretMasking.maskedValue)
+        XCTAssertEqual(preview.environmentAdditions["TARGET_MODE"], "work")
+    }
+
+    func testAnotherTargetReplacesTheProfileDefaults() throws {
+        let plain = try writeFakeTarget(named: "Plain", bundleIdentifier: "com.example.plain", version: "1.0", in: dir)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: plain.appending(path: "Contents/MacOS/Plain").path)
+        let profiles = ["com.example.target": AppProfile(name: "Target", status: .partial, args: ["--one"], env: ["ONE": "1"])]
+        let model = WizardModel(prefillTarget: target, profileLookup: { profiles[$0] })
+        XCTAssertEqual(model.arguments, ["--one"])
+
+        model.selectTarget(plain)
+        XCTAssertNil(model.profile)
+        XCTAssertEqual(model.arguments, [])
+        XCTAssertEqual(model.environment, [:])
+        XCTAssertEqual(model.makeConfig().arguments, [])
+        XCTAssertEqual(model.makeConfig().environment, [:])
+
+        model.selectTarget(target)
+        XCTAssertEqual(model.profile?.name, "Target")
+        XCTAssertEqual(model.environment, ["ONE": "1"])
+
+        model.selectTarget(dir.appending(path: "Missing.app"))
+        XCTAssertNil(model.inspected)
+        XCTAssertNil(model.profile)
+        XCTAssertEqual(model.arguments, [])
+        XCTAssertEqual(model.environment, [:])
     }
 }

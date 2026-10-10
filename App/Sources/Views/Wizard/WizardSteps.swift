@@ -1,3 +1,4 @@
+import CompatProfiles
 import DuplicatorCore
 import SwiftUI
 import UniformTypeIdentifiers
@@ -61,7 +62,7 @@ struct TargetStep: View {
                 Label(error, systemImage: "xmark.octagon").foregroundStyle(.red).font(.caption)
             }
             if let app = model.inspected {
-                Text("\(app.name) \(app.version) · \(CompatBadge.badge(for: app).label)")
+                Text("\(app.name) \(app.version) · \(CompatBadge.badge(for: app, profile: model.profile).label)")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -214,35 +215,50 @@ struct DataStep: View {
 struct ReviewStep: View {
     let model: WizardModel
     @State private var showPlan = false
+    @State private var showProfile = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Review").font(.title3)
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
-                row("Name", model.name)
-                row("Target", model.targetURL?.path ?? "")
-                row("Compatibility", CompatBadge.badge(for: model.inspected).label)
-                row("Launch mode", model.requiresSystemLaunch || model.launchMode == .systemLaunch ? "System Launch" : "Dock Shortcut")
-                row("Data", dataDescription)
-                row("Icon", iconDescription)
-            }
-            if let error = model.previewError {
-                Label(error, systemImage: "xmark.octagon").foregroundStyle(.red).font(.caption)
-            }
-            if let preview = model.preview {
-                DisclosureGroup("Launch plan", isExpanded: $showPlan) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        planRow("Executable", preview.executablePath)
-                        planRow("Arguments", preview.arguments.joined(separator: "\n"))
-                        planRow("Environment additions", preview.environmentAdditions.keys.sorted().map { "\($0)=\(preview.environmentAdditions[$0] ?? "")" }.joined(separator: "\n"))
-                        if !preview.warnings.isEmpty {
-                            Text("Warnings").font(.caption).foregroundStyle(.secondary)
-                            ForEach(preview.warnings, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").font(.caption) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Review").font(.title3)
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
+                    row("Name", model.name)
+                    row("Target", model.targetURL?.path ?? "")
+                    row("Compatibility", CompatBadge.badge(for: model.inspected, profile: model.profile).label)
+                    row("Profile", model.profile.map { "\($0.name) · \(ProfileSummary.statusLabel($0.status))" } ?? "None")
+                    row("Launch mode", model.requiresSystemLaunch || model.launchMode == .systemLaunch ? "System Launch" : "Dock Shortcut")
+                    row("Data", dataDescription)
+                    row("Icon", iconDescription)
+                }
+                if let error = model.previewError {
+                    Label(error, systemImage: "xmark.octagon").foregroundStyle(.red).font(.caption)
+                }
+                if let profile = model.profile {
+                    DisclosureGroup("Profile defaults", isExpanded: $showProfile) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ProfileSummaryView(rows: ProfileSummary.rows(for: profile, detectedFamily: model.inspected?.family))
+                            Text("The profile's arguments and environment are copied into the new shortcut; change them in its Advanced section after it is created.")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
+                        .padding(.top, 4)
                     }
-                    .padding(.top, 4)
+                }
+                if let preview = model.preview {
+                    DisclosureGroup("Launch plan", isExpanded: $showPlan) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            planRow("Executable", preview.executablePath)
+                            planRow("Arguments", preview.arguments.joined(separator: "\n"))
+                            planRow("Environment additions", preview.environmentAdditions.keys.sorted().map { "\($0)=\(preview.environmentAdditions[$0] ?? "")" }.joined(separator: "\n"))
+                            if !preview.warnings.isEmpty {
+                                Text("Warnings").font(.caption).foregroundStyle(.secondary)
+                                ForEach(preview.warnings, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").font(.caption) }
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

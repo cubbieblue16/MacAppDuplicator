@@ -1,3 +1,4 @@
+import CompatProfiles
 import DuplicatorCore
 import SwiftUI
 
@@ -6,6 +7,10 @@ struct DiagnosticsModel {
     let bundlePath: String
     /// The bundle's `MADEngineVersion` (0 when missing); below `ShortcutConfig.currentEngineVersion` means Regenerate is due.
     let engineVersion: Int
+    /// The profile match for the target bundle id (`ProfileSummary.matchLine`).
+    let profileMatch: String
+    /// The matched profile's rows (`ProfileSummary.rows`); empty without a match.
+    let profileRows: [ProfileSummary.Row]
     /// The target path stored in the shortcut's config.
     let storedTargetPath: String
     /// The target the launcher would start (spec §7 "resolved target path"): the stored path while its bundle id
@@ -19,16 +24,18 @@ struct DiagnosticsModel {
     let logLines: [String]
     let planError: String?
 
-    static func make(record: ShortcutRecord, logReader: LogReader = LogReader()) -> DiagnosticsModel {
+    static func make(record: ShortcutRecord, logReader: LogReader = LogReader(), profileCatalog: ProfileCatalog = .empty) -> DiagnosticsModel {
         // Lines a launcher built before argv masking wrote can hold secret argument values; mask them for display and
         // for the copied report.
         let logLines = logReader.tail(name: record.name).map(SecretMasking.maskLogLine)
+        let profile = profileCatalog.profile(forBundleIdentifier: record.config.targetBundleIdentifier)
+        let profileMatch = ProfileSummary.matchLine(bundleIdentifier: record.config.targetBundleIdentifier, catalog: profileCatalog)
         var config = record.config.resolvingDefaultDataPath(home: FileManager.default.homeDirectoryForCurrentUser)
         let resolvedTarget: URL
         do {
             resolvedTarget = try TargetResolver().resolve(config: config)
         } catch {
-            return failed(record: record, resolvedTargetPath: nil, logLines: logLines, error: error)
+            return failed(record: record, resolvedTargetPath: nil, logLines: logLines, profileMatch: profileMatch, profile: profile, error: error)
         }
         // Preview exactly what the launcher would inspect: the resolved bundle, not a stale stored path.
         config.targetPath = resolvedTarget.path
@@ -39,6 +46,8 @@ struct DiagnosticsModel {
                 shortcutName: record.name,
                 bundlePath: record.bundleURL.path,
                 engineVersion: record.engineVersion,
+                profileMatch: profileMatch,
+                profileRows: ProfileSummary.rows(for: profile, detectedFamily: preview.family),
                 storedTargetPath: record.config.targetPath,
                 resolvedTargetPath: resolvedTarget.path,
                 executablePath: preview.executablePath,
@@ -50,15 +59,19 @@ struct DiagnosticsModel {
                 planError: nil
             )
         } catch {
-            return failed(record: record, resolvedTargetPath: resolvedTarget.path, logLines: logLines, error: error)
+            return failed(record: record, resolvedTargetPath: resolvedTarget.path, logLines: logLines, profileMatch: profileMatch, profile: profile, error: error)
         }
     }
 
-    private static func failed(record: ShortcutRecord, resolvedTargetPath: String?, logLines: [String], error: Error) -> DiagnosticsModel {
+    private static func failed(
+        record: ShortcutRecord, resolvedTargetPath: String?, logLines: [String], profileMatch: String, profile: AppProfile?, error: Error
+    ) -> DiagnosticsModel {
         DiagnosticsModel(
             shortcutName: record.name,
             bundlePath: record.bundleURL.path,
             engineVersion: record.engineVersion,
+            profileMatch: profileMatch,
+            profileRows: ProfileSummary.rows(for: profile, detectedFamily: nil),
             storedTargetPath: record.config.targetPath,
             resolvedTargetPath: resolvedTargetPath,
             executablePath: "",
@@ -79,6 +92,8 @@ struct DiagnosticsModel {
         lines.append("App Duplicator diagnostics — \(shortcutName)")
         lines.append("Bundle: \(bundlePath)")
         lines.append("Engine version: \(engineVersion) (current \(ShortcutConfig.currentEngineVersion))")
+        lines.append("Profile: \(profileMatch)")
+        lines.append(contentsOf: profileRows.map { "  \($0.label): \($0.value)" })
         lines.append("Target: \(resolvedTargetPath ?? "not found")")
         if storedPathDiffers {
             lines.append("Stored target path: \(storedTargetPath)")
@@ -109,6 +124,8 @@ struct DiagnosticsModel {
 
 struct DiagnosticsView: View {
     let record: ShortcutRecord
+    /// The profiles in use when the sheet opened (`AppState.profiles.catalog`).
+    let profileCatalog: ProfileCatalog
     @Environment(\.dismiss) private var dismiss
     @State private var model: DiagnosticsModel?
 
@@ -121,6 +138,7 @@ struct DiagnosticsView: View {
                         section("Shortcut") {
                             row("Bundle", model.bundlePath)
                             row("Engine", "\(model.engineVersion) (current \(ShortcutConfig.currentEngineVersion))")
+                            row("Profile", model.profileMatch)
                             row("Target", model.resolvedTargetPath ?? "Not found")
                             if model.storedPathDiffers {
                                 row("Stored path", model.storedTargetPath)
@@ -131,6 +149,9 @@ struct DiagnosticsView: View {
                                 row("Executable", model.executablePath)
                                 row("Launch mode", model.launchMode)
                             }
+                        }
+                        if !model.profileRows.isEmpty {
+                            section("Profile") { ProfileSummaryView(rows: model.profileRows) }
                         }
                         if model.planError == nil {
                             section("Arguments") { mono(model.arguments.joined(separator: "\n")) }
@@ -164,7 +185,8 @@ struct DiagnosticsView: View {
         .frame(width: 640, height: 560)
         .task {
             let record = record
-            model = await Task.detached { DiagnosticsModel.make(record: record) }.value
+            let profileCatalog = profileCatalog
+            model = await Task.detached { DiagnosticsModel.make(record: record, profileCatalog: profileCatalog) }.value
         }
     }
 

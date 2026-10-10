@@ -1,3 +1,4 @@
+import CompatProfiles
 import DuplicatorCore
 import SwiftUI
 
@@ -22,10 +23,14 @@ struct ShortcutEditorView: View {
 
     private var hasChanges: Bool { draft != record.config }
 
+    /// The profile for the draft's target, read from the profiles in use (never copied into the draft here).
+    private var profile: AppProfile? { appState.profile(forBundleIdentifier: draft.targetBundleIdentifier) }
+
     var body: some View {
         Form {
             IdentitySection(draft: $draft, record: record)
-            TargetSection(draft: $draft, inspected: inspected)
+            TargetSection(draft: $draft, inspected: inspected, profile: profile)
+            ProfileSection(bundleIdentifier: draft.targetBundleIdentifier, profile: profile, detectedFamily: inspected?.family)
             LaunchSection(draft: $draft, record: record, inspected: inspected)
             AdvancedSection(draft: $draft)
             Section("Actions") {
@@ -83,7 +88,7 @@ struct ShortcutEditorView: View {
             ExportSheet(exportedURL: url, environment: record.config.environment, arguments: record.config.arguments)
         }
         .sheet(isPresented: $isDiagnosticsPresented) {
-            DiagnosticsView(record: record)
+            DiagnosticsView(record: record, profileCatalog: appState.profiles.catalog)
         }
         .sheet(isPresented: $isDeletePresented) {
             DeleteShortcutSheet(record: record, dataFolder: appState.dataFolderDeletionOption(for: record)) { removeData in

@@ -1,3 +1,4 @@
+import CompatProfiles
 import DuplicatorCore
 import Foundation
 import Observation
@@ -21,6 +22,12 @@ final class WizardModel {
     var dataMode: DataMode = .auto
     var dataPath: String?
     var launchMode: LaunchMode = .dockShortcut
+    /// The compatibility profile for the selected target, if the profiles in use have one (spec §8).
+    private(set) var profile: AppProfile?
+    /// The profile's `args` and `env`, copied into the new shortcut by `makeConfig()` as editable defaults; replaced
+    /// whenever the target changes.
+    private(set) var arguments: [String] = []
+    private(set) var environment: [String: String] = [:]
     private(set) var preview: LaunchPlanPreview?
     private(set) var previewError: String?
     var isCreating = false
@@ -34,7 +41,11 @@ final class WizardModel {
     /// target can restore the default.
     private var launchModeWasForced = false
 
-    init(prefillTarget: URL? = nil) {
+    /// Looks up the profile for a target bundle identifier; the sheet passes `AppState.profile(forBundleIdentifier:)`.
+    private let profileLookup: @MainActor (String) -> AppProfile?
+
+    init(prefillTarget: URL? = nil, profileLookup: @escaping @MainActor (String) -> AppProfile? = { _ in nil }) {
+        self.profileLookup = profileLookup
         if let prefillTarget {
             selectTarget(prefillTarget)
             if inspected != nil { step = .identity }
@@ -65,6 +76,9 @@ final class WizardModel {
             let app = try AppInspector().inspect(appAt: url)
             inspected = app
             inspectError = nil
+            profile = profileLookup(app.bundleIdentifier)
+            arguments = profile?.args ?? []
+            environment = profile?.env ?? [:]
             if name.isEmpty || name == suggestedName {
                 name = "\(app.name) Copy"
                 suggestedName = name
@@ -79,6 +93,9 @@ final class WizardModel {
         } catch {
             inspected = nil
             inspectError = error.localizedDescription
+            profile = nil
+            arguments = []
+            environment = [:]
         }
     }
 
@@ -106,6 +123,8 @@ final class WizardModel {
             launchMode: requiresSystemLaunch ? .systemLaunch : launchMode,
             dataMode: dataMode,
             dataPath: dataPath,
+            environment: environment,
+            arguments: arguments,
             iconMode: iconMode,
             customIconPath: iconMode == .custom ? customIconPath : nil
         )

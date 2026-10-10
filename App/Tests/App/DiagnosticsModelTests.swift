@@ -1,3 +1,4 @@
+import CompatProfiles
 import XCTest
 @testable import DuplicatorCore
 @testable import MacAppDuplicator
@@ -130,5 +131,50 @@ final class DiagnosticsModelTests: XCTestCase {
         for secret in ["hunter2", "not-a-real-token", "leaked"] {
             XCTAssertFalse(report.contains(secret), secret)
         }
+    }
+
+    func testShowsTheProfileMatchNotesAndFamilyWithoutSecrets() throws {
+        let target = try writeFakeTarget(named: "Target", bundleIdentifier: "com.example.target", version: "1.0", in: dir)
+        try FileManager.default.removeItem(at: target.appending(path: "Contents/MacOS/Target"))
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/ls"), to: target.appending(path: "Contents/MacOS/Target"))
+        let config = makeConfig(name: "Target Work", targetPath: target.path)
+        let bundle = try writeShortcutBundle(named: "Target Work", in: dir, config: config)
+        let record = try XCTUnwrap(LibraryScanner.record(forBundleAt: bundle, fileManager: .default))
+        let catalog = ProfileCatalog(document: ProfilesDocument(updated: "2026-10-09", apps: [
+            "com.example.target": AppProfile(name: "Target", status: .partial, family: .electron,
+                                             args: ["--api-key", "hunter2", "--plain"], env: ["API_TOKEN": "leaked", "PLAIN": "ok"],
+                                             notes: "Opens one window per data folder."),
+        ]), source: .cached)
+
+        let model = DiagnosticsModel.make(record: record, logReader: LogReader(folder: dir), profileCatalog: catalog)
+        XCTAssertNil(model.planError)
+        XCTAssertEqual(model.profileMatch, "com.example.target · Partial · updated 2026-10-09 · cached")
+        XCTAssertEqual(model.profileRows, ProfileSummary.rows(for: catalog.profile(forBundleIdentifier: "com.example.target"), detectedFamily: .native))
+        let report = model.reportText
+        XCTAssertTrue(report.contains("Profile: com.example.target · Partial · updated 2026-10-09 · cached"), report)
+        XCTAssertTrue(report.contains("  Notes: Opens one window per data folder."), report)
+        XCTAssertTrue(report.contains("  Family note: The profile lists family Electron but App Duplicator detected Native; launch settings follow the detected family."), report)
+        for secret in ["hunter2", "leaked"] {
+            XCTAssertFalse(report.contains(secret), secret)
+        }
+
+        // No catalog loaded, and a catalog without this app.
+        let unloaded = DiagnosticsModel.make(record: record, logReader: LogReader(folder: dir))
+        XCTAssertEqual(unloaded.profileMatch, "No profiles loaded.")
+        XCTAssertEqual(unloaded.profileRows, [])
+        let other = DiagnosticsModel.make(record: record, logReader: LogReader(folder: dir),
+                                          profileCatalog: ProfileCatalog(document: ProfilesDocument(updated: "2026-10-09"), source: .bundled))
+        XCTAssertEqual(other.profileMatch, "No profile for com.example.target (profiles updated 2026-10-09, bundled)")
+
+        // The failed path still reports the match; no family is detected, so there is no family note.
+        let goneID = "com.example.unregistered-\(UUID().uuidString)"
+        let gone = makeConfig(name: "Gone", targetPath: dir.appending(path: "Missing.app").path, targetBundleIdentifier: goneID)
+        let goneRecord = try XCTUnwrap(LibraryScanner.record(forBundleAt: try writeShortcutBundle(named: "Gone", in: dir, config: gone), fileManager: .default))
+        let goneCatalog = ProfileCatalog(document: ProfilesDocument(updated: "2026-10-09", apps: [goneID: AppProfile(name: "Gone", status: .verified, family: .electron)]), source: .bundled)
+        let failed = DiagnosticsModel.make(record: goneRecord, logReader: LogReader(folder: dir), profileCatalog: goneCatalog)
+        XCTAssertNotNil(failed.planError)
+        XCTAssertEqual(failed.profileMatch, "\(goneID) · Verified · updated 2026-10-09 · bundled")
+        XCTAssertFalse(failed.profileRows.contains { $0.label == "Family note" })
+        XCTAssertTrue(failed.reportText.contains("Profile: \(goneID) · Verified"), failed.reportText)
     }
 }

@@ -16,10 +16,11 @@ public struct DataSeparationPlanner {
     /// Order (spec §4.4): argv = `[target] + plannerArgs + config.arguments`;
     /// env = inherited (minus `MAD_*`) + plannerEnv + `MAD_SHORTCUT_*` + `config.environment`, later wins.
     ///
-    /// Phase 3 (Compatibility profiles) inserts a `profile` parameter here, matching spec §3.1
-    /// `(InspectedApp, Profile?, ShortcutConfig) -> LaunchPlan`: profile args go between the planner args and
-    /// `config.arguments`, profile env between the planner env and `config.environment`, and a profile's
-    /// data-mode override replaces the family default in `.auto`.
+    /// Compatibility profiles (Phase 3) do not reach the planner: a profile's `args` and `env` are copied into
+    /// `config.arguments` and `config.environment` when the shortcut is created (editable defaults), so they already sit
+    /// in the user's slot of the order above. Spec §3.1's `(InspectedApp, Profile?, ShortcutConfig) -> LaunchPlan` is
+    /// realised at creation time; a profile's family is shown but never replaces the detected one, and the spec §8
+    /// schema has no data-mode override.
     ///
     /// - Parameter shortcutBundleURL: the shortcut bundle, exported as `MAD_SHORTCUT_BUNDLE`; nil in previews.
     public func plan(
