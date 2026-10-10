@@ -60,6 +60,10 @@ final class AppState {
     /// Rebuild All progress while it runs; nil otherwise.
     var rebuildProgress: RebuildProgress?
 
+    /// Removes a web app's WebKit store (Task 6). A property rather than an initializer argument so tests swap in a
+    /// fake without a second initializer; the default deletes real files under `~/Library/WebKit`.
+    @ObservationIgnored var webDataRemover: any WebDataRemoving = WebKitWebDataRemover()
+
     /// `webShellBinary` nil means "next to the launcher in Resources" (where the Embed Web Shell build phase puts it).
     init(settings: AppSettings, library: ShortcutLibrary, launcherBinary: URL, webShellBinary: URL? = nil, profiles: ProfilesModel? = nil) {
         self.settings = settings
