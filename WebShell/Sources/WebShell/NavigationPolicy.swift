@@ -14,7 +14,30 @@ enum NavigationDecision: Equatable {
     case blocked(reason: String)
 }
 
+/// What the shell does when a page asks for a new window.
+enum PopupDecision: Equatable {
+    /// Open the in-app popup window.
+    case openInApp
+    /// Hand the URL to the default browser; no popup.
+    case openExternally
+    /// Refuse the new window.
+    case ignore
+}
+
 enum NavigationPolicy {
+    /// Decision for a new-window request (`createWebViewWith`). A user's click on a link to a site the app does not
+    /// keep in its window goes to the default browser; script-initiated `window.open` stays in-app so OAuth sign-in
+    /// popups complete. Anything that is not an http(s) address is refused.
+    static func popupDecision(url: URL?, navigationType: WKNavigationType, policy: WebHostPolicy) -> PopupDecision {
+        guard let url, let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            return .ignore
+        }
+        if navigationType == .linkActivated, !policy.allowsInPlace(url) {
+            return .openExternally
+        }
+        return .openInApp
+    }
+
     /// Pure navigation decision.
     /// - Parameters:
     ///   - targetFrameIsMain: `nil` when the action has no target frame (a new-window request),

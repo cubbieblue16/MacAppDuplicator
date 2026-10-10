@@ -193,6 +193,21 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
         for navigationAction: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
+        switch NavigationPolicy.popupDecision(
+            url: navigationAction.request.url,
+            navigationType: navigationAction.navigationType,
+            policy: shell.policy
+        ) {
+        case .ignore:
+            return nil
+        case .openExternally:
+            if let url = navigationAction.request.url {
+                openExternally(url)
+            }
+            return nil
+        case .openInApp:
+            break
+        }
         let width = max(320, windowFeatures.width.map { CGFloat($0.doubleValue) } ?? 900)
         let height = max(240, windowFeatures.height.map { CGFloat($0.doubleValue) } ?? 700)
         let frame = NSRect(x: 0, y: 0, width: width, height: height)

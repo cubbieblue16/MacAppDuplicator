@@ -78,4 +78,31 @@ final class NavigationPolicyTests: XCTestCase {
             .openExternally
         )
     }
+
+    // MARK: - popupDecision
+
+    private func popup(_ address: String?, _ type: WKNavigationType) throws -> PopupDecision {
+        let policy = WebHostPolicy(baseURL: try XCTUnwrap(URL(string: "https://app.example/")), extraHosts: ["cdn.example"])
+        return NavigationPolicy.popupDecision(url: address.flatMap { URL(string: $0) }, navigationType: type, policy: policy)
+    }
+
+    func testPopupLinkClickOffPolicyOpensExternally() throws {
+        XCTAssertEqual(try popup("https://news.example.org/story", .linkActivated), .openExternally)
+        XCTAssertEqual(try popup("http://other.example/", .linkActivated), .openExternally)
+    }
+
+    func testPopupLinkClickInPolicyOpensInApp() throws {
+        XCTAssertEqual(try popup("https://app.example/compose", .linkActivated), .openInApp)
+        XCTAssertEqual(try popup("https://cdn.example/doc", .linkActivated), .openInApp)
+    }
+
+    func testPopupScriptInitiatedStaysInApp() throws {
+        XCTAssertEqual(try popup("https://accounts.google.example/oauth", .other), .openInApp)
+    }
+
+    func testPopupNonWebOrMissingURLIsIgnored() throws {
+        XCTAssertEqual(try popup("mailto:a@example.com", .linkActivated), .ignore)
+        XCTAssertEqual(try popup("file:///etc/hosts", .other), .ignore)
+        XCTAssertEqual(try popup(nil, .other), .ignore)
+    }
 }
