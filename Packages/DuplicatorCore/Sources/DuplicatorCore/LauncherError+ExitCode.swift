@@ -4,14 +4,16 @@ extension LauncherError {
     /// Launcher process exit code (spec §4.7).
     public var exitCode: Int32 {
         switch self {
-        case .configMissing, .configCorrupt:
+        case .configMissing, .configCorrupt, .launcherConfigMissing:
             return 1
-        case .targetNotFound, .notAnAppBundle:
+        case .targetNotFound, .notAnAppBundle, .fileNotFound:
             return 2
-        case .execFailed:
+        case .execFailed, .spawnFailed:
             return 3
         case .dataPathNotWritable:
             return 4
+        case .terminalNotFound:
+            return 5
         }
     }
 }

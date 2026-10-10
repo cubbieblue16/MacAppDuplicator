@@ -31,4 +31,46 @@ final class LauncherErrorTests: XCTestCase {
         XCTAssertEqual(LauncherError.execFailed(errno: EACCES, path: "/x").exitCode, 3)
         XCTAssertEqual(LauncherError.dataPathNotWritable("/x").exitCode, 4)
     }
+
+    func testLauncherKindMessages() {
+        XCTAssertEqual(
+            LauncherError.fileNotFound(path: "/Users/test/Notes.md").errorDescription,
+            "The file, folder or command was not found.\nStored path: /Users/test/Notes.md"
+        )
+        XCTAssertEqual(
+            LauncherError.terminalNotFound(.terminal).errorDescription,
+            "Terminal is not installed. Choose another terminal in macOS App Duplicator."
+        )
+        XCTAssertEqual(
+            LauncherError.terminalNotFound(.iterm2).errorDescription,
+            "iTerm2 is not installed. Choose another terminal in macOS App Duplicator."
+        )
+        XCTAssertEqual(
+            LauncherError.terminalNotFound(.ghostty).errorDescription,
+            "Ghostty is not installed. Choose another terminal in macOS App Duplicator."
+        )
+        XCTAssertEqual(
+            LauncherError.terminalNotFound(TerminalChoice.none).errorDescription,
+            "The selected terminal is not installed. Choose another terminal in macOS App Duplicator."
+        )
+        XCTAssertEqual(
+            LauncherError.spawnFailed(errno: EACCES, path: "/usr/local/bin/tool").errorDescription,
+            "Could not start /usr/local/bin/tool: Permission denied"
+        )
+        XCTAssertEqual(
+            LauncherError.launcherConfigMissing(.cli).errorDescription,
+            "Shortcut is damaged — open macOS App Duplicator and Regenerate. (The cli settings are missing.)"
+        )
+        XCTAssertEqual(
+            LauncherError.launcherConfigMissing(.folder).errorDescription,
+            "Shortcut is damaged — open macOS App Duplicator and Regenerate. (The folder settings are missing.)"
+        )
+    }
+
+    func testLauncherKindExitCodes() {
+        XCTAssertEqual(LauncherError.launcherConfigMissing(.file).exitCode, 1)
+        XCTAssertEqual(LauncherError.fileNotFound(path: "/x").exitCode, 2)
+        XCTAssertEqual(LauncherError.spawnFailed(errno: ENOENT, path: "/x").exitCode, 3)
+        XCTAssertEqual(LauncherError.terminalNotFound(.ghostty).exitCode, 5)
+    }
 }
