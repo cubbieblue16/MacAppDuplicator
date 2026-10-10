@@ -9,17 +9,25 @@ import Observation
 final class RunningShortcutMonitor {
     /// Standardized paths of shortcut bundles with at least one running process.
     private(set) var runningBundlePaths: Set<String> = []
+    /// Lower-cased bundle identifiers of the running applications; web apps are matched through these.
+    private(set) var runningBundleIdentifiers: Set<String> = []
 
     private var observers: [NSObjectProtocol] = []
     private var refreshTask: Task<Void, Never>?
     private let probe: @Sendable () -> Set<String>
+    /// Reads the running applications' bundle identifiers on the main actor (`NSWorkspace`); nil means the live list.
+    private let identifierProbe: (@MainActor () -> Set<String>)?
     /// Bumped by every `refresh()`; only the newest refresh may publish its paths (final review M7).
     @ObservationIgnored private var refreshGeneration: UInt64 = 0
 
     /// `probe` lists the standardized bundle paths of running shortcuts; it runs detached, off the main actor.
     /// Tests inject a stub. The default is a nonisolated closure, never a main-actor value.
-    init(probe: @escaping @Sendable () -> Set<String> = { RunningShortcutMonitor.liveRunningBundlePaths() }) {
+    init(
+        probe: @escaping @Sendable () -> Set<String> = { RunningShortcutMonitor.liveRunningBundlePaths() },
+        identifierProbe: (@MainActor () -> Set<String>)? = nil
+    ) {
         self.probe = probe
+        self.identifierProbe = identifierProbe
     }
 
     func start() {
@@ -49,6 +57,7 @@ final class RunningShortcutMonitor {
         let paths = await Task.detached(priority: .utility) { probe() }.value
         guard generation == refreshGeneration else { return }
         runningBundlePaths = paths
+        runningBundleIdentifiers = identifierProbe?() ?? Self.liveRunningBundleIdentifiers()
     }
 
     /// Standardized paths from every process's `MAD_SHORTCUT_BUNDLE` entry (spec §7). Nonisolated because it runs
@@ -60,6 +69,18 @@ final class RunningShortcutMonitor {
 
     func isRunning(bundleURL: URL) -> Bool {
         runningBundlePaths.contains(bundleURL.standardizedFileURL.path)
+    }
+
+    /// A web app is the web shell itself, so it shows up in `NSWorkspace` under its own bundle identifier.
+    func isRunning(bundleURL: URL, bundleIdentifier: String?) -> Bool {
+        if isRunning(bundleURL: bundleURL) { return true }
+        guard let bundleIdentifier else { return false }
+        return runningBundleIdentifiers.contains(bundleIdentifier.lowercased())
+    }
+
+    /// Lower-cased bundle identifiers of the running applications.
+    static func liveRunningBundleIdentifiers() -> Set<String> {
+        Set(NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier?.lowercased() })
     }
 
     private func scheduleRefresh() {

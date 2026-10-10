@@ -76,7 +76,9 @@ final class ShortcutLibrary {
         if generation == scanGeneration { isScanning = false }
     }
 
-    func isRunning(_ record: ShortcutRecord) -> Bool { monitor.isRunning(bundleURL: record.bundleURL) }
+    func isRunning(_ record: ShortcutRecord) -> Bool {
+        monitor.isRunning(bundleURL: record.bundleURL, bundleIdentifier: record.config.kind == .webApp ? record.config.bundleIdentifier : nil)
+    }
     func records(ofKind kind: ShortcutKind) -> [ShortcutRecord] { records.filter { $0.config.kind == kind } }
     func record(for bundleURL: URL) -> ShortcutRecord? {
         let path = bundleURL.standardizedFileURL.path
