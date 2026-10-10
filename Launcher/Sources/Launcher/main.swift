@@ -8,15 +8,46 @@ logger.log("start pid=\(getpid()) bundle=\(Bundle.main.bundlePath)")
 let base = ProcessInfo.processInfo.environment
 let realHome = FileManager.default.homeDirectoryForCurrentUser
 
-let prepared: PreparedLaunch
+let shortcut: PreparedShortcut
 do {
-    prepared = try LaunchPreparer(realHome: realHome).prepare(
+    shortcut = try LaunchPreparer(realHome: realHome).prepareShortcut(
         infoDictionary: Bundle.main.infoDictionary ?? [:],
         shortcutBundleURL: Bundle.main.bundleURL,
-        baseEnvironment: base
+        baseEnvironment: base,
+        realHome: realHome,
+        terminalLocator: { choice in
+            choice.bundleIdentifier.flatMap { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }
+        }
     )
 } catch {
     fail(error, logger: logger)
+}
+
+// File, folder and command shortcuts (spec §6) open or spawn, then exit; every branch below ends in `exit` or `fail`.
+// App shortcuts fall through to the unchanged Phase 1 path. Web app bundles never reach here: `prepareShortcut`
+// rejects them with `configCorrupt`, because they run WebShell.
+let prepared: PreparedLaunch
+switch shortcut {
+case .app(let launch):
+    prepared = launch
+case .launcher(let action, let launcherConfig):
+    logger.log("kind \(launcherConfig.kind.rawValue)")
+    switch action {
+    case .open(let items, let openerApp):
+        openItems(items, openerApp: openerApp, logger: logger)
+    case .spawn(let executable, let arguments, let environment, let workingDirectory, let terminal):
+        logger.log("spawn \(executable.path) argc=\(arguments.count + 1) terminal=\(terminal.rawValue)")
+        logger.log(arguments: [executable.path] + arguments)
+        logger.log(environment: environment)
+        switch spawnDetached(executable: executable, arguments: arguments, environment: environment, workingDirectory: workingDirectory) {
+        case .success(let pid):
+            logger.log("spawned pid=\(pid)")
+            logger.log("exit 0")
+            exit(0)
+        case .failure(let error):
+            fail(error, logger: logger)
+        }
+    }
 }
 
 let config = prepared.config
