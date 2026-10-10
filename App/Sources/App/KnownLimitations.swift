@@ -9,7 +9,8 @@ struct KnownLimitation: Identifiable, Hashable {
 /// Spec §11 ("documented in-app and README"): one entry per §11 bullet, plus the app-specific limits that the README's
 /// list also carries (single instance, login items, updates). Phase 3 adds the profile limits (advisory badges, partial
 /// profiles, manual updates from one host, sandboxed badges, numbered slugs, export's Trash replacement). Phase 4 adds
-/// the four web app limits (passkeys, zoom storage, notification permission, pop-up and off-site links). Shown in the
+/// the four web app limits (passkeys, zoom storage, notification permission, pop-up and off-site links). Phase 5 adds
+/// the four launcher limits (terminal AppleScript, no running state for files or commands, Ghostty path). Shown in the
 /// Known Limitations window and linked from the wizard's compatibility line.
 enum KnownLimitations {
     static let all: [KnownLimitation] = [
@@ -132,6 +133,26 @@ enum KnownLimitations {
             id: "web-popup-policy",
             title: "Web apps open other sites in your browser",
             detail: "A web app keeps links to its own site and to the hosts listed under Also open in app inside the window. A link to any other site opens in your default browser instead, and so do mailto: and other non-web links. A window a site opens itself as a pop-up (for example a sign-in window) stays inside the web app so the sign-in can finish. If a site's sign-in or links jump out to the browser, add the hosts it uses to Also open in app."
+        ),
+        KnownLimitation(
+            id: "cli-terminal-applescript",
+            title: "Commands in Terminal or iTerm2 need Automation permission",
+            detail: "A command shortcut that runs in Terminal or iTerm2 drives that app through AppleScript, so macOS asks once to let the shortcut control it, and the command does not start until you allow it."
+        ),
+        KnownLimitation(
+            id: "file-no-running-state",
+            title: "File and folder shortcuts do not show a running state",
+            detail: "A file or folder shortcut hands the item to Finder or its opener app and quits, so its Dock icon never shows a running indicator."
+        ),
+        KnownLimitation(
+            id: "cli-no-running-state",
+            title: "Command shortcuts do not track the command",
+            detail: "A command shortcut starts the command in a terminal or in the background and quits, so its Dock icon does not show whether the command is still running."
+        ),
+        KnownLimitation(
+            id: "cli-ghostty-path",
+            title: "Ghostty commands start in Ghostty's own environment",
+            detail: "A command sent to Ghostty runs with the PATH and shell setup of the Ghostty window it opens, not the shortcut's environment, so a program that is not on that PATH needs its full path."
         ),
     ]
 }

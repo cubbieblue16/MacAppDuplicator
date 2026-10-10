@@ -127,6 +127,17 @@ A web app is a Dock shortcut for a website: App Duplicator builds a bundle whose
 
 Acceptance checklist: `docs/acceptance/phase4-webshell.md`.
 
+## Phase 5 launchers
+
+New Shortcut also makes shortcuts that are not apps:
+
+- **File or Folder** opens a document or folder from the Dock with the shortcut's own name and icon. A folder opens in Finder; a file opens in its default app or in an app you choose under Open with.
+- **Command** runs a program or script with one argument per line (spaces and quotes are passed as typed), an optional working directory, and a choice of Terminal, iTerm2, Ghostty or no terminal (run in background). In the background it can get its own HOME under `~/Library/Application Support/App Duplicator/<slug>`, so its dotfiles stay apart from yours.
+
+The default icon is the item's or the program's Finder icon. Diagnostics shows the item, opener, terminal, working directory, own HOME and the masked command line. The library row shows Item missing in red when the item or program is gone. Deleting never touches the item or program; a command's own HOME folder is offered for the Trash only when it has one. Commands in Terminal or iTerm2 ask once for Automation permission (see Known Limitations).
+
+Acceptance checklist: docs/acceptance/phase5-launchers.md
+
 ## Core API used by the app
 
 - `BundleWriter.write(config:app:launcherBinary:to:)`: creates `<Name>.app` in the target directory.

@@ -90,17 +90,35 @@ final class KnownLimitationsTests: XCTestCase {
     }
 
     /// Phase 4 (web apps): the four web limits are present with their prescribed ids and titles, the earlier 20 are
-    /// kept (24 in all), ids stay unique, and each entry states its point.
+    /// kept (28 in all with Phase 5's four), ids stay unique, and each entry states its point.
     func testPhase4WebEntriesStateTheirPoint() throws {
         let ids = KnownLimitations.all.map(\.id)
         XCTAssertEqual(Set(ids).count, ids.count, "duplicate known-limitation ids")
-        XCTAssertEqual(ids.count, 24, "20 earlier entries plus the four web entries")
+        XCTAssertEqual(ids.count, 28, "20 earlier entries plus the four web entries plus the four launcher entries")
         let topics: [(id: String, title: String, mentions: [String])] = [
             ("web-no-passkeys", "Web apps do not support passkeys", ["passkey", "WebAuthn"]),
             ("web-zoom-storage", "Web app zoom is remembered outside the shortcut", ["MADPageZoom", "sealed", "preferences"]),
             ("web-notification-permission", "Web notifications are always allowed, but macOS decides whether they appear",
              ["System Settings", "granted", "reload"]),
             ("web-popup-policy", "Web apps open other sites in your browser", ["Also open in app", "pop-up", "mailto:"]),
+        ]
+        let byID = Dictionary(KnownLimitations.all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for topic in topics {
+            let entry = try XCTUnwrap(byID[topic.id], "no entry \(topic.id)")
+            XCTAssertEqual(entry.title, topic.title)
+            for phrase in topic.mentions {
+                XCTAssertTrue("\(entry.title) \(entry.detail)".contains(phrase), "\(topic.id) does not mention \"\(phrase)\"")
+            }
+        }
+    }
+
+    /// Phase 5 (launchers): the four launcher limits are present with their prescribed ids and titles, and each states its point.
+    func testPhase5LauncherEntriesStateTheirPoint() throws {
+        let topics: [(id: String, title: String, mentions: [String])] = [
+            ("cli-terminal-applescript", "Commands in Terminal or iTerm2 need Automation permission", ["AppleScript", "allow"]),
+            ("file-no-running-state", "File and folder shortcuts do not show a running state", ["Finder", "running indicator"]),
+            ("cli-no-running-state", "Command shortcuts do not track the command", ["background", "Dock icon"]),
+            ("cli-ghostty-path", "Ghostty commands start in Ghostty's own environment", ["PATH", "full path"]),
         ]
         let byID = Dictionary(KnownLimitations.all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for topic in topics {
