@@ -17,6 +17,10 @@ struct ShortcutEditorView: View {
     @State private var pendingLibraryExport: URL?
     @State private var isDeletePresented = false
     @State private var isDiagnosticsPresented = false
+    /// False while the web address field holds something that is not an https address (Save is disabled then).
+    @State private var webURLIsValid = true
+    /// Bumped by Revert so the web section rebuilds its local text fields from the restored draft.
+    @State private var revertCount = 0
 
     init(record: ShortcutRecord) {
         self.record = record
@@ -25,16 +29,23 @@ struct ShortcutEditorView: View {
 
     private var hasChanges: Bool { draft != record.config }
 
+    private var isWebApp: Bool { record.config.kind == .webApp }
+
     /// The profile for the draft's target, read from the profiles in use (never copied into the draft here).
     private var profile: AppProfile? { appState.profile(forBundleIdentifier: draft.targetBundleIdentifier) }
 
     var body: some View {
         Form {
             IdentitySection(draft: $draft, record: record, inspected: inspected)
-            TargetSection(draft: $draft, inspected: inspected, profile: profile)
-            ProfileSection(bundleIdentifier: draft.targetBundleIdentifier, profile: profile, detectedFamily: inspected?.family)
-            LaunchSection(draft: $draft, record: record, inspected: inspected)
-            AdvancedSection(draft: $draft)
+            if isWebApp {
+                // A web app has no target, profile, launch mode or data folder; its options live in one section.
+                WebAppSection(draft: $draft, record: record, urlIsValid: $webURLIsValid).id(revertCount)
+            } else {
+                TargetSection(draft: $draft, inspected: inspected, profile: profile)
+                ProfileSection(bundleIdentifier: draft.targetBundleIdentifier, profile: profile, detectedFamily: inspected?.family)
+                LaunchSection(draft: $draft, record: record, inspected: inspected)
+                AdvancedSection(draft: $draft)
+            }
             Section("Actions") {
                 HStack {
                     Button("Launch") { Task { await appState.launch(record) } }
@@ -63,15 +74,24 @@ struct ShortcutEditorView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Revert") { draft = record.config }.disabled(!hasChanges || isSaving)
+                Button("Revert") {
+                    draft = record.config
+                    webURLIsValid = true
+                    revertCount += 1
+                }
+                .disabled(!(hasChanges || !webURLIsValid) || isSaving)
                 Button("Save") { save() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(!hasChanges || isSaving || draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(!hasChanges || isSaving || !webURLIsValid || draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(12)
             .background(.bar)
         }
         .task(id: draft.targetPath) {
+            guard !isWebApp else {
+                inspected = nil
+                return
+            }
             // A missing or unreadable target is not an error here: the row already shows "Target missing" and the
             // badge falls back to `Unknown`.
             do {
@@ -116,12 +136,18 @@ struct ShortcutEditorView: View {
     private func save() {
         isSaving = true
         var config = draft
-        config.name = config.name.trimmingCharacters(in: .whitespaces)
-        if config.name != record.config.name {
-            // Final review M6: a rename steps around the slugs the other shortcuts use (this one's own stays free).
-            config.slug = SlugAllocator.uniqueSlug(proposed: ShortcutConfig.slug(for: config.name),
-                                                   taken: SlugAllocator.takenSlugs(in: appState.library.records, excluding: record.bundleURL))
-            config.bundleIdentifier = ShortcutConfig.bundleIdentifier(forSlug: config.slug)
+        if isWebApp {
+            // The slug and bundle identifier stay on a rename (WebKit files the logins under the bundle id), and no icon
+            // data is passed, so `regenerate` keeps the bundle's AppIcon.icns for `.copied` (Task 6 Deviation 2, A2).
+            config = WebEditorPolicy.saveConfig(draft: draft, saved: record.config)
+        } else {
+            config.name = config.name.trimmingCharacters(in: .whitespaces)
+            if config.name != record.config.name {
+                // Final review M6: a rename steps around the slugs the other shortcuts use (this one's own stays free).
+                config.slug = SlugAllocator.uniqueSlug(proposed: ShortcutConfig.slug(for: config.name),
+                                                       taken: SlugAllocator.takenSlugs(in: appState.library.records, excluding: record.bundleURL))
+                config.bundleIdentifier = ShortcutConfig.bundleIdentifier(forSlug: config.slug)
+            }
         }
         Task {
             // The written config can differ from the draft (trimmed name, a nil data path resolved to the default,

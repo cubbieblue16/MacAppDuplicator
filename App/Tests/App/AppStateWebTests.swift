@@ -136,4 +136,63 @@ final class AppStateWebTests: XCTestCase {
             .unavailable(note: "A web app keeps its logins and cookies in web data, not in a data folder.")
         )
     }
+
+    // MARK: Editor Save (coordinator constraint: Save passes no icon data, the fetched icon stays)
+
+    private var iconBytes: Data { Data([1, 2, 3]) }
+
+    private func iconFile(in bundle: URL) -> URL { bundle.appending(path: "Contents/Resources/AppIcon.icns") }
+
+    /// What `ShortcutEditorView.save()` hands `AppState.save` for a web app after the draft is edited.
+    private func editorSaveConfig(of record: ShortcutRecord, _ edit: (inout ShortcutConfig) -> Void) -> ShortcutConfig {
+        var draft = record.config
+        edit(&draft)
+        return WebEditorPolicy.saveConfig(draft: draft, saved: record.config)
+    }
+
+    func testEditorSaveKeepsTheFetchedIconBytes() async throws {
+        let record = try await makeWebRecord()
+        XCTAssertEqual(record.config.iconMode, .copied)
+        XCTAssertEqual(try Data(contentsOf: iconFile(in: record.bundleURL)), iconBytes, "precondition: the bundle holds the fetched icon")
+        let config = editorSaveConfig(of: record) {
+            $0.webApp?.userAgent = .chrome
+            $0.webApp?.extraHosts = ["login.example.com"]
+        }
+
+        let saved = await state.save(record: record, config: config)
+
+        XCTAssertTrue(saved, state.pendingError?.message ?? "")
+        let after = try XCTUnwrap(library.record(for: record.bundleURL))
+        XCTAssertEqual(after.config.webApp?.userAgent, .chrome)
+        XCTAssertEqual(after.config.webApp?.extraHosts, ["login.example.com"])
+        XCTAssertEqual(after.config.iconMode, .copied)
+        XCTAssertEqual(try Data(contentsOf: iconFile(in: after.bundleURL)), iconBytes, "Save without new icon data must keep AppIcon.icns byte for byte")
+    }
+
+    func testEditorRenameKeepsTheBundleIdentifierTheStoreAndTheIconBytes() async throws {
+        let id = UUID()
+        let record = try await makeWebRecord(dataStoreID: id)
+        let config = editorSaveConfig(of: record) { $0.name = "  Chat Work " }
+
+        let saved = await state.save(record: record, config: config)
+
+        XCTAssertTrue(saved, state.pendingError?.message ?? "")
+        let renamedBundle = out.appending(path: "Chat Work.app", directoryHint: .isDirectory)
+        let after = try XCTUnwrap(library.record(for: renamedBundle))
+        XCTAssertEqual(after.config.name, "Chat Work")
+        XCTAssertEqual(after.config.slug, "chat")
+        XCTAssertEqual(after.config.bundleIdentifier, "com.mikekuta.appduplicator.chat", "the bundle id keys WebKit's store, so a rename must keep it")
+        XCTAssertEqual(after.config.webApp?.dataStoreID, id)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: record.bundleURL.path), "the old bundle is replaced")
+        XCTAssertEqual(try Data(contentsOf: iconFile(in: renamedBundle)), iconBytes)
+    }
+
+    func testEditorSaveNeverTouchesWebData() async throws {
+        let record = try await makeWebRecord()
+        let config = editorSaveConfig(of: record) { $0.webApp?.userAgent = .chrome }
+
+        _ = await state.save(record: record, config: config)
+
+        XCTAssertTrue(remover.calls.isEmpty, "Save keeps the logins; only Remove Web Data and Delete remove them")
+    }
 }

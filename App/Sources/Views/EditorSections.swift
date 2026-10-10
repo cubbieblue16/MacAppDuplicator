@@ -13,9 +13,16 @@ struct IdentitySection: View {
         Section("Identity") {
             TextField("Name", text: $draft.name)
             Picker("Icon", selection: $draft.iconMode) {
-                Text("Copied from target").tag(IconMode.copied)
-                Text("Custom file").tag(IconMode.custom)
-                Text("Generated tile").tag(IconMode.generated)
+                if draft.kind == .webApp {
+                    // "Fetched from site" only while it is the saved mode: the editor cannot refetch an icon.
+                    ForEach(WebEditorPolicy.iconModes(saved: record.config.iconMode), id: \.self) { mode in
+                        Text(WebEditorPolicy.iconLabel(mode)).tag(mode)
+                    }
+                } else {
+                    Text("Copied from target").tag(IconMode.copied)
+                    Text("Custom file").tag(IconMode.custom)
+                    Text("Generated tile").tag(IconMode.generated)
+                }
             }
             if draft.iconMode == .custom {
                 LabeledContent("Icon file") {
