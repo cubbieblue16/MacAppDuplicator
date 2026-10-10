@@ -63,16 +63,22 @@ struct LibraryScanner: Sendable {
         let iconURL = bundleURL.appending(path: "Contents/Resources/AppIcon.icns", directoryHint: .notDirectory)
         let hasIcon = fileManager.fileExists(atPath: iconURL.path)
 
-        // A web app has no target app: it is never "missing" and has no version to read.
-        let isWebApp = config.kind == .webApp
+        // A web app has no target app: it is never "missing" and has no version to read. A launcher's target is the
+        // item it opens or the program it runs (Phase 5); it has no version either.
         let targetURL = URL(fileURLWithPath: config.targetPath)
-        let targetExists = isWebApp || fileManager.fileExists(atPath: targetURL.path)
+        let targetExists: Bool
+        switch config.kind {
+        case .webApp: targetExists = true
+        case .file, .folder: targetExists = config.file.map { fileManager.fileExists(atPath: $0.path) } ?? false
+        case .cli: targetExists = config.cli.map { fileManager.fileExists(atPath: $0.executablePath) } ?? false
+        case .app: targetExists = fileManager.fileExists(atPath: targetURL.path)
+        }
         // Read the target's Info.plist directly: `Bundle(url:)` caches one instance per path for the process lifetime,
         // so a target updated while this app runs would keep reporting its old version. An unreadable plist means
         // "version unknown", which is what nil expresses.
         var targetVersion: String?
         let targetInfoURL = targetURL.appending(path: "Contents/Info.plist", directoryHint: .notDirectory)
-        if targetExists, !isWebApp,
+        if targetExists, config.kind == .app,
            let targetInfoData = fileManager.contents(atPath: targetInfoURL.path),
            let targetInfo = (try? PropertyListSerialization.propertyList(from: targetInfoData, format: nil)) as? [String: Any] {
             targetVersion = targetInfo["CFBundleShortVersionString"] as? String

@@ -26,6 +26,24 @@ struct DiagnosticsModel {
     /// Set for a web app: the facts the report shows instead of a target and a launch plan (nil for every other kind).
     /// The last stored property, with a default, so the two existing memberwise calls below stay as they are.
     var web: WebDetails?
+    /// Set for a file, folder or command shortcut (Phase 5); nil for every other kind. Defaulted like `web`.
+    var launcher: LauncherDetails?
+
+    /// What a launcher's Diagnostics shows besides the launch plan. Every value is display text.
+    struct LauncherDetails: Equatable {
+        /// "File", "Folder" or "Command".
+        let kind: String
+        /// The item a file or folder shortcut opens (nil for a command).
+        let item: String?
+        /// The opener app's name, or "Default app" (nil for a command).
+        let openWith: String?
+        /// The terminal label (`WizardModel.terminalLabel`) for a command.
+        let terminal: String?
+        /// The command's working directory, or "Default".
+        let workingDirectory: String?
+        /// The command's own HOME path, or "No".
+        let ownHome: String?
+    }
 
     /// What a web app's Diagnostics shows. Every value is display text, so the view and the report share it.
     struct WebDetails: Equatable {
@@ -48,6 +66,9 @@ struct DiagnosticsModel {
         let logLines = logReader.tail(name: record.name).map(SecretMasking.maskLogLine)
         if record.config.kind == .webApp {
             return makeWeb(record: record, logLines: logLines)
+        }
+        if LauncherEditorPolicy.isLauncherKind(record.config.kind) {
+            return makeLauncher(record: record, logLines: logLines)
         }
         let profile = profileCatalog.profile(forBundleIdentifier: record.config.targetBundleIdentifier)
         let profileMatch = ProfileSummary.matchLine(bundleIdentifier: record.config.targetBundleIdentifier, catalog: profileCatalog)
@@ -164,6 +185,51 @@ struct DiagnosticsModel {
         )
     }
 
+    /// A launcher has no profile or target app; the plan comes from `LaunchPlanPreview` (masked argv, environment
+    /// additions only) and the launcher's own settings fill `launcher`.
+    private static func makeLauncher(record: ShortcutRecord, logLines: [String]) -> DiagnosticsModel {
+        let config = record.config
+        let details = launcherDetails(for: config)
+        let itemPath = config.file?.path ?? config.cli?.executablePath ?? ""
+        let notApplicable = "Not applicable (\(details.kind.lowercased()) shortcut)"
+        do {
+            let preview = try LaunchPlanPreview.make(config: config, bundleURL: record.bundleURL)
+            let env = preview.environmentAdditions.keys.sorted().map { key in
+                (key: key, value: SecretMasking.isSecretKey(key) ? SecretMasking.maskedValue : preview.environmentAdditions[key] ?? "")
+            }
+            return DiagnosticsModel(
+                shortcutName: record.name, bundlePath: record.bundleURL.path, engineVersion: record.engineVersion,
+                profileMatch: notApplicable, profileRows: [], storedTargetPath: itemPath,
+                resolvedTargetPath: record.targetExists ? itemPath : nil, executablePath: preview.executablePath,
+                launchMode: "Dock Shortcut", arguments: preview.arguments, environment: env, warnings: preview.warnings,
+                logLines: logLines, planError: nil, launcher: details
+            )
+        } catch {
+            return DiagnosticsModel(
+                shortcutName: record.name, bundlePath: record.bundleURL.path, engineVersion: record.engineVersion,
+                profileMatch: notApplicable, profileRows: [], storedTargetPath: itemPath,
+                resolvedTargetPath: record.targetExists ? itemPath : nil, executablePath: "",
+                launchMode: "Dock Shortcut", arguments: [], environment: [], warnings: [],
+                logLines: logLines, planError: error.localizedDescription, launcher: details
+            )
+        }
+    }
+
+    private static func launcherDetails(for config: ShortcutConfig) -> LauncherDetails {
+        if config.kind == .cli, let cli = config.cli {
+            let home = LauncherEditorPolicy.commandHomePath(for: config, home: FileManager.default.homeDirectoryForCurrentUser)
+            return LauncherDetails(
+                kind: "Command", item: nil, openWith: nil, terminal: WizardModel.terminalLabel(cli.terminal),
+                workingDirectory: cli.workingDirectory ?? "Default", ownHome: home ?? "No"
+            )
+        }
+        let opener = config.file?.openerAppPath.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent }
+        return LauncherDetails(
+            kind: config.kind == .folder ? "Folder" : "File", item: config.file?.path ?? "None", openWith: opener ?? "Default app",
+            terminal: nil, workingDirectory: nil, ownHome: nil
+        )
+    }
+
     /// True when the launcher would start something other than the stored path (moved target or no target).
     var storedPathDiffers: Bool { resolvedTargetPath != storedTargetPath }
 
@@ -172,7 +238,14 @@ struct DiagnosticsModel {
         lines.append("App Duplicator diagnostics — \(shortcutName)")
         lines.append("Bundle: \(bundlePath)")
         lines.append("Engine version: \(engineVersion) (current \(ShortcutConfig.currentEngineVersion))")
-        if let web {
+        if let launcher {
+            lines.append("Kind: \(launcher.kind)")
+            if let item = launcher.item { lines.append("Item: \(item)") }
+            if let openWith = launcher.openWith { lines.append("Open with: \(openWith)") }
+            if let terminal = launcher.terminal { lines.append("Terminal: \(terminal)") }
+            if let workingDirectory = launcher.workingDirectory { lines.append("Working directory: \(workingDirectory)") }
+            if let ownHome = launcher.ownHome { lines.append("Own HOME: \(ownHome)") }
+        } else if let web {
             lines.append("Kind: Web app")
             lines.append("URL: \(web.url)")
             lines.append("User agent: \(web.userAgent)")
@@ -230,7 +303,14 @@ struct DiagnosticsView: View {
                         section("Shortcut") {
                             row("Bundle", model.bundlePath)
                             row("Engine", "\(model.engineVersion) (current \(ShortcutConfig.currentEngineVersion))")
-                            if let web = model.web {
+                            if let launcher = model.launcher {
+                                row("Kind", launcher.kind)
+                                if let item = launcher.item { row("Item", item) }
+                                if let openWith = launcher.openWith { row("Open with", openWith) }
+                                if let terminal = launcher.terminal { row("Terminal", terminal) }
+                                if let workingDirectory = launcher.workingDirectory { row("Working directory", workingDirectory) }
+                                if let ownHome = launcher.ownHome { row("Own HOME", ownHome) }
+                            } else if let web = model.web {
                                 row("Kind", "Web app")
                                 row("URL", web.url)
                                 row("User agent", web.userAgent)
