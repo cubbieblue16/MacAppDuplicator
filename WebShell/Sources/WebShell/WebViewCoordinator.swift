@@ -6,13 +6,17 @@ import WebKit
 @MainActor
 final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NSWindowDelegate {
     let webView: WKWebView
-    /// Called with the page title whenever `webView.title` changes. Reserved for Task 3 (badge parsing);
+    /// Called with the page title whenever `webView.title` changes. Feeds the badge parser;
     /// the window title has its own observation in `MainWindowController`.
     var titleDidChange: ((String) -> Void)?
     /// Called when a main-frame provisional load fails with a user-visible error.
     var provisionalLoadDidFail: ((Error) -> Void)?
     /// Called when a main-frame navigation commits.
     var navigationDidCommit: (() -> Void)?
+
+    /// Brings the app and its main window forward; set by `WebShellFeatures.install`. Dialogs call it when their
+    /// window is hidden.
+    var bringToFront: (@MainActor () -> Void)?
 
     private let shell: ShellConfig
     private let logger: LaunchLogger
@@ -232,6 +236,13 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
         logger.log("popup host=\(navigationAction.request.url?.host() ?? "")")
         window.makeKeyAndOrderFront(nil)
         return popup
+    }
+
+    /// Hides every open popup window (background mode hides the main window the same way).
+    func hidePopupWindows() {
+        for window in popupWindows {
+            window.orderOut(nil)
+        }
     }
 
     func webViewDidClose(_ webView: WKWebView) {

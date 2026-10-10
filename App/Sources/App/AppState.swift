@@ -219,6 +219,7 @@ final class AppState {
     @discardableResult
     func delete(_ record: ShortcutRecord, removeData: Bool, removeWebData removesWebData: Bool = false) async -> [URL] {
         if removesWebData, !(await self.removeWebData(for: record)) { return [] }
+        let webDataRemoved = removesWebData && record.config.kind == .webApp && record.config.webApp != nil
         do {
             let trashed = try builder.delete(
                 record: record, removeData: removeData,
@@ -229,17 +230,27 @@ final class AppState {
             await library.rescan()
             return trashed
         } catch {
-            present(error, context: "Could not delete shortcut")
+            if webDataRemoved {
+                pendingError = AppError(
+                    context: "Could not delete shortcut",
+                    message: "The web data was already removed, but the shortcut itself could not be moved to the Trash and is still in the library. \(error.localizedDescription)"
+                )
+            } else {
+                present(error, context: "Could not delete shortcut")
+            }
             return []
         }
     }
 
     /// Removes a web app's logins, cookies and cache (editor `Remove Web Data…` and the delete sheet's second step).
     /// Refused while the web app runs, because WebKit keeps the store open until the web view is released. Returns
-    /// false (and sets `pendingError`) on failure; false without an alert for a shortcut that is not a web app.
+    /// false (and sets `pendingError`) on failure; false without an alert for a shortcut that is not a web app; true
+    /// for a web app whose configuration has no web section (nothing to remove).
     @discardableResult
     func removeWebData(for record: ShortcutRecord) async -> Bool {
-        guard record.config.kind == .webApp, let web = record.config.webApp else { return false }
+        guard record.config.kind == .webApp else { return false }
+        // A web app whose configuration lost its web section has no store to remove; Delete proceeds.
+        guard let web = record.config.webApp else { return true }
         guard !library.isRunning(record) else {
             present(WebDataRemovalError.shortcutRunning(record.name), context: "Could not remove web data")
             return false

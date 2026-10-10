@@ -192,6 +192,13 @@ final class WebWizardModelTests: XCTestCase {
         XCTAssertEqual(WizardModel.parseExtraHosts("cdn.example.com?x=1\r\napi.example.com#top"), ["cdn.example.com", "api.example.com"])
     }
 
+    func testExtraHostsDropCredentialsAndPorts() {
+        XCTAssertEqual(WizardModel.parseExtraHosts("cdn.example:443"), ["cdn.example"])
+        XCTAssertEqual(WizardModel.parseExtraHosts("https://user:secret@cdn.example:8443/path"), ["cdn.example"])
+        XCTAssertEqual(WizardModel.parseExtraHosts("user@login.example\napi.example:80?x=1"), ["login.example", "api.example"])
+        XCTAssertEqual(WizardModel.parseExtraHosts("plain.example"), ["plain.example"])
+    }
+
     func testMakeConfigLowerCasesAndDeduplicatesTheExtraHosts() {
         let (model, _) = makeModel()
         model.webURL = "https://example.com"

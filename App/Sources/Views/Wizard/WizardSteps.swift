@@ -137,7 +137,7 @@ struct IdentityStep: View {
                 if let data = model.webIconData, let image = NSImage(data: data) {
                     Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
                 } else if model.webIconFetchState == .fetching {
-                    ProgressView()
+                    ProgressView().accessibilityLabel("Fetching icon")
                 } else {
                     generatedTile
                 }

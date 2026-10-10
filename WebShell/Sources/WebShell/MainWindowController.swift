@@ -82,13 +82,13 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    /// Brings the main window to the front (Dock reopen now; the status item in Task 3).
+    /// Brings the main window to the front (Dock reopen, status item and notification clicks).
     func showWindow() {
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
     }
 
-    /// Task 3: background mode hides the window instead of closing it (see WebShellFeatures.windowShouldClose).
+    /// Background mode hides the window instead of closing it (see WebShellFeatures.windowShouldClose).
     var shouldClose: (@MainActor (NSWindow) -> Bool)?
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {

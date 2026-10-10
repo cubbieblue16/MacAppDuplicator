@@ -3,8 +3,8 @@ import DuplicatorCore
 import Foundation
 import Observation
 
-/// Where the web app icon fetch stands (the identity step shows it). `unavailable` carries the reason for the log and
-/// the tests; the user sees `WizardModel.webIconStatusText`.
+/// Where the web app icon fetch stands (the identity step shows it). `unavailable` carries why the fetch failed so tests
+/// can assert it; the user only sees the fixed `WizardModel.webIconStatusText`.
 enum WebIconFetchState: Equatable {
     case idle
     case fetching
@@ -306,13 +306,19 @@ final class WizardModel {
         if !isOn { backgroundMode = false }
     }
 
-    /// One host per non-empty line with any scheme, path, query or fragment removed. `WebAppConfig.init` then trims,
+    /// One host per non-empty line with any scheme, `user@`, `:port`, path, query or fragment removed. `WebAppConfig.init` then trims,
     /// lower-cases and de-duplicates.
     static func parseExtraHosts(_ text: String) -> [String] {
         text.split(whereSeparator: \.isNewline).compactMap { line in
             var host = line.trimmingCharacters(in: .whitespaces)
             if let separator = host.range(of: "://") { host = String(host[separator.upperBound...]) }
             if let end = host.firstIndex(where: { "/?#".contains($0) }) { host = String(host[..<end]) }
+            // A host never carries credentials or a port: `user@cdn.example:443` can only ever match as `cdn.example`.
+            if let at = host.lastIndex(of: "@") { host = String(host[host.index(after: at)...]) }
+            if let colon = host.lastIndex(of: ":"), !host.hasSuffix("]"),
+               host[host.index(after: colon)...].allSatisfy(\.isNumber) {
+                host = String(host[..<colon])
+            }
             return host.isEmpty ? nil : host
         }
     }

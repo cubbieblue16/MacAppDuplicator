@@ -114,6 +114,13 @@ struct DiagnosticsModel {
                 extraHosts: web.extraHosts,
                 zoom: WebEditorPolicy.zoomLabel(web.pageZoom)
             )
+        } else {
+            // Keep the web rows (never the native target rows) when the saved configuration lost its web section.
+            let missing = "Not available (configuration missing)"
+            model.web = WebDetails(
+                url: missing, userAgent: missing, dataStoreID: missing, backgroundMode: missing, menuBarIcon: missing,
+                badgePattern: missing, extraHosts: [missing], zoom: missing
+            )
         }
         return model
     }

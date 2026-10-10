@@ -7,7 +7,8 @@
 // Without MAD_INTEGRATION=1 the test is skipped. The shortcut points at https://example.invalid (a reserved
 // name that never resolves), so the page load fails and the inline error view shows; the test asserts process
 // identity and the shell's start log only. A window opens for a few seconds; that is expected. HOME and
-// CFFIXED_USER_HOME point at a temp directory so the shell's log, defaults and web data stay out of ~/Library.
+// CFFIXED_USER_HOME point at a temp directory so the shell's log and web data stay out of ~/Library. Its window-frame preferences still reach the real
+// ~/Library/Preferences (cfprefsd), so the test removes that one plist and asserts it is gone.
 
 import AppKit
 import DuplicatorCore
@@ -130,21 +131,18 @@ final class WebShellLaunchTests: XCTestCase {
             "Library/Logs/App Duplicator/\(ShortcutConfig.fileSystemName(for: shortcutName)).log"
         )
 
-        // Teardown blocks run last-in-first-out: the reap registered below runs before this domain removal,
-        // so the shell cannot rewrite its preferences plist after it is cleared. Only the shortcut's own
-        // domain is touched.
-        let shortcutDomain = config.bundleIdentifier
+        // The shell's preferences (the window frame autosave) land in the real ~/Library/Preferences even with HOME
+        // redirected, because cfprefsd resolves the home directory itself. Nothing in this process touches that
+        // domain; the file is removed after the shell is reaped (teardown blocks run last-in-first-out, so this one
+        // is registered first and runs after the reap below) and its absence is asserted before and after.
+        let shortcutPlist = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Preferences/\(config.bundleIdentifier).plist")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: shortcutPlist.path), "Leftover preferences before the launch: \(shortcutPlist.path)")
         addTeardownBlock {
-            UserDefaults(suiteName: shortcutDomain)?.removePersistentDomain(forName: shortcutDomain)
-            CFPreferencesAppSynchronize(shortcutDomain as CFString)
-            // Clearing the domain leaves an empty plist that cfprefsd flushes asynchronously; let that
-            // flush land, then remove that one file.
-            try await Task.sleep(for: .milliseconds(500))
-            let plist = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Preferences/\(shortcutDomain).plist")
-            if FileManager.default.fileExists(atPath: plist.path) {
-                try FileManager.default.removeItem(at: plist)
+            if FileManager.default.fileExists(atPath: shortcutPlist.path) {
+                try FileManager.default.removeItem(at: shortcutPlist)
             }
+            XCTAssertFalse(FileManager.default.fileExists(atPath: shortcutPlist.path), "Preferences left behind: \(shortcutPlist.path)")
         }
         // Always terminate and reap the launched shell, including when the wait loop below throws.
         addTeardownBlock { @MainActor [self] in

@@ -81,7 +81,7 @@ final class LaunchIntegrationTests: XCTestCase {
     private func processPath(_ pid: pid_t) -> String {
         var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
         let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
-        return length > 0 ? String(cString: buffer) : ""
+        return length > 0 ? String(decoding: buffer.prefix(Int(length)).map { UInt8(bitPattern: $0) }, as: UTF8.self) : ""
     }
 
     /// PIDs of every running process whose executable resolves to `executable`.

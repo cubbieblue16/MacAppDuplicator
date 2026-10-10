@@ -116,9 +116,13 @@ public enum WebShellScripts {
 
         dispatchEvent(event) {
           var handlerProperty = this['on' + event.type];
-          if (typeof handlerProperty === 'function') { handlerProperty.call(this, event); }
+          if (typeof handlerProperty === 'function') {
+            try { handlerProperty.call(this, event); } catch (error) { if (typeof console !== 'undefined') { console.error(error); } }
+          }
           var list = (this._listeners[event.type] || []).slice();
-          for (var index = 0; index < list.length; index++) { list[index].call(this, event); }
+          for (var index = 0; index < list.length; index++) {
+            try { list[index].call(this, event); } catch (error) { if (typeof console !== 'undefined') { console.error(error); } }
+          }
           return true;
         }
 

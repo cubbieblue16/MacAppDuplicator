@@ -11,6 +11,7 @@ final class WebShellFeatures {
     private let logger: LaunchLogger
     private let showWindow: @MainActor () -> Void
     private var statusItem: StatusItemController?
+    private weak var coordinator: WebViewCoordinator?
 
     init(
         webApp: WebAppConfig,
@@ -35,6 +36,9 @@ final class WebShellFeatures {
 
     /// Call once from `applicationDidFinishLaunching`, before the first page load.
     func install(on coordinator: WebViewCoordinator) {
+        self.coordinator = coordinator
+        let showWindow = self.showWindow
+        coordinator.bringToFront = { WebShellFeatures.bringAppToFront(showWindow: showWindow) }
         badge.trustedWebView = coordinator.webView
         coordinator.addMessageHandler(badge, name: WebShellScripts.badgeHandlerName)
         coordinator.addMessageHandler(notifications, name: WebShellScripts.notificationHandlerName)
@@ -46,7 +50,6 @@ final class WebShellFeatures {
         }
         notifications.start()
         if policy.showsStatusItem {
-            let showWindow = self.showWindow
             let item = StatusItemController(appName: appName, icon: NSApp.applicationIconImage) {
                 WebShellFeatures.bringAppToFront(showWindow: showWindow)
             }
@@ -63,6 +66,7 @@ final class WebShellFeatures {
     func windowShouldClose(_ window: NSWindow) -> Bool {
         guard policy.keepsRunningWhenWindowCloses else { return true }
         window.orderOut(nil)
+        coordinator?.hidePopupWindows()
         NSApp.setActivationPolicy(.accessory)
         logger.log("window hidden; running in the menu bar")
         return false

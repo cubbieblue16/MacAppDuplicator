@@ -41,10 +41,19 @@ struct MacAppDuplicatorApp: App {
             webShellError = error
         }
         let state = AppState(settings: settings, library: library, launcherBinary: launcherBinary, webShellBinary: webShellBinary, profiles: profiles)
-        if let launcherError {
+        // `pendingError` holds one alert at a time, so when both binaries are missing one message names both.
+        switch (launcherError, webShellError) {
+        case let (launcherError?, webShellError?):
+            state.pendingError = AppError(
+                context: "Could not find the launcher or the web shell",
+                message: "\(launcherError.localizedDescription)\n\n\(webShellError.localizedDescription)"
+            )
+        case let (launcherError?, nil):
             state.present(launcherError, context: "Could not find the launcher")
-        } else if let webShellError {
+        case let (nil, webShellError?):
             state.present(webShellError, context: "Could not find the web shell")
+        case (nil, nil):
+            break
         }
         _appState = State(initialValue: state)
     }

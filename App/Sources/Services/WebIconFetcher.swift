@@ -81,6 +81,32 @@ enum WebIconHTMLParser {
         }.max() ?? 0
     }
 
+    /// True when an icon the page names may be fetched: http(s), and not a loopback or private-network address unless
+    /// it is on the page's own host (the user chose that host). Stops page HTML from steering the app at other machines.
+    static func isFetchableIconURL(_ url: URL, pageHost: String?) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",
+              let host = url.host(percentEncoded: false)?.lowercased(), !host.isEmpty else { return false }
+        if let pageHost, host == pageHost.lowercased() { return true }
+        return !isLoopbackOrPrivate(host: host)
+    }
+
+    static func isLoopbackOrPrivate(host rawHost: String) -> Bool {
+        var host = rawHost.lowercased()
+        if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
+        if host == "localhost" || host.hasSuffix(".localhost") || host.hasSuffix(".local") { return true }
+        if host == "::1" || host == "::" || host == "0.0.0.0" { return true }
+        if host.contains(":") {
+            return host.hasPrefix("fc") || host.hasPrefix("fd") || host.hasPrefix("fe80")
+        }
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false).compactMap { Int($0) }
+        guard parts.count == 4 else { return false }
+        switch (parts[0], parts[1]) {
+        case (127, _), (10, _), (192, 168), (169, 254): return true
+        case (172, 16...31): return true
+        default: return false
+        }
+    }
+
     private static func resolve(_ href: String, against pageURL: URL) -> URL? {
         let cleaned = href.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "&amp;", with: "&")
         guard !cleaned.isEmpty, let url = URL(string: cleaned, relativeTo: pageURL)?.absoluteURL,
@@ -120,7 +146,10 @@ struct URLSessionWebIconFetcher: WebIconFetching {
         let baseURL = page.finalURL
         let html = String(decoding: page.data, as: UTF8.self)
         var candidates: [URL] = []
-        if let declared = WebIconHTMLParser.iconURL(inHTML: html, pageURL: baseURL) { candidates.append(declared) }
+        if let declared = WebIconHTMLParser.iconURL(inHTML: html, pageURL: baseURL),
+           WebIconHTMLParser.isFetchableIconURL(declared, pageHost: baseURL.host(percentEncoded: false)) {
+            candidates.append(declared)
+        }
         if let favicon = URL(string: "/favicon.ico", relativeTo: baseURL)?.absoluteURL, !candidates.contains(favicon) {
             candidates.append(favicon)
         }

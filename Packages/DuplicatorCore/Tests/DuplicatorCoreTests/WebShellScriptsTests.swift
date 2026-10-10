@@ -136,6 +136,20 @@ final class WebShellScriptsTests: XCTestCase {
         XCTAssertEqual(context.evaluateScript("window.__madNotificationClicked('aaaaaaaa-bbbb-4ccc-8ddd-000000000001')")?.toBool(), false)
     }
 
+    func testAThrowingClickHandlerDoesNotStarveTheOthers() throws {
+        let context = try makeContext()
+        context.evaluateScript(WebShellScripts.notificationShim)
+        context.evaluateScript("""
+        var log = [];
+        var n = new Notification('A');
+        n.onclick = function () { throw new Error('onclick boom'); };
+        n.addEventListener('click', function () { throw new Error('listener boom'); });
+        n.addEventListener('click', function () { log.push('survivor'); });
+        """)
+        XCTAssertEqual(context.evaluateScript("window.__madNotificationClicked('AAAAAAAA-BBBB-4CCC-8DDD-000000000001')")?.toBool(), true)
+        XCTAssertEqual(try json(context, "log"), #"["survivor"]"#)
+    }
+
     func testClickDispatchesToOnclickAndListeners() throws {
         let context = try makeContext()
         context.evaluateScript(WebShellScripts.notificationShim)

@@ -94,6 +94,7 @@ extension WebViewCoordinator {
         panel.canChooseDirectories = parameters.allowsDirectories
         panel.allowsMultipleSelection = parameters.allowsMultipleSelection
         if let window = webView.window {
+            revealIfHidden(window)
             panel.beginSheetModal(for: window) { response in
                 completionHandler(DialogPresentation.openPanelResult(response, urls: panel.urls))
             }
@@ -110,6 +111,13 @@ extension WebViewCoordinator {
         return alert
     }
 
+    /// A sheet on a hidden window (background mode) would leave page JavaScript waiting invisibly; bring the app forward.
+    private func revealIfHidden(_ window: NSWindow) {
+        if !window.isVisible {
+            bringToFront?()
+        }
+    }
+
     /// Sheet on the web view's window; app-modal when the web view has no window.
     private func present(
         _ alert: NSAlert,
@@ -117,6 +125,7 @@ extension WebViewCoordinator {
         completion: @escaping @MainActor (NSApplication.ModalResponse) -> Void
     ) {
         if let window = webView.window {
+            revealIfHidden(window)
             alert.beginSheetModal(for: window) { response in
                 completion(response)
             }

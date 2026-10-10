@@ -48,6 +48,25 @@ final class WebIconHTMLParserTests: XCTestCase {
         XCTAssertEqual(icon(#"<link rel="icon" href="https://cdn.example.test/abs.png">"#), "https://cdn.example.test/abs.png")
     }
 
+    func testIconAddressesOnLoopbackAndPrivateHostsAreNotFetchable() throws {
+        func fetchable(_ address: String, pageHost: String? = "www.example.test") throws -> Bool {
+            WebIconHTMLParser.isFetchableIconURL(try XCTUnwrap(URL(string: address)), pageHost: pageHost)
+        }
+        XCTAssertTrue(try fetchable("https://cdn.example.test/icon.png"))
+        XCTAssertTrue(try fetchable("http://8.8.8.8/icon.png"))
+        XCTAssertTrue(try fetchable("http://172.32.0.1/icon.png"))
+        XCTAssertFalse(try fetchable("http://localhost/icon.png"))
+        XCTAssertFalse(try fetchable("http://127.0.0.1:8080/icon.png"))
+        XCTAssertFalse(try fetchable("http://[::1]/icon.png"))
+        XCTAssertFalse(try fetchable("http://10.1.2.3/icon.png"))
+        XCTAssertFalse(try fetchable("http://172.16.0.1/icon.png"))
+        XCTAssertFalse(try fetchable("http://172.31.255.1/icon.png"))
+        XCTAssertFalse(try fetchable("http://192.168.1.1/icon.png"))
+        XCTAssertFalse(try fetchable("https://printer.local/icon.png"))
+        XCTAssertFalse(try fetchable("ftp://cdn.example.test/icon.png"))
+        XCTAssertTrue(try fetchable("http://192.168.1.1/icon.png", pageHost: "192.168.1.1"), "the page's own host is the user's choice")
+    }
+
     func testUnusableLinksAreSkipped() {
         let html = """
         <link rel="mask-icon" href="/mask.svg">

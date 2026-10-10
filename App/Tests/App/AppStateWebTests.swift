@@ -24,7 +24,7 @@ final class AppStateWebTests: XCTestCase {
         settings.outputFolder = out
         running = RunningPaths()
         let runningPaths = running!
-        library = ShortcutLibrary(settings: settings, monitor: RunningShortcutMonitor(probe: { runningPaths.paths }))
+        library = ShortcutLibrary(settings: settings, monitor: RunningShortcutMonitor(probe: { runningPaths.paths }, identifierProbe: { [] }))
         launcher = dir.appending(path: "Launcher")
         webShell = dir.appending(path: "WebShell")
         try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/echo"), to: launcher)
@@ -94,6 +94,41 @@ final class AppStateWebTests: XCTestCase {
         XCTAssertFalse(removed)
         XCTAssertTrue(remover.calls.isEmpty)
         XCTAssertNil(state.pendingError)
+    }
+
+    func testRemoveWebDataForAWebAppWithoutAWebSectionIsNothingToRemove() async throws {
+        var record = try await makeWebRecord()
+        record.config.webApp = nil
+
+        let removed = await state.removeWebData(for: record)
+
+        XCTAssertTrue(removed)
+        XCTAssertTrue(remover.calls.isEmpty)
+        XCTAssertNil(state.pendingError)
+    }
+
+    func testDeleteWithRemoveWebDataProceedsForAWebAppWithoutAWebSection() async throws {
+        var record = try await makeWebRecord()
+        record.config.webApp = nil
+
+        let trashed = await state.delete(record, removeData: false, removeWebData: true)
+
+        XCTAssertEqual(trashed.count, 1)
+        XCTAssertTrue(remover.calls.isEmpty)
+        XCTAssertNil(state.pendingError)
+    }
+
+    func testTrashFailureAfterWebDataRemovalSaysTheWebDataIsGone() async throws {
+        let record = try await makeWebRecord()
+        // The bundle is already gone, so the builder's trash step fails after the web data was removed.
+        try FileManager.default.removeItem(at: record.bundleURL)
+
+        let trashed = await state.delete(record, removeData: false, removeWebData: true)
+
+        XCTAssertTrue(trashed.isEmpty)
+        XCTAssertEqual(remover.calls.count, 1)
+        XCTAssertEqual(state.pendingError?.context, "Could not delete shortcut")
+        XCTAssertTrue(state.pendingError?.message.hasPrefix("The web data was already removed") == true, "\(state.pendingError?.message ?? "nil")")
     }
 
     func testDeleteKeepsWebDataByDefault() async throws {

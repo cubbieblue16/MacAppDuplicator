@@ -1,7 +1,7 @@
 import AppKit
 import DuplicatorCore
 
-/// Application delegate of a web-app shortcut. Task 3 adds the badge, notification and status-item controllers here.
+/// Application delegate of a web-app shortcut: owns the coordinator, the main window and the feature controllers (badge, notifications, status item).
 @MainActor
 final class WebShellAppDelegate: NSObject, NSApplicationDelegate {
     let shell: ShellConfig
@@ -10,7 +10,7 @@ final class WebShellAppDelegate: NSObject, NSApplicationDelegate {
     private(set) var windowController: MainWindowController?
     /// Retained here: menu item targets are weak.
     private var zoomController: PageZoomController?
-    /// Task 3: badge, notifications, background mode and the status item.
+    /// Badge, notifications, background mode and the status item.
     private var features: WebShellFeatures?
 
     init(shell: ShellConfig, logger: LaunchLogger) {
@@ -64,7 +64,7 @@ final class WebShellAppDelegate: NSObject, NSApplicationDelegate {
         logger.log("quit")
     }
 
-    /// Task 3: badge, notifications, background mode and the status item (skeleton decisions 7, 8, 9).
+    /// Creates the badge, notification, background-mode and status-item features (skeleton decisions 7, 8, 9).
     private func installFeatures(
         webApp: WebAppConfig,
         shortcut: ShortcutConfig,

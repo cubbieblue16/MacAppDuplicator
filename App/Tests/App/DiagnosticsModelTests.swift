@@ -252,7 +252,8 @@ final class DiagnosticsModelTests: XCTestCase {
             bundleURL: dir.appending(path: "Chat Broken.app"), config: config, engineVersion: ShortcutConfig.currentEngineVersion,
             iconURL: nil, targetVersion: nil, targetExists: true, modifiedDate: Date())
         let model = DiagnosticsModel.make(record: record, logReader: LogReader(folder: dir))
-        XCTAssertNil(model.web)
+        XCTAssertEqual(model.web?.url, "Not available (configuration missing)")
+        XCTAssertEqual(model.web?.dataStoreID, "Not available (configuration missing)")
         XCTAssertEqual(model.planError, "This web app has no web address saved. Regenerate the shortcut or recreate it.")
         XCTAssertTrue(model.reportText.contains("Launch plan error: This web app has no web address saved."))
     }
