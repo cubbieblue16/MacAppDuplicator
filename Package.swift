@@ -26,6 +26,7 @@ let package = Package(
         .executableTarget(name: "Launcher", dependencies: ["DuplicatorCore"], path: "Launcher/Sources/Launcher"),
         // Web-app shortcut executable (Phase 4 skeleton decision 2). Programmatic AppKit + WebKit, no resources.
         .executableTarget(name: "WebShell", dependencies: ["DuplicatorCore"], path: "WebShell/Sources/WebShell"),
+        .testTarget(name: "WebShellTests", dependencies: ["WebShell", "DuplicatorCore"], path: "WebShell/Tests/WebShellTests"),
         .executableTarget(name: "madctl",
                           dependencies: ["DuplicatorCore", .product(name: "ArgumentParser", package: "swift-argument-parser")],
                           path: "Tools/madctl/Sources/madctl"),
