@@ -1,6 +1,7 @@
 import Foundation
 
-/// What a shortcut launches (spec §3.1). Phase 1 implements `.app` only.
+/// What a shortcut launches (spec §3.1): `.app` runs the Launcher and execs a target app, `.webApp` runs WebShell
+/// (spec §5), and `.file`, `.folder` and `.cli` run the Launcher, which opens or spawns and exits (spec §6).
 public enum ShortcutKind: String, Codable, Sendable { case app, webApp, file, folder, cli }
 
 /// How the launcher starts the target (spec §4.1).

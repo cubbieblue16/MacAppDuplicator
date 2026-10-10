@@ -34,6 +34,10 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
     public var homeSymlinkEntries: [String]?
     /// Web app settings; set exactly when `kind == .webApp`, nil otherwise (spec §5).
     public var webApp: WebAppConfig?
+    /// File or folder settings; set exactly when `kind` is `.file` or `.folder`, nil otherwise (spec §6).
+    public var file: FileConfig?
+    /// Command settings; set exactly when `kind == .cli`, nil otherwise (spec §6).
+    public var cli: CLIConfig?
     public var engineVersion: Int
 
     public init(
@@ -56,6 +60,8 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         customIconPath: String? = nil,
         homeSymlinkEntries: [String]? = nil,
         webApp: WebAppConfig? = nil,
+        file: FileConfig? = nil,
+        cli: CLIConfig? = nil,
         engineVersion: Int = ShortcutConfig.currentEngineVersion
     ) {
         self.kind = kind
@@ -77,16 +83,19 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         self.customIconPath = customIconPath
         self.homeSymlinkEntries = homeSymlinkEntries
         self.webApp = webApp
+        self.file = file
+        self.cli = cli
         self.engineVersion = engineVersion
     }
 
     private enum CodingKeys: String, CodingKey {
         case kind, name, slug, bundleIdentifier, targetPath, targetBundleIdentifier, launchMode, dataMode, dataPath
         case environment, arguments, appearance, languageCode, eraseOnQuit, menuBarIcon
-        case iconMode, customIconPath, homeSymlinkEntries, webApp, engineVersion
+        case iconMode, customIconPath, homeSymlinkEntries, webApp, file, cli, engineVersion
     }
 
-    /// Decodes Phase 1 to 3 dictionaries too: `iconMode`, `customIconPath`, `homeSymlinkEntries` and `webApp` are optional on input.
+    /// Decodes Phase 1 to 4 dictionaries too: `iconMode`, `customIconPath`, `homeSymlinkEntries`, `webApp`, `file` and `cli`
+    /// are optional on input.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         kind = try container.decode(ShortcutKind.self, forKey: .kind)
@@ -108,6 +117,8 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         customIconPath = try container.decodeIfPresent(String.self, forKey: .customIconPath)
         homeSymlinkEntries = try container.decodeIfPresent([String].self, forKey: .homeSymlinkEntries)
         webApp = try container.decodeIfPresent(WebAppConfig.self, forKey: .webApp)
+        file = try container.decodeIfPresent(FileConfig.self, forKey: .file)
+        cli = try container.decodeIfPresent(CLIConfig.self, forKey: .cli)
         engineVersion = try container.decode(Int.self, forKey: .engineVersion)
     }
 

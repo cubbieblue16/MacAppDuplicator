@@ -152,4 +152,88 @@ final class ShortcutConfigTests: XCTestCase {
         let set: Set<ShortcutConfig> = [makeConfig(), makeConfig()]
         XCTAssertEqual(set.count, 1)
     }
+
+    // MARK: Launcher kinds (Phase 5)
+
+    private func makeLauncherConfig(kind: ShortcutKind, file: FileConfig? = nil, cli: CLIConfig? = nil) -> ShortcutConfig {
+        ShortcutConfig(
+            kind: kind,
+            name: "Projects",
+            slug: "projects",
+            bundleIdentifier: "com.mikekuta.appduplicator.projects",
+            targetPath: "",
+            targetBundleIdentifier: "",
+            launchMode: .dockShortcut,
+            dataMode: .disabled,
+            file: file,
+            cli: cli
+        )
+    }
+
+    func testLauncherSubConfigsDefaultToNil() {
+        let config = ShortcutConfig(name: "N", slug: "n", bundleIdentifier: "b", targetPath: "/A.app", targetBundleIdentifier: "a")
+        XCTAssertNil(config.file)
+        XCTAssertNil(config.cli)
+        XCTAssertEqual(config.engineVersion, 1)
+    }
+
+    func testEveryKindRoundTripsThroughMADConfig() throws {
+        let webApp = ShortcutConfig(
+            kind: .webApp, name: "Mail", slug: "mail", bundleIdentifier: "com.mikekuta.appduplicator.mail",
+            targetPath: "", targetBundleIdentifier: "", dataMode: .disabled, webApp: WebAppConfig(url: "https://mail.example.com")
+        )
+        let configs = [
+            makeConfig(),
+            webApp,
+            makeLauncherConfig(kind: .file, file: FileConfig(path: "/Users/test/Notes.md", openerAppPath: "/Applications/TextEdit.app")),
+            makeLauncherConfig(kind: .folder, file: FileConfig(path: "/Users/test/Projects")),
+            makeLauncherConfig(
+                kind: .cli,
+                cli: CLIConfig(
+                    executablePath: "/usr/bin/top",
+                    arguments: ["-o", "cpu"],
+                    workingDirectory: "~",
+                    terminal: .iterm2,
+                    homeOverride: true
+                )
+            ),
+        ]
+        for config in configs {
+            XCTAssertEqual(try ShortcutConfig(plistDictionary: config.plistDictionary()), config, "kind \(config.kind)")
+        }
+    }
+
+    func testLauncherSubConfigsAreWrittenOnlyWhenSet() throws {
+        let folder = makeLauncherConfig(kind: .folder, file: FileConfig(path: "/Users/test/Projects")).plistDictionary()
+        XCTAssertEqual(folder["kind"] as? String, "folder")
+        XCTAssertEqual((folder["file"] as? [String: Any])?["path"] as? String, "/Users/test/Projects")
+        XCTAssertNil(folder["cli"])
+        XCTAssertNil(folder["webApp"])
+        XCTAssertNil(folder["dataPath"])
+        XCTAssertEqual(folder["targetPath"] as? String, "")
+        XCTAssertEqual(folder["engineVersion"] as? Int, 1)
+
+        let command = makeLauncherConfig(kind: .cli, cli: CLIConfig(executablePath: "/bin/ls", terminal: TerminalChoice.none))
+        let dictionary = command.plistDictionary()
+        let cli = try XCTUnwrap(dictionary["cli"] as? [String: Any])
+        XCTAssertEqual(cli["executablePath"] as? String, "/bin/ls")
+        XCTAssertEqual(cli["arguments"] as? [String], [])
+        XCTAssertEqual(cli["terminal"] as? String, "none")
+        XCTAssertEqual(cli["homeOverride"] as? Bool, false)
+        XCTAssertNil(cli["workingDirectory"])
+        XCTAssertNil(dictionary["file"])
+
+        XCTAssertNil(makeConfig().plistDictionary()["file"])
+        XCTAssertNil(makeConfig().plistDictionary()["cli"])
+    }
+
+    func testCorruptLauncherSubConfigThrowsConfigCorrupt() {
+        var dictionary = makeLauncherConfig(kind: .cli, cli: CLIConfig(executablePath: "/bin/ls")).plistDictionary()
+        dictionary["cli"] = ["arguments": ["-l"]]
+        XCTAssertThrowsError(try ShortcutConfig(plistDictionary: dictionary)) { error in
+            guard case LauncherError.configCorrupt = error else {
+                return XCTFail("expected configCorrupt, got \(error)")
+            }
+        }
+    }
 }
