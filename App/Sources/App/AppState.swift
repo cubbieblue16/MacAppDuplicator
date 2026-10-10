@@ -56,6 +56,8 @@ final class AppState {
     var pendingError: AppError?
     /// The last Check Profile Updates result, shown in an alert until it is dismissed.
     var profileUpdateMessage: String?
+    /// Rebuild All progress while it runs; nil otherwise.
+    var rebuildProgress: RebuildProgress?
 
     init(settings: AppSettings, library: ShortcutLibrary, launcherBinary: URL, profiles: ProfilesModel? = nil) {
         self.settings = settings
@@ -133,20 +135,30 @@ final class AppState {
         _ = await save(record: record, config: record.config)
     }
 
-    /// Rewrites every record whose engine version is stale. Returns how many were rebuilt; stops at the first error.
-    func rebuildAll() async -> Int {
-        var count = 0
-        for record in library.recordsNeedingRebuild {
-            do {
-                _ = try builder.regenerate(record: record, config: record.config)
-                count += 1
-            } catch {
-                present(error, context: "Could not rebuild \(record.name)")
-                break
-            }
+    /// Rebuild All (final review M16): rewrites every record whose engine version is stale, one at a time in a
+    /// detached task so the main actor stays free, and carries on past a failure. `rebuildProgress` counts the
+    /// finished records while it runs. Returns one result per record, in `recordsNeedingRebuild` order; failures are
+    /// reported there, never through `pendingError`.
+    func rebuildAll() async -> [RebuildResult] {
+        let records = library.recordsNeedingRebuild
+        let builder = self.builder
+        var results: [RebuildResult] = []
+        rebuildProgress = RebuildProgress(done: 0, total: records.count)
+        for record in records {
+            let outcome = await Task.detached(priority: .userInitiated) { () -> RebuildResult.Outcome in
+                do {
+                    _ = try builder.regenerate(record: record, config: record.config)
+                    return .rebuilt
+                } catch {
+                    return .failed(error.localizedDescription)
+                }
+            }.value
+            results.append(RebuildResult(id: record.bundleURL, name: record.name, outcome: outcome))
+            rebuildProgress = RebuildProgress(done: results.count, total: records.count)
         }
         await library.rescan()
-        return count
+        rebuildProgress = nil
+        return results
     }
 
     func duplicate(_ record: ShortcutRecord, newName: String) async {

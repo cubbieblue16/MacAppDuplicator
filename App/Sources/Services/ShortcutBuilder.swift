@@ -4,7 +4,7 @@ import os
 
 /// Create / regenerate / duplicate / export / delete shortcut bundles (spec §7 actions). Every write goes through
 /// `BundleWriter` + `Signer`; the target app is only ever read.
-struct ShortcutBuilder {
+struct ShortcutBuilder: Sendable {
     enum BuilderError: Error, LocalizedError {
         case alreadyExists(URL)
         case targetMissing(String)
@@ -26,7 +26,9 @@ struct ShortcutBuilder {
     let launcherBinary: URL
     /// Codesign identity display name, or nil for ad hoc.
     let signingIdentity: String?
-    var fileManager: FileManager = .default
+    // FileManager is not Sendable, so it is not a stored property of this Sendable struct (Rebuild All runs the
+    // builder in a detached task). Nothing ever set it; every use reads the shared instance.
+    var fileManager: FileManager { .default }
 
     init(launcherBinary: URL, signingIdentity: String?) {
         self.launcherBinary = launcherBinary

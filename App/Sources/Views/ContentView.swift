@@ -39,7 +39,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $isRebuildAllPresented) {
             RebuildAllSheet(count: appState.library.recordsNeedingRebuild.count) {
-                _ = await appState.rebuildAll()
+                await appState.rebuildAll()
             }
         }
         .alert(item: $appState.pendingError) { error in

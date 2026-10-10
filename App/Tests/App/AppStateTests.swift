@@ -168,8 +168,9 @@ final class AppStateTests: XCTestCase {
         try writeShortcutBundle(named: "Old One", in: out, config: old, engineVersion: 0)
         await library.rescan()
         XCTAssertEqual(library.recordsNeedingRebuild.map(\.name), ["Old One"])
-        let count = await state.rebuildAll()
-        XCTAssertEqual(count, 1)
+        let results = await state.rebuildAll()
+        XCTAssertEqual(results.map(\.name), ["Old One"])
+        XCTAssertEqual(results.map(\.outcome), [.rebuilt])
         XCTAssertTrue(library.recordsNeedingRebuild.isEmpty)
     }
 
@@ -187,5 +188,29 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(checking.profileUpdateMessage, message)
         XCTAssertEqual(fetcher.requestedURLs.map(\.absoluteString), [fork])
         XCTAssertEqual(checking.profile(forBundleIdentifier: "com.example.target")?.status, .verified)
+    }
+
+    func testRebuildAllContinuesPastAFailureAndReportsEveryShortcut() async throws {
+        // "A Broken" sorts first and its target is gone; Phase 2's loop stopped there and never reached "B Stale".
+        var broken = config(name: "A Broken")
+        broken.targetPath = dir.appending(path: "Missing.app").path
+        broken.engineVersion = 0
+        try writeShortcutBundle(named: "A Broken", in: out, config: broken, engineVersion: 0)
+        var stale = config(name: "B Stale")
+        stale.engineVersion = 0
+        try writeShortcutBundle(named: "B Stale", in: out, config: stale, engineVersion: 0)
+        await library.rescan()
+        XCTAssertEqual(library.recordsNeedingRebuild.map(\.name), ["A Broken", "B Stale"])
+
+        let results = await state.rebuildAll()
+
+        XCTAssertEqual(results.map(\.name), ["A Broken", "B Stale"])
+        XCTAssertEqual(results.map(\.id.lastPathComponent), ["A Broken.app", "B Stale.app"])
+        XCTAssertEqual(results.last?.outcome, .rebuilt)
+        guard case .failed(let message) = results.first?.outcome else { return XCTFail("the missing target fails") }
+        XCTAssertTrue(message.contains("Missing.app"), message)
+        XCTAssertNil(state.pendingError, "Rebuild All reports failures in its results, not in the error alert")
+        XCTAssertNil(state.rebuildProgress, "progress is cleared when Rebuild All ends")
+        XCTAssertEqual(library.recordsNeedingRebuild.map(\.name), ["A Broken"])
     }
 }
