@@ -277,6 +277,12 @@ struct ShortcutBuilder: Sendable {
     private func writeWebApp(config: ShortcutConfig, in directory: URL, webIconData: Data?, existingIcon: URL?) throws -> URL {
         guard config.webApp != nil else { throw BuilderError.webAppConfigMissing }
         var config = config
+        // Web app invariants (no target app, plain dock shortcut, no data-folder handling) are enforced here as well as in the wizard.
+        config.targetPath = ""
+        config.targetBundleIdentifier = ""
+        config.launchMode = .dockShortcut
+        config.dataMode = .disabled
+        config.dataPath = nil
         config.engineVersion = ShortcutConfig.currentEngineVersion
         let scratch = try makeScratch()
         defer { removeScratch(scratch) }

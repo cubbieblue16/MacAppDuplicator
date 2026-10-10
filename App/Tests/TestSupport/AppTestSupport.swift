@@ -66,7 +66,8 @@ func makeWebConfig(name: String = "Chat Work", url: String = "https://chat.examp
     let slug = ShortcutConfig.slug(for: name)
     var config = ShortcutConfig(
         kind: .webApp, name: name, slug: slug, bundleIdentifier: ShortcutConfig.bundleIdentifier(forSlug: slug),
-        targetPath: "", targetBundleIdentifier: "", webApp: WebAppConfig(url: url, dataStoreID: dataStoreID)
+        targetPath: "", targetBundleIdentifier: "", launchMode: .dockShortcut, dataMode: .disabled, dataPath: nil,
+        webApp: WebAppConfig(url: url, dataStoreID: dataStoreID)
     )
     config.iconMode = .copied
     return config

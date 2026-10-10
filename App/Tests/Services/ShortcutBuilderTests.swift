@@ -505,6 +505,25 @@ final class ShortcutBuilderTests: XCTestCase {
                        try Data(contentsOf: bundle.appending(path: "Contents/Resources/AppIcon.icns")))
     }
 
+    func testWebAppWriteNormalisesInvariants() throws {
+        var config = makeWebConfig(name: "Chat Work")
+        config.targetPath = "/Applications/Foo.app"
+        config.targetBundleIdentifier = "com.example.foo"
+        config.launchMode = .systemLaunch
+        config.dataMode = .auto
+        config.dataPath = dir.appending(path: "data", directoryHint: .isDirectory).path
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+
+        let bundle = try builder.create(config: config, in: out, webIconData: try pngData())
+
+        let written = try LibraryScanner.record(forBundleAt: bundle).config
+        XCTAssertEqual(written.targetPath, "")
+        XCTAssertEqual(written.targetBundleIdentifier, "")
+        XCTAssertEqual(written.launchMode, .dockShortcut)
+        XCTAssertEqual(written.dataMode, .disabled)
+        XCTAssertNil(written.dataPath)
+    }
+
     func testWebAppKindWithoutWebAppSettingsIsRefused() throws {
         var config = makeWebConfig()
         config.webApp = nil
