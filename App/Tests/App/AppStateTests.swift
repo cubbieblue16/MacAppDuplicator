@@ -226,7 +226,9 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(state.exportWarning(for: out.appending(path: "Nested/Work Copy.app")), "the library scans only a folder's direct children")
 
         let destination = exports.appending(path: "Work.app", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        // The existing destination is a previous export (a shortcut bundle); a plain app there would be refused.
+        try FileManager.default.createDirectory(at: exports, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: record.bundleURL, to: destination)
         try Data("old".utf8).write(to: destination.appending(path: "old-marker"))
         let exported = await state.exportCopy(record, to: destination)
 
