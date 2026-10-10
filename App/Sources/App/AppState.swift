@@ -211,11 +211,14 @@ final class AppState {
         return "\(destination.lastPathComponent) would be inside the library folder \(folder.path), so it would appear in the library as a second shortcut with the same bundle identifier and data folder."
     }
 
-    /// Moves the shortcut (and, with `removeData`, its data folder) to the Trash. Delete is offered only from the
-    /// selected shortcut's editor, and a selection made by an earlier duplicate or rename must not survive into the
-    /// next detail view, so the selection is always cleared. Returns the Trash locations (empty on failure).
+    /// Moves the shortcut (and, with `removeData`, its data folder) to the Trash. With `removesWebData` a web app's
+    /// logins, cookies and cache are removed first; when that fails nothing is trashed, so the shortcut stays and the
+    /// error alert explains why. Delete is offered only from the selected shortcut's editor, and a selection made by an
+    /// earlier duplicate or rename must not survive into the next detail view, so the selection is always cleared.
+    /// Returns the Trash locations (empty on failure).
     @discardableResult
-    func delete(_ record: ShortcutRecord, removeData: Bool) async -> [URL] {
+    func delete(_ record: ShortcutRecord, removeData: Bool, removeWebData removesWebData: Bool = false) async -> [URL] {
+        if removesWebData, !(await self.removeWebData(for: record)) { return [] }
         do {
             let trashed = try builder.delete(
                 record: record, removeData: removeData,
@@ -228,6 +231,25 @@ final class AppState {
         } catch {
             present(error, context: "Could not delete shortcut")
             return []
+        }
+    }
+
+    /// Removes a web app's logins, cookies and cache (editor `Remove Web Data…` and the delete sheet's second step).
+    /// Refused while the web app runs, because WebKit keeps the store open until the web view is released. Returns
+    /// false (and sets `pendingError`) on failure; false without an alert for a shortcut that is not a web app.
+    @discardableResult
+    func removeWebData(for record: ShortcutRecord) async -> Bool {
+        guard record.config.kind == .webApp, let web = record.config.webApp else { return false }
+        guard !library.isRunning(record) else {
+            present(WebDataRemovalError.shortcutRunning(record.name), context: "Could not remove web data")
+            return false
+        }
+        do {
+            try await webDataRemover.removeWebData(identifier: web.dataStoreID, bundleIdentifier: record.config.bundleIdentifier)
+            return true
+        } catch {
+            present(error, context: "Could not remove web data")
+            return false
         }
     }
 
@@ -247,6 +269,9 @@ final class AppState {
     /// What the delete sheet offers for `record`'s data folder: only an existing folder that passes `DataPathGuard`.
     func dataFolderDeletionOption(for record: ShortcutRecord) -> DataFolderDeletionOption {
         let home = FileManager.default.homeDirectoryForCurrentUser
+        if record.config.kind == .webApp {
+            return .unavailable(note: "A web app keeps its logins and cookies in web data, not in a data folder.")
+        }
         guard record.config.dataMode != .disabled else {
             return .unavailable(note: "Data mode is Disabled, so this shortcut has no data folder of its own.")
         }
