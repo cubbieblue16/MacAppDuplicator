@@ -26,6 +26,21 @@ public struct BundleWriter {
     /// is copied to `Contents/Resources/AppIcon.icns` instead of the target's icon. The library app passes the result of
     /// its icon mode (copied / custom / generated) here.
     public func write(config: ShortcutConfig, app: InspectedApp, launcherBinary: URL, iconFile: URL?, to directory: URL) throws -> URL {
+        // Target's LSEnvironment merged under the shortcut's environment: shortcut wins.
+        let lsEnvironment = app.lsEnvironment.merging(config.environment) { _, shortcut in shortcut }
+        return try assemble(config: config, executable: launcherBinary, iconFile: iconFile, lsEnvironment: lsEnvironment, to: directory)
+    }
+
+    /// Writes a bundle that has no target app (web app shortcuts, spec §5): `executable` (the WebShell binary) is copied
+    /// to `Contents/MacOS/<Name>` with mode 0o755, `iconFile` (an `.icns`, or nil for no icon) to
+    /// `Contents/Resources/AppIcon.icns`, and `LSEnvironment` is exactly `config.environment`. The Info.plist key set
+    /// is the same as for app shortcuts.
+    public func write(config: ShortcutConfig, executable: URL, iconFile: URL?, to directory: URL) throws -> URL {
+        try assemble(config: config, executable: executable, iconFile: iconFile, lsEnvironment: config.environment, to: directory)
+    }
+
+    /// Builds `<directory>/<Name>.app` in a hidden staging directory and renames it into place.
+    private func assemble(config: ShortcutConfig, executable executableSource: URL, iconFile: URL?, lsEnvironment: [String: String], to directory: URL) throws -> URL {
         let bundleName = ShortcutConfig.fileSystemName(for: config.name)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         let destination = directory.appending(path: bundleName + ".app", directoryHint: .isDirectory)
@@ -38,7 +53,7 @@ public struct BundleWriter {
             try fileManager.createDirectory(at: resources, withIntermediateDirectories: true)
 
             let executable = macOS.appending(path: bundleName, directoryHint: .notDirectory)
-            try Data(contentsOf: launcherBinary).write(to: executable)
+            try Data(contentsOf: executableSource).write(to: executable)
             try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
 
             var hasIcon = false
@@ -49,7 +64,7 @@ public struct BundleWriter {
             }
 
             try Data("APPL????".utf8).write(to: contents.appending(path: "PkgInfo", directoryHint: .notDirectory))
-            let info = Self.infoDictionary(config: config, app: app, executableName: bundleName, hasIcon: hasIcon)
+            let info = Self.infoDictionary(config: config, lsEnvironment: lsEnvironment, executableName: bundleName, hasIcon: hasIcon)
             let plistData = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
             try plistData.write(to: contents.appending(path: "Info.plist", directoryHint: .notDirectory))
 
@@ -61,10 +76,8 @@ public struct BundleWriter {
         return destination
     }
 
-    /// The complete shortcut Info.plist (spec §3.2). Only these keys are ever written.
-    static func infoDictionary(config: ShortcutConfig, app: InspectedApp, executableName: String, hasIcon: Bool) -> [String: Any] {
-        // Target's LSEnvironment merged under the shortcut's environment: shortcut wins.
-        let lsEnvironment = app.lsEnvironment.merging(config.environment) { _, shortcut in shortcut }
+    /// The complete shortcut Info.plist (spec §3.2), shared by app and web app shortcuts. Only these keys are ever written.
+    private static func infoDictionary(config: ShortcutConfig, lsEnvironment: [String: String], executableName: String, hasIcon: Bool) -> [String: Any] {
         var info: [String: Any] = [
             "CFBundleName": config.name,
             "CFBundleDisplayName": config.name,
