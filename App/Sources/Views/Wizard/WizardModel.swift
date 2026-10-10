@@ -3,12 +3,32 @@ import DuplicatorCore
 import Foundation
 import Observation
 
+/// Where the web app icon fetch stands (the identity step shows it). `unavailable` carries the reason for the log and
+/// the tests; the user sees `WizardModel.webIconStatusText`.
+enum WebIconFetchState: Equatable {
+    case idle
+    case fetching
+    case fetched
+    case unavailable(String)
+}
+
 /// State for the New Shortcut sheet. Pure model: no AppKit, so it is unit-testable.
 @MainActor
 @Observable
 final class WizardModel {
     enum Step: Int, CaseIterable {
-        case kind, target, identity, data, review
+        case kind, target, identity, data, webOptions, review
+    }
+
+    /// One label/value line of the web app Review step.
+    struct ReviewRow: Equatable {
+        let label: String
+        let value: String
+
+        init(_ label: String, _ value: String) {
+            self.label = label
+            self.value = value
+        }
     }
 
     var step: Step = .kind
@@ -33,6 +53,28 @@ final class WizardModel {
     var isCreating = false
     var createError: String?
 
+    // MARK: Web App state (kind == .webApp)
+
+    /// The address field, exactly as typed; `validatedWebURL` trims and checks it.
+    var webURL = ""
+    /// The last preset applied; `highlightedPreset` is it only while `webURL` still matches the preset's address.
+    private(set) var selectedPreset: WebAppPreset?
+    var userAgent: UserAgentPreset = .safari
+    /// Empty means "use the default pattern" (stored as nil).
+    var badgeRegex = ""
+    /// One host per line; `parseExtraHosts(_:)` strips schemes and paths.
+    var extraHostsText = ""
+    /// Only meaningful while `menuBarIcon` is on (`setMenuBarIcon(_:)` clears it, `makeConfig()` gates on it).
+    var backgroundMode = false
+    private(set) var menuBarIcon = false
+    private(set) var webIconData: Data?
+    private(set) var webIconFetchState: WebIconFetchState = .idle
+    /// The icon fetch started by entering the identity step; tests await it.
+    private(set) var iconFetchTask: Task<Void, Never>?
+    let webAppPresets: [WebAppPreset]
+    /// One `WKWebsiteDataStore` identifier per wizard session, so the Review row and the created shortcut agree.
+    let webDataStoreID: UUID
+
     /// The last name this model filled in itself. A name still equal to it was not typed by the user, so picking
     /// another target may replace it.
     private var suggestedName = ""
@@ -41,15 +83,40 @@ final class WizardModel {
     /// target can restore the default.
     private var launchModeWasForced = false
 
+    /// True while `iconMode` is Generated tile only because the icon fetch found nothing, so a later successful fetch
+    /// may restore Fetched from site (and a user's own pick is never overridden).
+    private var iconModeWasFallback = false
+
+    /// Bumped whenever a fetch starts or is cancelled; a fetch that finishes under an older number is stale.
+    private var iconFetchGeneration = 0
+
+    /// The address the last settled fetch was for, so re-entering the identity step does not fetch it again.
+    private var fetchedURL: URL?
+
     /// Looks up the profile for a target bundle identifier; the sheet passes `AppState.profile(forBundleIdentifier:)`.
     private let profileLookup: @MainActor (String) -> AppProfile?
 
     /// Slugs the library already uses (`SlugAllocator.takenSlugs(in:)`); `slug` steps around them (final review M6).
     private let takenSlugs: Set<String>
 
-    init(prefillTarget: URL? = nil, takenSlugs: Set<String> = [], profileLookup: @escaping @MainActor (String) -> AppProfile? = { _ in nil }) {
+    private let iconFetcher: any WebIconFetching
+
+    /// Maps a preset's `userAgent` string to a preset value; the sheet passes `ProfilesModel.userAgentPreset(for:)`.
+    private let userAgentResolver: @MainActor (WebAppPreset) -> UserAgentPreset
+
+    init(prefillTarget: URL? = nil,
+         takenSlugs: Set<String> = [],
+         profileLookup: @escaping @MainActor (String) -> AppProfile? = { _ in nil },
+         webAppPresets: [WebAppPreset] = [],
+         webDataStoreID: UUID = UUID(),
+         iconFetcher: any WebIconFetching = URLSessionWebIconFetcher(),
+         userAgentResolver: @escaping @MainActor (WebAppPreset) -> UserAgentPreset = { _ in .safari }) {
         self.profileLookup = profileLookup
         self.takenSlugs = takenSlugs
+        self.webAppPresets = webAppPresets
+        self.webDataStoreID = webDataStoreID
+        self.iconFetcher = iconFetcher
+        self.userAgentResolver = userAgentResolver
         if let prefillTarget {
             selectTarget(prefillTarget)
             if inspected != nil { step = .identity }
@@ -57,6 +124,17 @@ final class WizardModel {
     }
 
     var isLastStep: Bool { step == .review }
+
+    /// The steps this kind of shortcut goes through. A web app has no Data step (its data lives in a private web data
+    /// store); Web App Options takes that slot.
+    var steps: [Step] {
+        kind == .webApp ? [.kind, .target, .identity, .webOptions, .review] : [.kind, .target, .identity, .data, .review]
+    }
+
+    /// 1-based position of `step` in `steps`, for the "Step N of M" header.
+    var stepNumber: Int {
+        (steps.firstIndex(of: step) ?? 0) + 1
+    }
 
     /// The slug the new shortcut gets: the name's slug, or its first free `-2`, `-3`, … variant. Its bundle id and
     /// default data folder follow it.
@@ -84,11 +162,13 @@ final class WizardModel {
 
     var canAdvance: Bool {
         switch step {
-        case .kind: kind == .app
-        case .target: inspected != nil
+        case .kind: kind == .app || kind == .webApp
+        case .target: kind == .webApp ? validatedWebURL != nil : inspected != nil
         case .identity: !name.trimmingCharacters(in: .whitespaces).isEmpty && (iconMode != .custom || customIconPath != nil)
-        case .data: true
-        case .review: preview != nil && !isCreating
+        case .data, .webOptions: true
+        case .review:
+            // A web app has no launch plan to wait for; it waits for an in-flight icon fetch instead.
+            kind == .webApp ? (!isCreating && webIconFetchState != .fetching) : (preview != nil && !isCreating)
         }
     }
 
@@ -132,19 +212,22 @@ final class WizardModel {
     }
 
     func next() {
-        guard canAdvance, let i = Step.allCases.firstIndex(of: step), i + 1 < Step.allCases.count else { return }
-        step = Step.allCases[i + 1]
+        guard canAdvance, let i = steps.firstIndex(of: step), i + 1 < steps.count else { return }
+        step = steps[i + 1]
+        if step == .identity, kind == .webApp { startIconFetch() }
         if step == .review { refreshPreview() }
     }
 
     func back() {
-        guard let i = Step.allCases.firstIndex(of: step), i > 0 else { return }
-        step = Step.allCases[i - 1]
+        guard let i = steps.firstIndex(of: step), i > 0 else { return }
+        if step == .identity { cancelIconFetch() }
+        step = steps[i - 1]
     }
 
     func makeConfig() -> ShortcutConfig {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         let finalSlug = slug
+        if kind == .webApp { return makeWebConfig(name: trimmed, slug: finalSlug) }
         return ShortcutConfig(
             kind: kind,
             name: trimmed,
@@ -164,7 +247,13 @@ final class WizardModel {
 
     /// Previews the plan the shortcut will actually run. `makeConfig()` leaves a default data folder as nil and
     /// `ShortcutBuilder` resolves it at write time; the planner would otherwise report "data separation skipped".
+    /// A web app has no target to plan, so its preview stays nil and the Review step lists `webReviewRows` instead.
     func refreshPreview() {
+        if kind == .webApp {
+            preview = nil
+            previewError = nil
+            return
+        }
         let config = makeConfig().resolvingDefaultDataPath(home: FileManager.default.homeDirectoryForCurrentUser)
         do {
             preview = try LaunchPlanPreview.make(config: config, bundleURL: nil)
@@ -173,5 +262,192 @@ final class WizardModel {
             preview = nil
             previewError = error.localizedDescription
         }
+    }
+
+    // MARK: Web App
+
+    /// The address as `WebAppURLValidator` accepts it (https, a host, no user info), nil while it does not validate.
+    var validatedWebURL: URL? {
+        do {
+            return try WebAppURLValidator.validate(webURL)
+        } catch {
+            return nil
+        }
+    }
+
+    /// The inline message under the address field: nil while it is empty (nothing typed yet) or valid.
+    var webURLError: String? {
+        guard !webURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, validatedWebURL == nil else { return nil }
+        return WebAppURLError.invalidAddress.localizedDescription
+    }
+
+    /// The applied preset while the address field still holds the preset's address.
+    var highlightedPreset: WebAppPreset? {
+        guard let selectedPreset, selectedPreset.url == webURL.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
+        return selectedPreset
+    }
+
+    /// Fills the address, user agent, badge pattern and extra hosts from `preset`, and the name when the user has not
+    /// typed one. Every field stays editable afterwards.
+    func applyPreset(_ preset: WebAppPreset) {
+        selectedPreset = preset
+        webURL = preset.url
+        userAgent = userAgentResolver(preset)
+        badgeRegex = preset.badgeRegex ?? ""
+        extraHostsText = preset.extraHosts.joined(separator: "\n")
+        if name.isEmpty || name == suggestedName {
+            name = preset.name
+            suggestedName = name
+        }
+    }
+
+    func setMenuBarIcon(_ isOn: Bool) {
+        menuBarIcon = isOn
+        if !isOn { backgroundMode = false }
+    }
+
+    /// One host per non-empty line with any scheme, path, query or fragment removed. `WebAppConfig.init` then trims,
+    /// lower-cases and de-duplicates.
+    static func parseExtraHosts(_ text: String) -> [String] {
+        text.split(whereSeparator: \.isNewline).compactMap { line in
+            var host = line.trimmingCharacters(in: .whitespaces)
+            if let separator = host.range(of: "://") { host = String(host[separator.upperBound...]) }
+            if let end = host.firstIndex(where: { "/?#".contains($0) }) { host = String(host[..<end]) }
+            return host.isEmpty ? nil : host
+        }
+    }
+
+    /// The host a preset tile shows under its name; the raw string when it has no host.
+    static func presetHost(_ preset: WebAppPreset) -> String {
+        URL(string: preset.url)?.host() ?? preset.url
+    }
+
+    static func userAgentLabel(_ preset: UserAgentPreset) -> String {
+        switch preset {
+        case .safari: "Safari"
+        case .chrome: "Chrome"
+        }
+    }
+
+    /// What the icon row says. For a web app Copied means "Fetched from site".
+    var iconDescription: String {
+        switch iconMode {
+        case .copied: kind == .webApp ? "Fetched from site" : "Copied from target"
+        case .custom: customIconPath.map { "Custom: \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? "Custom file"
+        case .generated: "Generated tile"
+        }
+    }
+
+    /// The one-line status under the identity step's icon preview; nil when there is nothing to say.
+    var webIconStatusText: String? {
+        switch webIconFetchState {
+        case .idle, .fetched: nil
+        case .fetching: "Fetching the site icon…"
+        case .unavailable: "Could not get the site icon; using a generated tile."
+        }
+    }
+
+    /// The fetched icon bytes the builder turns into `AppIcon.icns`: only while the mode is Fetched from site.
+    var webIconPayload: Data? {
+        kind == .webApp && iconMode == .copied ? webIconData : nil
+    }
+
+    /// The Review step lines for a web app (it has no target, compatibility, profile or launch plan).
+    var webReviewRows: [ReviewRow] {
+        let menuBar = !menuBarIcon ? "Off" : (backgroundMode ? "On, keeps running when the window closes" : "On")
+        return [
+            ReviewRow("Name", name.trimmingCharacters(in: .whitespaces)),
+            ReviewRow("URL", validatedWebURL?.absoluteString ?? webURL),
+            ReviewRow("User agent", Self.userAgentLabel(userAgent)),
+            ReviewRow("Data store id", webDataStoreID.uuidString),
+            ReviewRow("Menu bar", menuBar),
+            ReviewRow("Icon", iconDescription),
+        ]
+    }
+
+    /// Fetches the site's icon for `validatedWebURL`. Fetched data keeps (or restores) Fetched from site; nil, empty
+    /// data or a thrown error falls back to Generated tile, unless the user picked Custom file.
+    func fetchWebIcon() async {
+        guard !Task.isCancelled, kind == .webApp, let url = validatedWebURL else { return }
+        iconFetchGeneration += 1
+        let generation = iconFetchGeneration
+        webIconData = nil
+        fetchedURL = nil
+        webIconFetchState = .fetching
+        do {
+            let data = try await iconFetcher.fetchIcon(for: url)
+            guard generation == iconFetchGeneration else { return }
+            if let data, !data.isEmpty {
+                settleFetch(for: url, data: data)
+            } else {
+                settleFetch(for: url, unavailable: "No icon found on the site.")
+            }
+        } catch {
+            guard generation == iconFetchGeneration else { return }
+            settleFetch(for: url, unavailable: error.localizedDescription)
+        }
+    }
+
+    private func settleFetch(for url: URL, data: Data) {
+        webIconData = data
+        webIconFetchState = .fetched
+        fetchedURL = url
+        if iconModeWasFallback, iconMode == .generated {
+            iconMode = .copied
+        }
+        iconModeWasFallback = false
+    }
+
+    private func settleFetch(for url: URL, unavailable reason: String) {
+        webIconData = nil
+        webIconFetchState = .unavailable(reason)
+        fetchedURL = url
+        if iconMode == .copied {
+            iconMode = .generated
+            iconModeWasFallback = true
+        }
+    }
+
+    private func startIconFetch() {
+        guard let url = validatedWebURL else { return }
+        if fetchedURL == url, webIconFetchState != .fetching, webIconFetchState != .idle { return }
+        iconFetchTask?.cancel()
+        iconFetchTask = Task { await self.fetchWebIcon() }
+    }
+
+    private func cancelIconFetch() {
+        iconFetchGeneration += 1
+        iconFetchTask?.cancel()
+        iconFetchTask = nil
+        if webIconFetchState == .fetching { webIconFetchState = .idle }
+    }
+
+    private func makeWebConfig(name: String, slug: String) -> ShortcutConfig {
+        let badge = badgeRegex.trimmingCharacters(in: .whitespacesAndNewlines)
+        let address = validatedWebURL?.absoluteString ?? webURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Copied means Fetched from site; without fetched bytes the honest mode is the generated tile.
+        let effectiveIconMode: IconMode = iconMode == .copied && webIconData == nil ? .generated : iconMode
+        return ShortcutConfig(
+            kind: .webApp,
+            name: name,
+            slug: slug,
+            bundleIdentifier: ShortcutConfig.bundleIdentifier(forSlug: slug),
+            targetPath: "",
+            targetBundleIdentifier: "",
+            launchMode: .dockShortcut,
+            dataMode: .disabled,
+            dataPath: nil,
+            menuBarIcon: menuBarIcon,
+            iconMode: effectiveIconMode,
+            customIconPath: effectiveIconMode == .custom ? customIconPath : nil,
+            webApp: WebAppConfig(
+                url: address,
+                dataStoreID: webDataStoreID,
+                userAgent: userAgent,
+                badgeRegex: badge.isEmpty ? nil : badge,
+                extraHosts: Self.parseExtraHosts(extraHostsText),
+                backgroundMode: backgroundMode && menuBarIcon
+            )
+        )
     }
 }

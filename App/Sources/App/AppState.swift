@@ -99,13 +99,15 @@ final class AppState {
     /// Creates in the output folder, rescans, selects the new bundle. Returns nil (and sets `pendingError`) on failure.
     /// A customized Settings symlink list is stamped into the new config (final review I3); the default list is left
     /// out so the launcher keeps following `HomeTreeBuilder.defaultSymlinkEntries`.
-    func create(config: ShortcutConfig) async -> URL? {
+    /// For a web app, `webIconData` is the icon fetched in the wizard (`WizardModel.webIconPayload`); the builder turns
+    /// it into AppIcon.icns.
+    func create(config: ShortcutConfig, webIconData: Data? = nil) async -> URL? {
         var config = config
         if config.homeSymlinkEntries == nil, settings.homeSymlinkEntries != HomeTreeBuilder.defaultSymlinkEntries {
             config.homeSymlinkEntries = settings.homeSymlinkEntries
         }
         do {
-            let url = try builder.create(config: config, in: settings.outputFolder)
+            let url = try builder.create(config: config, in: settings.outputFolder, webIconData: webIconData)
             await library.rescan()
             return select(url)
         } catch {

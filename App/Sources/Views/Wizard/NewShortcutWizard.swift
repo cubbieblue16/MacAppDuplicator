@@ -16,14 +16,16 @@ struct NewShortcutWizard: View {
             HStack {
                 Text("New Shortcut").font(.headline)
                 Spacer()
-                Text("Step \(model.step.rawValue + 1) of \(WizardModel.Step.allCases.count)").font(.caption).foregroundStyle(.secondary)
+                Text("Step \(model.stepNumber) of \(model.steps.count)").font(.caption).foregroundStyle(.secondary)
             }
             Group {
                 switch model.step {
                 case .kind: KindStep(model: model)
-                case .target: TargetStep(model: model)
+                case .target:
+                    if model.kind == .webApp { WebTargetStep(model: model) } else { TargetStep(model: model) }
                 case .identity: IdentityStep(model: model)
                 case .data: DataStep(model: model)
+                case .webOptions: WebAppOptionsStep(model: model)
                 case .review: ReviewStep(model: model)
                 }
             }
@@ -61,7 +63,9 @@ struct NewShortcutWizard: View {
             isSetUp = true
             model = WizardModel(prefillTarget: appState.wizardPrefillTarget,
                                 takenSlugs: SlugAllocator.takenSlugs(in: appState.library.records),
-                                profileLookup: { [appState] in appState.profile(forBundleIdentifier: $0) })
+                                profileLookup: { [appState] in appState.profile(forBundleIdentifier: $0) },
+                                webAppPresets: appState.profiles.webAppPresets,
+                                userAgentResolver: { ProfilesModel.userAgentPreset(for: $0) })
             appState.wizardPrefillTarget = nil
         }
     }
@@ -70,7 +74,7 @@ struct NewShortcutWizard: View {
         model.isCreating = true
         model.createError = nil
         Task {
-            let url = await appState.create(config: model.makeConfig())
+            let url = await appState.create(config: model.makeConfig(), webIconData: model.webIconPayload)
             model.isCreating = false
             if url != nil {
                 dismiss()
