@@ -12,7 +12,9 @@ struct ShortcutEditorView: View {
     @State private var isSaving = false
     @State private var isDuplicatePromptPresented = false
     @State private var duplicateName = ""
-    @State private var exportedURL: URL?
+    @State private var exportOutcome: ShortcutBuilder.ExportOutcome?
+    /// An export destination inside a library folder, waiting for Export Anyway (re-review Minor 5).
+    @State private var pendingLibraryExport: URL?
     @State private var isDeletePresented = false
     @State private var isDiagnosticsPresented = false
 
@@ -84,8 +86,22 @@ struct ShortcutEditorView: View {
             Button("Duplicate") { Task { await appState.duplicate(record, newName: duplicateName) } }
                 .disabled(duplicateName.trimmingCharacters(in: .whitespaces).isEmpty)
         }
-        .sheet(item: $exportedURL) { url in
-            ExportSheet(exportedURL: url, environment: record.config.environment, arguments: record.config.arguments)
+        .confirmationDialog(
+            "Export into a library folder?",
+            isPresented: Binding(get: { pendingLibraryExport != nil }, set: { if !$0 { pendingLibraryExport = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingLibraryExport
+        ) { url in
+            Button("Export Anyway") { startExport(to: url) }
+            Button("Cancel", role: .cancel) {}
+        } message: { url in
+            Text(appState.exportWarning(for: url) ?? "")
+        }
+        .sheet(item: $exportOutcome) { outcome in
+            ExportSheet(
+                exportedURL: outcome.exportedURL, environment: record.config.environment, arguments: record.config.arguments,
+                trashedExisting: outcome.trashedExisting
+            )
         }
         .sheet(isPresented: $isDiagnosticsPresented) {
             DiagnosticsView(record: record, profileCatalog: appState.profiles.catalog)
@@ -123,9 +139,16 @@ struct ShortcutEditorView: View {
         // Never default to the library folder the shortcut lives in (final review I2).
         panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Desktop", directoryHint: .isDirectory)
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task {
-            if await appState.export(record, to: url) { exportedURL = url }
+        // A copy directly inside a library folder would be scanned as a second shortcut; ask first (re-review Minor 5).
+        if appState.exportWarning(for: url) != nil {
+            pendingLibraryExport = url
+        } else {
+            startExport(to: url)
         }
+    }
+
+    private func startExport(to url: URL) {
+        Task { exportOutcome = await appState.exportCopy(record, to: url) }
     }
 }
 

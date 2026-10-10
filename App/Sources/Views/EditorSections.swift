@@ -180,7 +180,7 @@ struct LaunchSection: View {
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         // The same guard delete uses (final review I1): a folder that could never be trashed safely is never stored.
-        switch appState.validateDataPath(url.path, targetPath: draft.targetPath, excluding: record.bundleURL) {
+        switch appState.validateDataPath(url.path, targetPath: draft.targetPath, excluding: record.bundleURL, targetBundleIdentifier: draft.targetBundleIdentifier) {
         case .success:
             draft.dataPath = url.path
             dataFolderError = nil

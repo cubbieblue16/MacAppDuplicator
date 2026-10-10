@@ -13,7 +13,7 @@ struct CanonicalPath {
     init(_ path: String) {
         let resolved = Self.resolve(URL(fileURLWithPath: path).standardizedFileURL.path)
         self.path = resolved
-        folded = resolved.split(separator: "/").map { $0.precomposedStringWithCanonicalMapping.folding(options: .caseInsensitive, locale: nil) }
+        folded = resolved.split(separator: "/").map { Self.fold(String($0)) }
     }
 
     var url: URL { URL(fileURLWithPath: path, isDirectory: true) }
@@ -32,6 +32,14 @@ struct CanonicalPath {
     func overlaps(_ other: CanonicalPath) -> Bool { isSame(as: other) || isInside(other) || other.isInside(self) }
 
     func appending(_ relativePath: String) -> CanonicalPath { CanonicalPath(path + "/" + relativePath) }
+
+    /// The comparison form of one path component: precomposed (NFC) and case-folded, as every comparison here uses.
+    static func fold(_ component: String) -> String {
+        component.precomposedStringWithCanonicalMapping.folding(options: .caseInsensitive, locale: nil)
+    }
+
+    /// The comparison form of the component at `index` (0 is the first component below `/`), or nil past the end.
+    func foldedComponent(at index: Int) -> String? { folded.indices.contains(index) ? folded[index] : nil }
 
     private static func resolve(_ standardized: String) -> String {
         var prefix = standardized

@@ -202,7 +202,7 @@ struct DataStep: View {
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         // The same guard delete uses (final review I1); a new shortcut has no bundle of its own to exclude yet.
-        switch appState.validateDataPath(url.path, targetPath: model.targetURL?.path ?? "", excluding: nil) {
+        switch appState.validateDataPath(url.path, targetPath: model.targetURL?.path ?? "", excluding: nil, targetBundleIdentifier: model.inspected?.bundleIdentifier) {
         case .success:
             model.dataPath = url.path
             dataFolderError = nil

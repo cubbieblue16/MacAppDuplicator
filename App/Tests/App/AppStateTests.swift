@@ -213,4 +213,44 @@ final class AppStateTests: XCTestCase {
         XCTAssertNil(state.rebuildProgress, "progress is cleared when Rebuild All ends")
         XCTAssertEqual(library.recordsNeedingRebuild.map(\.name), ["A Broken"])
     }
+
+    func testExportWarnsInsideALibraryFolderAndMovesAnExistingDestinationToTheTrash() async throws {
+        let created = await state.create(config: config())
+        let record = try XCTUnwrap(library.record(for: try XCTUnwrap(created)))
+        let exports = dir.appending(path: "Exports", directoryHint: .isDirectory)
+
+        let warning = try XCTUnwrap(state.exportWarning(for: out.appending(path: "Work Copy.app")))
+        XCTAssertTrue(warning.contains("Work Copy.app") && warning.contains("second shortcut"), warning)
+        XCTAssertNotNil(state.exportWarning(for: dir.appending(path: "OUT/Work Copy.app")), "library folders compare case-insensitively")
+        XCTAssertNil(state.exportWarning(for: exports.appending(path: "Work Copy.app")))
+        XCTAssertNil(state.exportWarning(for: out.appending(path: "Nested/Work Copy.app")), "the library scans only a folder's direct children")
+
+        let destination = exports.appending(path: "Work.app", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        try Data("old".utf8).write(to: destination.appending(path: "old-marker"))
+        let exported = await state.exportCopy(record, to: destination)
+
+        let outcome = try XCTUnwrap(exported)
+        let trashed = try XCTUnwrap(outcome.trashedExisting)
+        addTeardownBlock { try FileManager.default.removeItem(at: trashed) }
+        XCTAssertEqual(try Data(contentsOf: trashed.appending(path: "old-marker")), Data("old".utf8))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destination.appending(path: "Contents/Info.plist").path))
+        XCTAssertNil(state.pendingError)
+    }
+
+    func testValidateDataPathRefusesScannedShortcutsAndTheTargetAppsOwnData() async throws {
+        let created = await state.create(config: config())
+        let bundle = try XCTUnwrap(created)
+        guard case .failure(.overlapsShortcut) = state.validateDataPath(bundle.appending(path: "Contents/Data").path, targetPath: target.path, excluding: nil) else {
+            return XCTFail("a folder inside a scanned shortcut is refused")
+        }
+        // Read-only: the app is not sandboxed, so this is the real home; these folders are only resolved, never created.
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        for folder in ["Library/Application Support/Target", "Library/Caches/com.example.target"] {
+            let result = state.validateDataPath(home.appending(path: folder).path, targetPath: target.path, excluding: nil, targetBundleIdentifier: "com.example.target")
+            guard case .failure(.targetAppData) = result else { return XCTFail("\(folder): \(result)") }
+        }
+        XCTAssertEqual(TargetResolver().resolvedPath(targetPath: target.path, targetBundleIdentifier: "com.example.target"), target.path)
+        XCTAssertNil(TargetResolver().resolvedPath(targetPath: target.path, targetBundleIdentifier: ""))
+    }
 }

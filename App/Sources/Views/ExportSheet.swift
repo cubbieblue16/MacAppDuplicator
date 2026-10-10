@@ -8,6 +8,8 @@ struct ExportSheet: View {
     var environment: [String: String] = [:]
     /// The exported shortcut's saved arguments; the notice names the secret-looking ones, never their values.
     var arguments: [String] = []
+    /// Where the item that was already at `exportedURL` went in the Trash, or nil when there was none.
+    var trashedExisting: URL? = nil
     /// Read from the exported copy (final review M10), so the copy never claims an identity the bundle does not carry.
     @State private var signature: CodeSignature = .unknown
 
@@ -29,6 +31,16 @@ struct ExportSheet: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            if let trashedExisting {
+                Label {
+                    Text(verbatim: "The item that was at \(exportedURL.path) is in the Trash: \(trashedExisting.path)")
+                } icon: {
+                    Image(systemName: "trash")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
             HStack {
                 Button("Copy Command") {

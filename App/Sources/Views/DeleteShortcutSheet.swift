@@ -2,13 +2,16 @@ import DuplicatorCore
 import SwiftUI
 
 /// Confirms a delete. The data-folder toggle appears only for a folder `AppState.dataFolderDeletionOption` approved
-/// (final review I1): never for Disabled mode, a missing folder, or a folder `DataPathGuard` refuses.
+/// (final review I1): never for Disabled mode, a missing folder, or a folder `DataPathGuard` refuses. Trashing a
+/// folder outside the data root takes a second, destructive confirmation that names it (re-review Minor 1, final
+/// review M24).
 struct DeleteShortcutSheet: View {
     @Environment(\.dismiss) private var dismiss
     let record: ShortcutRecord
     let dataFolder: DataFolderDeletionOption
     let onDelete: (Bool) async -> Void
     @State private var removeData = false
+    @State private var pendingConfirmation: DeleteConfirmation?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -29,18 +32,38 @@ struct DeleteShortcutSheet: View {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Delete", role: .destructive) {
-                    Task {
-                        await onDelete(removeData && isDataFolderAvailable)
-                        dismiss()
+                    let removesData = removeData && isDataFolderAvailable
+                    if let confirmation = DeleteConfirmation(shortcutName: record.name, option: dataFolder, removeData: removesData) {
+                        pendingConfirmation = confirmation
+                    } else {
+                        delete(removeData: removesData)
                     }
                 }
             }
         }
         .padding(20)
         .frame(width: 460)
+        .confirmationDialog(
+            pendingConfirmation?.title ?? "",
+            isPresented: Binding(get: { pendingConfirmation != nil }, set: { if !$0 { pendingConfirmation = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingConfirmation
+        ) { _ in
+            Button("Move to Trash", role: .destructive) { delete(removeData: true) }
+            Button("Cancel", role: .cancel) {}
+        } message: { confirmation in
+            Text(confirmation.message)
+        }
     }
 
     private var isDataFolderAvailable: Bool {
         if case .available = dataFolder { true } else { false }
+    }
+
+    private func delete(removeData: Bool) {
+        Task {
+            await onDelete(removeData)
+            dismiss()
+        }
     }
 }

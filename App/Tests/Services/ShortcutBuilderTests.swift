@@ -164,10 +164,14 @@ final class ShortcutBuilderTests: XCTestCase {
         try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
         try Data("old".utf8).write(to: destination.appending(path: "old-marker"))
 
-        let exported = try builder.export(record: record, to: destination)
+        let outcome = try builder.exportCopy(record: record, to: destination)
+        let exported = outcome.exportedURL
+        let trashed = try XCTUnwrap(outcome.trashedExisting, "the existing destination goes to the Trash")
+        addTeardownBlock { try FileManager.default.removeItem(at: trashed) }
 
         XCTAssertEqual(exported.standardizedFileURL.path, destination.standardizedFileURL.path)
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.appending(path: "old-marker").path))
+        XCTAssertEqual(try Data(contentsOf: trashed.appending(path: "old-marker")), Data("old".utf8), "replaced, never deleted")
         XCTAssertEqual(try Data(contentsOf: destination.appending(path: "Contents/Info.plist")), try Data(contentsOf: bundle.appending(path: "Contents/Info.plist")))
         XCTAssertTrue(FileManager.default.fileExists(atPath: bundle.appending(path: "Contents/Info.plist").path))
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: exportDir.path), ["Exported.app"], "no staging copy left behind")
@@ -238,5 +242,75 @@ final class ShortcutBuilderTests: XCTestCase {
         addTeardownBlock { for url in trashedBoth { try FileManager.default.removeItem(at: url) } }
         XCTAssertEqual(trashedBoth.count, 2)
         XCTAssertFalse(FileManager.default.fileExists(atPath: data.path))
+    }
+
+    func testExportRefusesACaseVariantOfTheShortcutsPath() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: config(), in: out)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        for destination in [out.appending(path: "target work.app"), out.appending(path: "TARGET WORK.app/Contents/Copy.app")] {
+            XCTAssertThrowsError(try builder.exportCopy(record: record, to: destination)) { error in
+                guard case ShortcutBuilder.BuilderError.exportOverlapsShortcut = error else { return XCTFail("\(destination.path): \(error)") }
+            }
+        }
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: out.path), ["Target Work.app"], "nothing staged, trashed or replaced")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: bundle.appending(path: "Contents/Info.plist").path))
+    }
+
+    func testExportRefusesASymlinkToTheShortcut() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: config(), in: out)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        let link = dir.appending(path: "Link.app")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: bundle)
+        let folderLink = dir.appending(path: "link-to-out")
+        try FileManager.default.createSymbolicLink(at: folderLink, withDestinationURL: out)
+        for destination in [link, folderLink.appending(path: "Target Work.app")] {
+            XCTAssertThrowsError(try builder.exportCopy(record: record, to: destination)) { error in
+                guard case ShortcutBuilder.BuilderError.exportOverlapsShortcut = error else { return XCTFail("\(destination.path): \(error)") }
+            }
+        }
+        XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: link.path), bundle.path, "the link is never replaced")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: bundle.appending(path: "Contents/Info.plist").path))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: out.path), ["Target Work.app"])
+    }
+
+    func testExportRefusesTheResolvedTargetWhenTheStoredPathIsStale() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: config(), in: out)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        // The target moved after the shortcut was made; the stored path no longer holds it.
+        let moved = dir.appending(path: "Moved/Renamed.app", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: moved.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.moveItem(at: target, to: moved)
+        let executable = try Data(contentsOf: moved.appending(path: "Contents/MacOS/Target"))
+        for destination in [moved, moved.appending(path: "Contents/Inner.app"), moved.deletingLastPathComponent()] {
+            XCTAssertThrowsError(try builder.exportCopy(record: record, to: destination, resolvedTargetPath: moved.path)) { error in
+                guard case ShortcutBuilder.BuilderError.exportOverlapsTarget = error else { return XCTFail("\(destination.path): \(error)") }
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: moved.appending(path: "Contents/MacOS/Target")), executable, "the target is never touched")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: moved.deletingLastPathComponent().path), ["Renamed.app"])
+    }
+
+    func testExportSweepsStaleStagingCopiesAndNothingElse() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: config(), in: out)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        let exportDir = dir.appending(path: "export", directoryHint: .isDirectory)
+        // Left behind by crashed exports: the staging names `exportCopy` makes, for this destination and another one.
+        let stale = [".Exported.app.mad-export-\(UUID().uuidString)", ".Other.app.mad-export-\(UUID().uuidString)"]
+        // Look-alikes the sweep must keep.
+        let kept = [".Exported.app.mad-export-not-a-uuid", "Exported.app.mad-export-\(UUID().uuidString)", "Notes"]
+        for name in stale + kept {
+            try FileManager.default.createDirectory(at: exportDir.appending(path: name), withIntermediateDirectories: true)
+        }
+
+        let outcome = try builder.exportCopy(record: record, to: exportDir.appending(path: "Exported.app", directoryHint: .isDirectory))
+
+        XCTAssertNil(outcome.trashedExisting, "nothing was at the destination")
+        XCTAssertEqual(Set(try FileManager.default.contentsOfDirectory(atPath: exportDir.path)), Set(kept + ["Exported.app"]))
+        XCTAssertTrue(ShortcutBuilder.isStagingName(stale[0]))
+        XCTAssertFalse(ShortcutBuilder.isStagingName(kept[0]))
     }
 }

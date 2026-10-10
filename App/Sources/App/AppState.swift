@@ -171,14 +171,30 @@ final class AppState {
         }
     }
 
-    func export(_ record: ShortcutRecord, to destination: URL) async -> Bool {
+    /// Exports a copy of `record` (re-review Minors 4 and 5): checked against the target's current location as well
+    /// as the stored one; an item already at `destination` goes to the Trash and comes back if the export fails. The
+    /// library is rescanned afterwards. Returns nil and sets `pendingError` on failure.
+    func exportCopy(_ record: ShortcutRecord, to destination: URL) async -> ShortcutBuilder.ExportOutcome? {
         do {
-            _ = try builder.export(record: record, to: destination)
-            return true
+            let outcome = try builder.exportCopy(record: record, to: destination, resolvedTargetPath: TargetResolver().resolvedPath(for: record.config))
+            await library.rescan()
+            return outcome
         } catch {
             present(error, context: "Could not export shortcut")
-            return false
+            return nil
         }
+    }
+
+    func export(_ record: ShortcutRecord, to destination: URL) async -> Bool {
+        await exportCopy(record, to: destination) != nil
+    }
+
+    /// Why exporting to `destination` deserves a second look, or nil: a copy directly inside a library folder is
+    /// scanned as a second shortcut with the same bundle identifier and data folder (re-review Minor 5).
+    func exportWarning(for destination: URL) -> String? {
+        let parent = CanonicalPath(destination.deletingLastPathComponent().path)
+        guard let folder = settings.allLibraryFolders.first(where: { CanonicalPath($0.path).isSame(as: parent) }) else { return nil }
+        return "\(destination.lastPathComponent) would be inside the library folder \(folder.path), so it would appear in the library as a second shortcut with the same bundle identifier and data folder."
     }
 
     /// Moves the shortcut (and, with `removeData`, its data folder) to the Trash. Delete is offered only from the
@@ -189,7 +205,8 @@ final class AppState {
         do {
             let trashed = try builder.delete(
                 record: record, removeData: removeData,
-                libraryFolders: settings.allLibraryFolders, otherRecordDataPaths: dataPathsInUse(excluding: record.bundleURL)
+                libraryFolders: settings.allLibraryFolders, otherRecordDataPaths: dataPathsInUse(excluding: record.bundleURL),
+                shortcutBundles: library.records.map(\.bundleURL)
             )
             selection = nil
             await library.rescan()
@@ -201,11 +218,15 @@ final class AppState {
     }
 
     /// Checks a data folder the user picked (wizard or editor) with the same guard delete uses. `excluding` is the
-    /// bundle being edited, so its own current folder does not count as another shortcut's.
-    func validateDataPath(_ path: String, targetPath: String, excluding bundleURL: URL?) -> Result<URL, DataPathGuardError> {
+    /// bundle being edited, so its own current folder does not count as another shortcut's. Every scanned bundle is
+    /// checked, the edited one included; with `targetBundleIdentifier`, so are the target's current location and its
+    /// own data folders in `~/Library`.
+    func validateDataPath(_ path: String, targetPath: String, excluding bundleURL: URL?, targetBundleIdentifier: String? = nil) -> Result<URL, DataPathGuardError> {
         DataPathGuard.validate(
             dataPath: path, targetPath: targetPath, outputFolder: settings.outputFolder, libraryFolders: settings.allLibraryFolders,
-            otherRecordDataPaths: dataPathsInUse(excluding: bundleURL), home: FileManager.default.homeDirectoryForCurrentUser
+            otherRecordDataPaths: dataPathsInUse(excluding: bundleURL), home: FileManager.default.homeDirectoryForCurrentUser,
+            resolvedTargetPath: targetBundleIdentifier.flatMap { TargetResolver().resolvedPath(targetPath: targetPath, targetBundleIdentifier: $0) },
+            targetBundleIdentifier: targetBundleIdentifier, shortcutBundles: library.records.map(\.bundleURL)
         )
     }
 
@@ -219,7 +240,7 @@ final class AppState {
             return .unavailable(note: "This shortcut has no data folder.")
         }
         let folder: URL
-        switch validateDataPath(path, targetPath: record.config.targetPath, excluding: record.bundleURL) {
+        switch validateDataPath(path, targetPath: record.config.targetPath, excluding: record.bundleURL, targetBundleIdentifier: record.config.targetBundleIdentifier) {
         case .success(let resolved): folder = resolved
         case .failure(let error): return .unavailable(note: "The data folder stays: \(error.localizedDescription)")
         }
