@@ -32,6 +32,8 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
     public var customIconPath: String?
     /// HOME-override symlink list override; nil means `HomeTreeBuilder.defaultSymlinkEntries` (spec §4.3, §7 Settings).
     public var homeSymlinkEntries: [String]?
+    /// Web app settings; set exactly when `kind == .webApp`, nil otherwise (spec §5).
+    public var webApp: WebAppConfig?
     public var engineVersion: Int
 
     public init(
@@ -53,6 +55,7 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         iconMode: IconMode = .copied,
         customIconPath: String? = nil,
         homeSymlinkEntries: [String]? = nil,
+        webApp: WebAppConfig? = nil,
         engineVersion: Int = ShortcutConfig.currentEngineVersion
     ) {
         self.kind = kind
@@ -73,16 +76,17 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         self.iconMode = iconMode
         self.customIconPath = customIconPath
         self.homeSymlinkEntries = homeSymlinkEntries
+        self.webApp = webApp
         self.engineVersion = engineVersion
     }
 
     private enum CodingKeys: String, CodingKey {
         case kind, name, slug, bundleIdentifier, targetPath, targetBundleIdentifier, launchMode, dataMode, dataPath
         case environment, arguments, appearance, languageCode, eraseOnQuit, menuBarIcon
-        case iconMode, customIconPath, homeSymlinkEntries, engineVersion
+        case iconMode, customIconPath, homeSymlinkEntries, webApp, engineVersion
     }
 
-    /// Decodes Phase 1 dictionaries too: `iconMode`, `customIconPath` and `homeSymlinkEntries` are optional on input.
+    /// Decodes Phase 1 to 3 dictionaries too: `iconMode`, `customIconPath`, `homeSymlinkEntries` and `webApp` are optional on input.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         kind = try container.decode(ShortcutKind.self, forKey: .kind)
@@ -103,6 +107,7 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         iconMode = try container.decodeIfPresent(IconMode.self, forKey: .iconMode) ?? .copied
         customIconPath = try container.decodeIfPresent(String.self, forKey: .customIconPath)
         homeSymlinkEntries = try container.decodeIfPresent([String].self, forKey: .homeSymlinkEntries)
+        webApp = try container.decodeIfPresent(WebAppConfig.self, forKey: .webApp)
         engineVersion = try container.decode(Int.self, forKey: .engineVersion)
     }
 
