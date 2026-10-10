@@ -9,7 +9,7 @@ struct KindStep: View {
     private struct Option { let kind: ShortcutKind; let title: String; let subtitle: String; let enabled: Bool; let symbol: String }
     private let options = [
         Option(kind: .app, title: "Application", subtitle: "Run a second copy of an installed app with its own data", enabled: true, symbol: "app.badge"),
-        Option(kind: .webApp, title: "Web App", subtitle: "Coming in a later phase", enabled: false, symbol: "globe"),
+        Option(kind: .webApp, title: "Web App", subtitle: "Any website as its own app", enabled: true, symbol: "globe"),
         Option(kind: .folder, title: "File or Folder", subtitle: "Coming in a later phase", enabled: false, symbol: "folder"),
         Option(kind: .cli, title: "Command", subtitle: "Coming in a later phase", enabled: false, symbol: "terminal"),
     ]
@@ -101,7 +101,7 @@ struct IdentityStep: View {
             TextField("Name", text: $model.name)
                 .help("This becomes the Dock title and the bundle name")
             Picker("Icon", selection: $model.iconMode) {
-                Text("Copied from target").tag(IconMode.copied)
+                Text(model.kind == .webApp ? "Fetched from site" : "Copied from target").tag(IconMode.copied)
                 Text("Custom file").tag(IconMode.custom)
                 Text("Generated tile").tag(IconMode.generated)
             }
@@ -114,12 +114,17 @@ struct IdentityStep: View {
                 }
             }
             LabeledContent("Preview") { preview.frame(width: 96, height: 96) }
-            Picker("Launch mode", selection: $model.launchMode) {
-                Text("Dock Shortcut").tag(LaunchMode.dockShortcut)
-                Text("System Launch").tag(LaunchMode.systemLaunch)
+            if model.kind == .webApp, let status = model.webIconStatusText {
+                Text(status).font(.caption).foregroundStyle(.secondary)
             }
-            .disabled(model.requiresSystemLaunch)
-            .help(model.requiresSystemLaunch ? "This app is protected by launch constraints; System Launch is required" : "")
+            if model.kind != .webApp {
+                Picker("Launch mode", selection: $model.launchMode) {
+                    Text("Dock Shortcut").tag(LaunchMode.dockShortcut)
+                    Text("System Launch").tag(LaunchMode.systemLaunch)
+                }
+                .disabled(model.requiresSystemLaunch)
+                .help(model.requiresSystemLaunch ? "This app is protected by launch constraints; System Launch is required" : "")
+            }
         }
         .formStyle(.columns)
     }
@@ -128,7 +133,15 @@ struct IdentityStep: View {
     private var preview: some View {
         switch model.iconMode {
         case .copied:
-            if let url = model.inspected?.iconFileURL, let image = NSImage(contentsOf: url) {
+            if model.kind == .webApp {
+                if let data = model.webIconData, let image = NSImage(data: data) {
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
+                } else if model.webIconFetchState == .fetching {
+                    ProgressView()
+                } else {
+                    generatedTile
+                }
+            } else if let url = model.inspected?.iconFileURL, let image = NSImage(contentsOf: url) {
                 Image(nsImage: image).resizable()
             } else if let target = model.targetURL {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: target.path)).resizable()
@@ -142,9 +155,13 @@ struct IdentityStep: View {
                 Image(systemName: "photo").resizable().aspectRatio(contentMode: .fit).foregroundStyle(.secondary)
             }
         case .generated:
-            Image(decorative: IconRenderer.generatedTile(initials: IconRenderer.initials(for: model.name), size: 192), scale: 2)
-                .resizable()
+            generatedTile
         }
+    }
+
+    private var generatedTile: some View {
+        Image(decorative: IconRenderer.generatedTile(initials: IconRenderer.initials(for: model.name), size: 192), scale: 2)
+            .resizable()
     }
 
     private func chooseIcon() {
@@ -226,18 +243,25 @@ struct ReviewStep: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Review").font(.title3)
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
-                    row("Name", model.name)
-                    row("Target", model.targetURL?.path ?? "")
-                    row("Compatibility", CompatBadge.badge(for: model.inspected, profile: model.profile).label)
-                    row("Profile", model.profile.map { "\($0.name) · \(ProfileSummary.statusLabel($0.status))" } ?? "None")
-                    row("Launch mode", model.requiresSystemLaunch || model.launchMode == .systemLaunch ? "System Launch" : "Dock Shortcut")
-                    row("Data", dataDescription)
-                    row("Icon", iconDescription)
+                    if model.kind == .webApp {
+                        ForEach(model.webReviewRows, id: \.label) { row($0.label, $0.value) }
+                    } else {
+                        row("Name", model.name)
+                        row("Target", model.targetURL?.path ?? "")
+                        row("Compatibility", CompatBadge.badge(for: model.inspected, profile: model.profile).label)
+                        row("Profile", model.profile.map { "\($0.name) · \(ProfileSummary.statusLabel($0.status))" } ?? "None")
+                        row("Launch mode", model.requiresSystemLaunch || model.launchMode == .systemLaunch ? "System Launch" : "Dock Shortcut")
+                        row("Data", dataDescription)
+                        row("Icon", model.iconDescription)
+                    }
+                }
+                if model.kind == .webApp, let status = model.webIconStatusText {
+                    Text(status).font(.caption).foregroundStyle(.secondary)
                 }
                 if let error = model.previewError {
                     Label(error, systemImage: "xmark.octagon").foregroundStyle(.red).font(.caption)
                 }
-                if let profile = model.profile {
+                if model.kind != .webApp, let profile = model.profile {
                     DisclosureGroup("Profile defaults", isExpanded: $showProfile) {
                         VStack(alignment: .leading, spacing: 6) {
                             ProfileSummaryView(rows: ProfileSummary.rows(for: profile, detectedFamily: model.inspected?.family))
@@ -271,14 +295,6 @@ struct ReviewStep: View {
         case .auto: "Auto"
         case .homeOverride: "HOME override"
         case .disabled: "Disabled"
-        }
-    }
-
-    private var iconDescription: String {
-        switch model.iconMode {
-        case .copied: "Copied from target"
-        case .custom: model.customIconPath.map { "Custom: \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? "Custom file"
-        case .generated: "Generated tile"
         }
     }
 
