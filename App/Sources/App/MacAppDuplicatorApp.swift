@@ -5,7 +5,14 @@ struct MacAppDuplicatorApp: App {
     @State private var appState: AppState
 
     init() {
-        let settings = AppSettings(defaultSigningIdentity: SigningIdentities.defaultIdentity(from: SigningIdentities.load()))
+        // As the unit-test host the app uses a throwaway defaults suite and never runs `security` (final review M15).
+        let isTestHost = Self.isTestHost
+        let settings = AppSettings(defaults: LaunchEnvironment.settingsDefaults(isTestHost: isTestHost),
+                                   defaultSigningIdentity: AppSettings.adHocIdentityName)
+        if !isTestHost {
+            // `security find-identity` runs off the main thread; until it returns, new shortcuts default to ad hoc.
+            Task { await settings.loadDefaultSigningIdentity() }
+        }
         let library = ShortcutLibrary(settings: settings)
         // `EmbeddedLauncher.url()` throws only when the Embed Launcher build phase did not run. Keep the expected path
         // so the window still opens, and say up front why every write will fail.
@@ -62,9 +69,9 @@ struct MacAppDuplicatorApp: App {
         }
     }
 
-    /// xcodebuild sets this for the process that hosts the test bundle.
+    /// True for the process that hosts the test bundle (`LaunchEnvironment.isTestHost`).
     private static var isTestHost: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        LaunchEnvironment.isTestHost()
     }
 }
 

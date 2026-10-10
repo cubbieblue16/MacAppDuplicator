@@ -8,12 +8,13 @@ final class ShortcutLibraryTests: XCTestCase {
     private var defaults: UserDefaults!
     private var suite: String!
 
-    override func setUpWithError() throws {
+    // Async overrides run on the main actor, so they can touch the class's main-actor state (final review M19).
+    override func setUp() async throws {
         root = try makeAppTemporaryDirectory()
         (defaults, suite) = makeTestDefaults()
     }
 
-    override func tearDownWithError() throws {
+    override func tearDown() async throws {
         defaults.removePersistentDomain(forName: suite)
         try FileManager.default.removeItem(at: root)
     }

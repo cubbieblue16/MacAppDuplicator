@@ -7,14 +7,13 @@ final class AppSettingsTests: XCTestCase {
     private var defaults: UserDefaults!
     private var suite: String!
 
-    override func setUp() {
-        super.setUp()
+    // Async overrides run on the main actor, so they can touch the class's main-actor state (final review M19).
+    override func setUp() async throws {
         (defaults, suite) = makeTestDefaults()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         defaults.removePersistentDomain(forName: suite)
-        super.tearDown()
     }
 
     func testDefaults() {
@@ -68,5 +67,52 @@ final class AppSettingsTests: XCTestCase {
         let settings = AppSettings(defaults: defaults, defaultSigningIdentity: "Ad-hoc")
         settings.libraryFolders = [settings.outputFolder]
         XCTAssertEqual(settings.allLibraryFolders.count, 1)
+    }
+
+    // MARK: Default signing identity loaded after launch (final review M15)
+
+    func testAppliedDefaultIdentityIsUsedButNotPersisted() {
+        let settings = AppSettings(defaults: defaults, defaultSigningIdentity: AppSettings.adHocIdentityName)
+        settings.applyDefaultSigningIdentity("Developer ID Application: Test (TEAMID)")
+        XCTAssertEqual(settings.signingIdentity, "Developer ID Application: Test (TEAMID)")
+        XCTAssertEqual(settings.signerIdentity, "Developer ID Application: Test (TEAMID)")
+
+        let relaunched = AppSettings(defaults: defaults, defaultSigningIdentity: AppSettings.adHocIdentityName)
+        XCTAssertEqual(relaunched.signingIdentity, AppSettings.adHocIdentityName, "a computed default is never stored as a choice")
+
+        settings.signingIdentity = "Apple Development: Test (DEVTEAM)"
+        let afterChoice = AppSettings(defaults: defaults, defaultSigningIdentity: AppSettings.adHocIdentityName)
+        XCTAssertEqual(afterChoice.signingIdentity, "Apple Development: Test (DEVTEAM)", "a user choice still writes through")
+    }
+
+    func testAppliedDefaultNeverReplacesAChosenIdentity() {
+        let settings = AppSettings(defaults: defaults, defaultSigningIdentity: AppSettings.adHocIdentityName)
+        // The user picks an identity in Settings before the launch-time load finishes.
+        settings.signingIdentity = "Apple Development: Test (DEVTEAM)"
+        settings.applyDefaultSigningIdentity("Developer ID Application: Test (TEAMID)")
+        XCTAssertEqual(settings.signingIdentity, "Apple Development: Test (DEVTEAM)")
+
+        let relaunched = AppSettings(defaults: defaults, defaultSigningIdentity: AppSettings.adHocIdentityName)
+        relaunched.applyDefaultSigningIdentity("Developer ID Application: Test (TEAMID)")
+        XCTAssertEqual(relaunched.signingIdentity, "Apple Development: Test (DEVTEAM)", "a stored choice wins on later launches")
+    }
+
+    func testLoadDefaultSigningIdentityRunsTheLoaderOffTheMainThread() async {
+        let settings = AppSettings(defaults: defaults, defaultSigningIdentity: AppSettings.adHocIdentityName)
+        // The stub never spawns `security`. It returns the Developer ID identity only when it runs off the main thread,
+        // so a loader run on the main thread leaves the ad hoc default in place and fails the assertion.
+        await settings.loadDefaultSigningIdentity {
+            Thread.isMainThread ? [] : ["Apple Development: Test (DEVTEAM)", "Developer ID Application: Test (TEAMID)"]
+        }
+        XCTAssertEqual(settings.signingIdentity, "Developer ID Application: Test (TEAMID)")
+        let relaunched = AppSettings(defaults: defaults, defaultSigningIdentity: AppSettings.adHocIdentityName)
+        XCTAssertEqual(relaunched.signingIdentity, AppSettings.adHocIdentityName)
+    }
+
+    func testLoadDefaultSigningIdentityFallsBackToAdHoc() async {
+        let settings = AppSettings(defaults: defaults, defaultSigningIdentity: AppSettings.adHocIdentityName)
+        await settings.loadDefaultSigningIdentity { ["Apple Development: Test (DEVTEAM)"] }
+        XCTAssertEqual(settings.signingIdentity, AppSettings.adHocIdentityName)
+        XCTAssertNil(settings.signerIdentity)
     }
 }

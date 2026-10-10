@@ -64,6 +64,9 @@ targets:
     postBuildScripts:
       - name: Embed Launcher
         shell: /bin/bash
+        # Runs on every build so the Launcher build below always runs; Xcode would otherwise skip this phase while the
+        # old Launcher binary is newer than the embedded copy (final review M20).
+        basedOnDependencyAnalysis: false
         inputFiles:
           - "$(SRCROOT)/../.build/release/Launcher"
         outputFiles:
@@ -71,9 +74,8 @@ targets:
         script: |
           set -euo pipefail
           LAUNCHER_SRC="${SRCROOT}/../.build/release/Launcher"
-          if [ ! -x "$LAUNCHER_SRC" ]; then
-            env -i HOME="$HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin xcrun swift build -c release --product Launcher --package-path "${SRCROOT}/.."
-          fi
+          # Always build: SwiftPM is incremental, and a build started from Xcode must not embed a stale Launcher.
+          env -i HOME="$HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin xcrun swift build -c release --product Launcher --package-path "${SRCROOT}/.."
           DEST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Launcher"
           mkdir -p "$(dirname "$DEST")"
           cp -f "$LAUNCHER_SRC" "$DEST"

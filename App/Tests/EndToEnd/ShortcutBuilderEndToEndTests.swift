@@ -94,7 +94,10 @@ final class ShortcutBuilderEndToEndTests: XCTestCase {
         let exported = try builder.export(record: copyRecord, to: exportDir.appending(path: "Fixture B.app"))
         XCTAssertTrue(FileManager.default.fileExists(atPath: exported.appending(path: "Contents/Info.plist").path))
 
-        try builder.delete(record: copyRecord, removeData: false)
+        let trashed = try builder.delete(record: copyRecord, removeData: false)
+        // `delete` moves the bundle to the real Trash; remove it from there so runs do not pile up (final review M17).
+        addTeardownBlock { for url in trashed { try FileManager.default.removeItem(at: url) } }
+        XCTAssertEqual(trashed.count, 1)
         XCTAssertFalse(FileManager.default.fileExists(atPath: copy.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: bundle.path))
     }

@@ -22,12 +22,4 @@ struct LogReader: Sendable {
         let all = String(decoding: data, as: UTF8.self).split(whereSeparator: \.isNewline).map(String.init)
         return Array(all.suffix(lines))
     }
-
-    static func logFolder() -> URL {
-        LogReader().logFolder()
-    }
-
-    static func tail(name: String, lines: Int = 200) -> [String] {
-        LogReader().tail(name: name, lines: lines)
-    }
 }
