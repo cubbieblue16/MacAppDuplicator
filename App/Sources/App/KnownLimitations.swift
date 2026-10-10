@@ -8,9 +8,9 @@ struct KnownLimitation: Identifiable, Hashable {
 
 /// Spec §11 ("documented in-app and README"): one entry per §11 bullet, plus the app-specific limits that the README's
 /// list also carries (single instance, login items, updates). Phase 3 adds the profile limits (advisory badges, partial
-/// profiles, manual updates from one host, sandboxed badges, numbered slugs, export's Trash replacement). The web-shell
-/// bullet (no passkeys) arrives with the web shell phase. Shown in the Known Limitations window and linked from the
-/// wizard's compatibility line.
+/// profiles, manual updates from one host, sandboxed badges, numbered slugs, export's Trash replacement). Phase 4 adds
+/// the four web app limits (passkeys, zoom storage, notification permission, pop-up and off-site links). Shown in the
+/// Known Limitations window and linked from the wizard's compatibility line.
 enum KnownLimitations {
     static let all: [KnownLimitation] = [
         KnownLimitation(
@@ -112,6 +112,26 @@ enum KnownLimitations {
             id: "export-replaces",
             title: "Export replaces an existing shortcut by moving it to the Trash",
             detail: "When the export destination already holds a bundle with the same name, App Duplicator moves that bundle to the Trash and writes the exported copy in its place; nothing is deleted outright. If you exported over the wrong bundle, put it back from the Trash."
+        ),
+        KnownLimitation(
+            id: "web-no-passkeys",
+            title: "Web apps do not support passkeys",
+            detail: "A web app shows its site in an embedded web view that App Duplicator builds into the shortcut. That view cannot sign in with a passkey or a security key (WebAuthn), so a site that offers only a passkey cannot be used in a web app. Use a password and a one-time code where the site allows it, or open the site in your browser."
+        ),
+        KnownLimitation(
+            id: "web-zoom-storage",
+            title: "Web app zoom is remembered outside the shortcut",
+            detail: "A web app's bundle is sealed by its code signature, so the zoom you set with Command-Plus, Command-Minus and Command-0 is not written into the shortcut. The web app keeps it in its own preferences under the key MADPageZoom, for that shortcut only. The Zoom value in the editor is the starting zoom saved in the shortcut, and the remembered level wins over it. Deleting the shortcut's preferences file resets the zoom to the starting value."
+        ),
+        KnownLimitation(
+            id: "web-notification-permission",
+            title: "Web notifications are always allowed, but macOS decides whether they appear",
+            detail: "A web app tells every site that notification permission is granted, so sites never show their own permission prompt. Whether a banner actually appears is up to macOS: the first notification asks for permission for that shortcut, and you change it later in System Settings > Notifications. A site that checked permission before you allowed it in System Settings keeps its answer until you reload the page."
+        ),
+        KnownLimitation(
+            id: "web-popup-policy",
+            title: "Web apps open other sites in your browser",
+            detail: "A web app keeps links to its own site and to the hosts listed under Also open in app inside the window. A link to any other site opens in your default browser instead, and so do mailto: and other non-web links. A window a site opens itself as a pop-up (for example a sign-in window) stays inside the web app so the sign-in can finish. If a site's sign-in or links jump out to the browser, add the hosts it uses to Also open in app."
         ),
     ]
 }
