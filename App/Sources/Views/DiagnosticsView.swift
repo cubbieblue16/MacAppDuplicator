@@ -4,6 +4,8 @@ import SwiftUI
 struct DiagnosticsModel {
     let shortcutName: String
     let bundlePath: String
+    /// The bundle's `MADEngineVersion` (0 when missing); below `ShortcutConfig.currentEngineVersion` means Regenerate is due.
+    let engineVersion: Int
     /// The target path stored in the shortcut's config.
     let storedTargetPath: String
     /// The target the launcher would start (spec §7 "resolved target path"): the stored path while its bundle id
@@ -18,7 +20,9 @@ struct DiagnosticsModel {
     let planError: String?
 
     static func make(record: ShortcutRecord, logReader: LogReader = LogReader()) -> DiagnosticsModel {
-        let logLines = logReader.tail(name: record.name)
+        // Lines a launcher built before argv masking wrote can hold secret argument values; mask them for display and
+        // for the copied report.
+        let logLines = logReader.tail(name: record.name).map(SecretMasking.maskLogLine)
         var config = record.config.resolvingDefaultDataPath(home: FileManager.default.homeDirectoryForCurrentUser)
         let resolvedTarget: URL
         do {
@@ -34,6 +38,7 @@ struct DiagnosticsModel {
             return DiagnosticsModel(
                 shortcutName: record.name,
                 bundlePath: record.bundleURL.path,
+                engineVersion: record.engineVersion,
                 storedTargetPath: record.config.targetPath,
                 resolvedTargetPath: resolvedTarget.path,
                 executablePath: preview.executablePath,
@@ -53,6 +58,7 @@ struct DiagnosticsModel {
         DiagnosticsModel(
             shortcutName: record.name,
             bundlePath: record.bundleURL.path,
+            engineVersion: record.engineVersion,
             storedTargetPath: record.config.targetPath,
             resolvedTargetPath: resolvedTargetPath,
             executablePath: "",
@@ -72,6 +78,7 @@ struct DiagnosticsModel {
         var lines: [String] = []
         lines.append("App Duplicator diagnostics — \(shortcutName)")
         lines.append("Bundle: \(bundlePath)")
+        lines.append("Engine version: \(engineVersion) (current \(ShortcutConfig.currentEngineVersion))")
         lines.append("Target: \(resolvedTargetPath ?? "not found")")
         if storedPathDiffers {
             lines.append("Stored target path: \(storedTargetPath)")
@@ -113,6 +120,7 @@ struct DiagnosticsView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         section("Shortcut") {
                             row("Bundle", model.bundlePath)
+                            row("Engine", "\(model.engineVersion) (current \(ShortcutConfig.currentEngineVersion))")
                             row("Target", model.resolvedTargetPath ?? "Not found")
                             if model.storedPathDiffers {
                                 row("Stored path", model.storedTargetPath)

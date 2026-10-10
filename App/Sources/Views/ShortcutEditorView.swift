@@ -80,7 +80,7 @@ struct ShortcutEditorView: View {
                 .disabled(duplicateName.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .sheet(item: $exportedURL) { url in
-            ExportSheet(exportedURL: url, environment: record.config.environment)
+            ExportSheet(exportedURL: url, environment: record.config.environment, arguments: record.config.arguments)
         }
         .sheet(isPresented: $isDiagnosticsPresented) {
             DiagnosticsView(record: record)

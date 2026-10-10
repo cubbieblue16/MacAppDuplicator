@@ -34,4 +34,14 @@ final class LaunchPlanPreviewTests: XCTestCase {
     func testPreviewMissingTargetThrows() {
         XCTAssertThrowsError(try LaunchPlanPreview.make(config: makeConfig(targetPath: dir.appending(path: "Nope.app").path), bundleURL: nil))
     }
+
+    func testPreviewMasksSecretArgumentValues() throws {
+        var config = makeConfig(targetPath: dir.appending(path: "Target.app").path)
+        config.arguments = ["--api-key", "hunter2", "--token=not-a-real-token", "--plain", "visible"]
+
+        let preview = try LaunchPlanPreview.make(config: config, bundleURL: nil)
+
+        // The /bin/ls stand-in is a native app, so the planner adds no arguments of its own.
+        XCTAssertEqual(preview.arguments, ["--api-key", "••••••", "--token=••••••", "--plain", "visible"])
+    }
 }

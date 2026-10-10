@@ -4,6 +4,7 @@ import Foundation
 /// What the launcher would exec for a config, with secrets masked, for Diagnostics and the wizard review step (spec §7).
 struct LaunchPlanPreview: Sendable {
     var executablePath: String
+    /// argv after argv[0] (planner arguments, then the shortcut's), secret values masked per `SecretMasking.maskArguments`.
     var arguments: [String]
     /// Full target environment, masked per `SecretMasking`.
     var maskedEnvironment: [String: String]
@@ -18,7 +19,7 @@ struct LaunchPlanPreview: Sendable {
         let plan = DataSeparationPlanner().plan(app: app, config: config, baseEnvironment: base, shortcutBundleURL: bundleURL)
         return LaunchPlanPreview(
             executablePath: plan.executableURL.path,
-            arguments: plan.arguments,
+            arguments: SecretMasking.maskArguments(plan.arguments),
             maskedEnvironment: SecretMasking.mask(plan.environment),
             environmentAdditions: SecretMasking.mask(plan.environmentAdditions(relativeTo: base)),
             warnings: plan.warnings,

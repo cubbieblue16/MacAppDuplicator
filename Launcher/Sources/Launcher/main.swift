@@ -26,7 +26,7 @@ logger.log("target \(plan.executableURL.path)")
 for warning in plan.warnings {
     logger.log("warning \(warning)")
 }
-logger.log("argv \(plan.arguments.joined(separator: " "))")
+logger.log(arguments: plan.arguments)
 logger.log("mode \(plan.launchMode)")
 logger.log(environment: plan.environment)
 

@@ -30,4 +30,44 @@ final class SecretMaskingTests: XCTestCase {
     func testEmptyEnvironment() {
         XCTAssertEqual(SecretMasking.mask([:]), [:])
     }
+
+    func testMaskArgumentsHidesSecretValues() {
+        let arguments = [
+            "--api-key", "hunter2", "--token=not-a-real-token", "-password", "pw", "--plain", "visible", "positional",
+            "API_TOKEN=leaked",
+        ]
+        XCTAssertEqual(SecretMasking.maskArguments(arguments), [
+            "--api-key", "••••••", "--token=••••••", "-password", "••••••", "--plain", "visible", "positional",
+            "API_TOKEN=••••••",
+        ])
+    }
+
+    func testMaskArgumentsLeavesFlagsAndPlannerArgumentsAlone() {
+        // A secret flag followed by another flag has no value to hide.
+        XCTAssertEqual(SecretMasking.maskArguments(["--token", "--verbose", "x"]), ["--token", "--verbose", "x"])
+        // Every argument DataSeparationPlanner adds stays readable.
+        let planner = [
+            "--user-data-dir=/tmp/data", "--profile", "/tmp/profile", "--no-remote", "-data", "/tmp/workspace",
+            "-configuration", "/tmp/configuration", "-NSRequiresAquaSystemAppearance", "YES", "--force-dark-mode",
+            "-AppleLanguages", "(de)", "-AppleLocale", "de",
+        ]
+        XCTAssertEqual(SecretMasking.maskArguments(planner), planner)
+        XCTAssertEqual(SecretMasking.maskArguments([]), [])
+        // Over-masking is accepted: a flag that merely contains "key" hides its value too.
+        XCTAssertEqual(SecretMasking.maskArguments(["--use-mock-keychain", "value"]), ["--use-mock-keychain", "••••••"])
+    }
+
+    func testMaskLogLineMasksArgvAndEnvironmentWords() {
+        XCTAssertEqual(
+            SecretMasking.maskLogLine("2026-10-01T09:00:00Z argv --api-key hunter2 --token=abc --plain v"),
+            "2026-10-01T09:00:00Z argv --api-key •••••• --token=•••••• --plain v"
+        )
+        XCTAssertEqual(
+            SecretMasking.maskLogLine("2026-10-01T09:00:00Z env GITHUB_TOKEN=leaked"),
+            "2026-10-01T09:00:00Z env GITHUB_TOKEN=••••••"
+        )
+        let plain = "2026-10-01T09:00:00Z config name=Claude Work mode=dockShortcut data=auto"
+        XCTAssertEqual(SecretMasking.maskLogLine(plain), plain)
+        XCTAssertEqual(SecretMasking.maskLogLine(""), "")
+    }
 }

@@ -55,4 +55,14 @@ final class LaunchLoggerTests: XCTestCase {
         XCTAssertFalse(raw.contains("not-a-real-token"))
         XCTAssertFalse(raw.contains("hunter2"))
     }
+
+    func testArgumentsAreLoggedOnOneLineWithSecretValuesMasked() throws {
+        let logger = LaunchLogger(name: "Argv", directory: try makeTemporaryDirectory(), maxBytes: 10_000)
+        logger.log(arguments: ["--user-data-dir=/tmp/data", "--api-key", "hunter2", "--token=not-a-real-token", "--plain", "visible"])
+        let written = try lines(of: logger.fileURL).map { $0.split(separator: " ", maxSplits: 1).last.map(String.init) ?? "" }
+        XCTAssertEqual(written, ["argv --user-data-dir=/tmp/data --api-key •••••• --token=•••••• --plain visible"])
+        let raw = try String(contentsOf: logger.fileURL, encoding: .utf8)
+        XCTAssertFalse(raw.contains("hunter2"))
+        XCTAssertFalse(raw.contains("not-a-real-token"))
+    }
 }

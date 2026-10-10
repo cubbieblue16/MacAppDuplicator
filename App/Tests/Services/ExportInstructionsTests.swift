@@ -55,4 +55,29 @@ final class ExportInstructionsTests: XCTestCase {
         XCTAssertFalse(notice.contains("PLAIN"), notice)
         XCTAssertFalse(notice.contains("\n"), notice)
     }
+
+    func testSecretNoticeNamesSecretArgumentsButNeverTheirValues() throws {
+        // Arguments with nothing secret leave the environment-only behaviour unchanged.
+        XCTAssertNil(ExportInstructions.secretNotice(for: [:], arguments: ["--plain", "visible"]))
+        XCTAssertEqual(
+            ExportInstructions.secretNotice(for: ["GITHUB_TOKEN": "x"], arguments: ["--plain", "visible"]),
+            "Environment values travel in plain text inside the exported shortcut, including GITHUB_TOKEN."
+        )
+
+        let notice = try XCTUnwrap(ExportInstructions.secretNotice(
+            for: ["PLAIN": "ok", "GITHUB_TOKEN": "leaked"],
+            arguments: ["--api-key", "hunter2", "--token=not-a-real-token", "--plain", "visible", "--api-key", "again"]
+        ))
+        XCTAssertEqual(
+            notice,
+            "Environment values and arguments travel in plain text inside the exported shortcut, including GITHUB_TOKEN, --api-key, --token."
+        )
+        for value in ["leaked", "hunter2", "not-a-real-token", "visible", "again"] {
+            XCTAssertFalse(notice.contains(value), value)
+        }
+        XCTAssertEqual(
+            ExportInstructions.secretNotice(for: [:], arguments: ["--token=abc"]),
+            "Environment values and arguments travel in plain text inside the exported shortcut, including --token."
+        )
+    }
 }

@@ -6,6 +6,8 @@ struct ExportSheet: View {
     let exportedURL: URL
     /// The exported shortcut's saved environment; only its keys are shown, never its values.
     var environment: [String: String] = [:]
+    /// The exported shortcut's saved arguments; the notice names the secret-looking ones, never their values.
+    var arguments: [String] = []
     /// Read from the exported copy (final review M10), so the copy never claims an identity the bundle does not carry.
     @State private var signature: CodeSignature = .unknown
 
@@ -22,7 +24,7 @@ struct ExportSheet: View {
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-            if let notice = ExportInstructions.secretNotice(for: environment) {
+            if let notice = ExportInstructions.secretNotice(for: environment, arguments: arguments) {
                 Label(notice, systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(.orange)

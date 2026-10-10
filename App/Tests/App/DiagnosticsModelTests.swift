@@ -101,4 +101,34 @@ final class DiagnosticsModelTests: XCTestCase {
         XCTAssertTrue(model.reportText.contains("Target: \(resolved)"))
         XCTAssertTrue(model.reportText.contains("Stored target path: \(stale)"))
     }
+
+    func testMasksSecretArgumentsAndOldLogLinesAndShowsTheEngineVersion() throws {
+        let target = try writeFakeTarget(named: "Target", bundleIdentifier: "com.example.target", version: "1.0", in: dir)
+        try FileManager.default.removeItem(at: target.appending(path: "Contents/MacOS/Target"))
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/ls"), to: target.appending(path: "Contents/MacOS/Target"))
+        var config = makeConfig(name: "Target Work", targetPath: target.path)
+        config.arguments = ["--api-key", "hunter2", "--token=not-a-real-token", "--plain", "visible"]
+        let bundle = try writeShortcutBundle(named: "Target Work", in: dir, config: config, engineVersion: 0)
+        let record = try XCTUnwrap(LibraryScanner.record(forBundleAt: bundle, fileManager: .default))
+
+        // Lines a launcher built before argv masking wrote.
+        let logs = dir.appending(path: "logs")
+        try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+        try "2026-10-01T09:00:00Z argv --api-key hunter2 --token=not-a-real-token\n2026-10-01T09:00:00Z env GITHUB_TOKEN=leaked\n"
+            .write(to: logs.appending(path: "Target Work.log"), atomically: true, encoding: .utf8)
+
+        let model = DiagnosticsModel.make(record: record, logReader: LogReader(folder: logs))
+        XCTAssertNil(model.planError)
+        XCTAssertEqual(model.arguments, ["--api-key", "••••••", "--token=••••••", "--plain", "visible"])
+        XCTAssertEqual(model.engineVersion, 0)
+        XCTAssertEqual(model.logLines, [
+            "2026-10-01T09:00:00Z argv --api-key •••••• --token=••••••",
+            "2026-10-01T09:00:00Z env GITHUB_TOKEN=••••••",
+        ])
+        let report = model.reportText
+        XCTAssertTrue(report.contains("Engine version: 0 (current \(ShortcutConfig.currentEngineVersion))"), report)
+        for secret in ["hunter2", "not-a-real-token", "leaked"] {
+            XCTAssertFalse(report.contains(secret), secret)
+        }
+    }
 }

@@ -38,6 +38,11 @@ public struct LaunchLogger: Sendable {
         }
     }
 
+    /// Logs `argv <arguments>` on one line, secret values masked per `SecretMasking.maskArguments`.
+    public func log(arguments: [String]) {
+        log("argv \(SecretMasking.maskArguments(arguments).joined(separator: " "))")
+    }
+
     private func append(_ data: Data) {
         let fileManager = FileManager.default
         try? fileManager.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
