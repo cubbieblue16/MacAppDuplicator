@@ -90,6 +90,29 @@ targets:
           else
             codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --options runtime --timestamp "$DEST"
           fi
+      - name: Embed WebShell
+        shell: /bin/bash
+        # Same shape as Embed Launcher: runs on every build so the WebShell build below always runs and a stale
+        # binary is never embedded.
+        basedOnDependencyAnalysis: false
+        inputFiles:
+          - "$(SRCROOT)/../.build/release/WebShell"
+        outputFiles:
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/WebShell"
+        script: |
+          set -euo pipefail
+          WEBSHELL_SRC="${SRCROOT}/../.build/release/WebShell"
+          # Always build: SwiftPM is incremental, and a build started from Xcode must not embed a stale WebShell.
+          env -i HOME="$HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin xcrun swift build -c release --product WebShell --package-path "${SRCROOT}/.."
+          DEST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/WebShell"
+          mkdir -p "$(dirname "$DEST")"
+          cp -f "$WEBSHELL_SRC" "$DEST"
+          chmod 755 "$DEST"
+          if [ "${EXPANDED_CODE_SIGN_IDENTITY:--}" = "-" ] || [ -z "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
+            codesign --force --sign - "$DEST"
+          else
+            codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --options runtime --timestamp "$DEST"
+          fi
 
   MacAppDuplicatorTests:
     type: bundle.unit-test

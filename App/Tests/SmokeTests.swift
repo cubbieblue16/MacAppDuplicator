@@ -15,6 +15,18 @@ final class SmokeTests: XCTestCase {
         XCTAssertEqual(process.terminationStatus, 0, "embedded Launcher must carry a valid signature")
     }
 
+    func testEmbeddedWebShellIsPresentAndSigned() throws {
+        let webShell = try EmbeddedWebShell.url()
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: webShell.path))
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+        process.arguments = ["--verify", "--strict", webShell.path]
+        try process.run()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0, "embedded WebShell must carry a valid signature")
+    }
+
     func testBundleIdentity() {
         XCTAssertEqual(Bundle.main.bundleIdentifier, "com.mikekuta.MacAppDuplicator")
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, "macOS App Duplicator")

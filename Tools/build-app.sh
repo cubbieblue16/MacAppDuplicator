@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds macOS App Duplicator.app. Usage: Tools/build-app.sh [--identity "Developer ID Application: ..."] [--configuration Debug|Release]
-# Without --identity the app and the embedded Launcher are ad hoc signed.
+# Without --identity the app and the embedded Launcher and WebShell are ad hoc signed.
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 IDENTITY=""
@@ -27,6 +27,7 @@ if [ -z "$XCODEGEN" ]; then
 fi
 "$XCODEGEN" generate --spec App/project.yml --project App --quiet
 swift build -c release --product Launcher
+swift build -c release --product WebShell
 
 ARGS=(
   -project App/MacAppDuplicator.xcodeproj

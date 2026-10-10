@@ -16,6 +16,7 @@ if [ -z "$XCODEGEN" ]; then
 fi
 "$XCODEGEN" generate --spec App/project.yml --project App --quiet
 swift build -c release --product Launcher
+swift build -c release --product WebShell
 # makeTestDefaults() suites leave one empty com.mikekuta.MacAppDuplicatorTests.<UUID>.plist each in
 # ~/Library/Preferences (re-review Minor 7). Delete exactly those on every exit, pass or fail. Scope: that one
 # directory, that one name pattern, regular files only, no recursion.
