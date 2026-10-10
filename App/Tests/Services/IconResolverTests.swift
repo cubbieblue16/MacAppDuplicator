@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import DuplicatorCore
 @testable import MacAppDuplicator
@@ -71,5 +72,52 @@ final class IconResolverTests: XCTestCase {
         config.iconMode = .generated
         let result = try XCTUnwrap(try IconResolver.iconFile(for: config, app: app(iconFile: nil), scratchDirectory: dir))
         XCTAssertEqual(String(decoding: try Data(contentsOf: result).prefix(4), as: UTF8.self), "icns")
+    }
+
+    private func webConfig(mode: IconMode) -> ShortcutConfig {
+        var config = makeWebConfig(name: "Chat Work", url: "https://chat.example.test/")
+        config.iconMode = mode
+        return config
+    }
+
+    private func png() throws -> Data {
+        let rep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 64, bitsPerSample: 8, samplesPerPixel: 4,
+                                                 hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        return try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+    }
+
+    func testWebCopiedWithFetchedBytesWritesFetchedICNS() throws {
+        let url = try XCTUnwrap(IconResolver.webAppIconFile(for: webConfig(mode: .copied), webIconData: try png(), existingIcon: nil, scratchDirectory: dir))
+        XCTAssertEqual(url.lastPathComponent, "web-fetched-icon.icns")
+        XCTAssertEqual(String(decoding: try Data(contentsOf: url).prefix(4), as: UTF8.self), "icns")
+    }
+
+    func testWebCopiedWithUndecodableBytesFallsBackToLetterTile() throws {
+        let url = try XCTUnwrap(IconResolver.webAppIconFile(for: webConfig(mode: .copied), webIconData: Data("<html>".utf8), existingIcon: nil, scratchDirectory: dir))
+        XCTAssertEqual(url.lastPathComponent, "web-letter-icon.icns")
+    }
+
+    func testWebCopiedWithoutBytesKeepsTheExistingIcon() throws {
+        let existing = dir.appending(path: "old.icns")
+        try Data("keep me".utf8).write(to: existing)
+        let url = try XCTUnwrap(IconResolver.webAppIconFile(for: webConfig(mode: .copied), webIconData: nil, existingIcon: existing, scratchDirectory: dir))
+        XCTAssertEqual(try Data(contentsOf: url), Data("keep me".utf8))
+        XCTAssertNotEqual(url, existing, "the icon is copied into scratch so replacing the old bundle cannot delete it")
+    }
+
+    func testWebCopiedWithNothingGetsLetterTile() throws {
+        let url = try XCTUnwrap(IconResolver.webAppIconFile(for: webConfig(mode: .copied), webIconData: nil, existingIcon: nil, scratchDirectory: dir))
+        XCTAssertEqual(url.lastPathComponent, "web-letter-icon.icns")
+    }
+
+    func testWebGeneratedIgnoresFetchedBytesAndCustomRequiresTheFile() throws {
+        let tile = try XCTUnwrap(IconResolver.webAppIconFile(for: webConfig(mode: .generated), webIconData: try png(), existingIcon: nil, scratchDirectory: dir))
+        XCTAssertEqual(tile.lastPathComponent, "web-letter-icon.icns")
+
+        var custom = webConfig(mode: .custom)
+        custom.customIconPath = dir.appending(path: "missing.png").path
+        XCTAssertThrowsError(try IconResolver.webAppIconFile(for: custom, webIconData: nil, existingIcon: nil, scratchDirectory: dir)) { error in
+            guard case IconResolver.IconError.customFileMissing = error else { return XCTFail("\(error)") }
+        }
     }
 }

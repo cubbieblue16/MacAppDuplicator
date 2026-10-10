@@ -61,6 +61,17 @@ func makeConfig(name: String = "Target Work", targetPath: String = "/Application
     )
 }
 
+/// A web app shortcut config: `kind == .webApp`, no target. `iconMode` is `.copied` (the fetched or kept site icon).
+func makeWebConfig(name: String = "Chat Work", url: String = "https://chat.example.test/", dataStoreID: UUID = UUID()) -> ShortcutConfig {
+    let slug = ShortcutConfig.slug(for: name)
+    var config = ShortcutConfig(
+        kind: .webApp, name: name, slug: slug, bundleIdentifier: ShortcutConfig.bundleIdentifier(forSlug: slug),
+        targetPath: "", targetBundleIdentifier: "", webApp: WebAppConfig(url: url, dataStoreID: dataStoreID)
+    )
+    config.iconMode = .copied
+    return config
+}
+
 /// Isolated UserDefaults for one test; call `removePersistentDomain(forName:)` with the suite in tearDown.
 func makeTestDefaults() -> (defaults: UserDefaults, suite: String) {
     let suite = "com.mikekuta.MacAppDuplicatorTests.\(UUID().uuidString)"
