@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v26)],
     products: [
         .library(name: "DuplicatorCore", targets: ["DuplicatorCore"]),
+        .library(name: "CompatProfiles", targets: ["CompatProfiles"]),
         .executable(name: "Launcher", targets: ["Launcher"]),
         .executable(name: "madctl", targets: ["madctl"]),
     ],
@@ -16,6 +17,11 @@ let package = Package(
         .target(name: "DuplicatorCore", path: "Packages/DuplicatorCore/Sources/DuplicatorCore"),
         .testTarget(name: "DuplicatorCoreTests", dependencies: ["DuplicatorCore"],
                     path: "Packages/DuplicatorCore/Tests/DuplicatorCoreTests"),
+        // Compatibility profiles (spec §8). Linked by the app and its tests only; the Launcher never reads profiles.
+        .target(name: "CompatProfiles", dependencies: ["DuplicatorCore"],
+                path: "Packages/CompatProfiles/Sources/CompatProfiles"),
+        .testTarget(name: "CompatProfilesTests", dependencies: ["CompatProfiles", "DuplicatorCore"],
+                    path: "Packages/CompatProfiles/Tests/CompatProfilesTests"),
         .executableTarget(name: "Launcher", dependencies: ["DuplicatorCore"], path: "Launcher/Sources/Launcher"),
         .executableTarget(name: "madctl",
                           dependencies: ["DuplicatorCore", .product(name: "ArgumentParser", package: "swift-argument-parser")],
