@@ -60,6 +60,7 @@ struct NewShortcutWizard: View {
             guard !isSetUp else { return }
             isSetUp = true
             model = WizardModel(prefillTarget: appState.wizardPrefillTarget,
+                                takenSlugs: SlugAllocator.takenSlugs(in: appState.library.records),
                                 profileLookup: { [appState] in appState.profile(forBundleIdentifier: $0) })
             appState.wizardPrefillTarget = nil
         }

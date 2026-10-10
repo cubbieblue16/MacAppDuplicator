@@ -29,7 +29,7 @@ private struct GeneralSettingsTab: View {
             LabeledContent("Output folder") {
                 HStack {
                     Text(settings.outputFolder.path).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-                    Button("Choose…") { chooseOutput() }
+                    Button("Browse…") { chooseOutput() }
                     Button("Reset to Default") {
                         settings.outputFolder = AppSettings.defaultOutputFolder(home: FileManager.default.homeDirectoryForCurrentUser)
                     }

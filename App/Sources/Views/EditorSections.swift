@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 struct IdentitySection: View {
     @Binding var draft: ShortcutConfig
     let record: ShortcutRecord
+    /// The draft target's inspection; its icon file is the `.copied` preview.
+    let inspected: InspectedApp?
 
     var body: some View {
         Section("Identity") {
@@ -19,16 +21,14 @@ struct IdentitySection: View {
                 LabeledContent("Icon file") {
                     HStack {
                         Text(draft.customIconPath ?? "No file chosen").lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-                        Button("Choose…") { chooseIcon() }
+                        Button("Browse…") { chooseIcon() }
                     }
                 }
             }
             LabeledContent("Preview") {
-                if let url = record.iconURL, let image = NSImage(contentsOf: url) {
-                    Image(nsImage: image).resizable().frame(width: 64, height: 64)
-                } else {
-                    Image(systemName: "app.dashed").font(.system(size: 48)).foregroundStyle(.secondary).frame(width: 64, height: 64)
-                }
+                IconPreview(source: IconPreviewSource.resolve(draft: draft, saved: record.config,
+                                                              savedIconURL: record.iconURL,
+                                                              targetIconURL: inspected?.iconFileURL))
             }
         }
     }
@@ -46,14 +46,19 @@ struct TargetSection: View {
     let inspected: InspectedApp?
     /// The compatibility profile for `draft.targetBundleIdentifier`, if any; it can turn the badge `Verified` or `Unsupported`.
     let profile: AppProfile?
+    /// Why the last chosen target was refused (final review M5); the next accepted choice clears it.
+    @State private var targetError: String?
 
     var body: some View {
         Section("Target") {
             LabeledContent("Application") {
                 HStack {
                     Text(draft.targetPath).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-                    Button("Choose…") { chooseTarget() }
+                    Button("Browse…") { chooseTarget() }
                 }
+            }
+            if let targetError {
+                Label(targetError, systemImage: "xmark.octagon").foregroundStyle(.red).font(.caption)
             }
             LabeledContent("Bundle ID", value: draft.targetBundleIdentifier)
             LabeledContent("Compatibility") {
@@ -74,8 +79,14 @@ struct TargetSection: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.applicationBundle]
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
-        guard panel.runModal() == .OK, let url = panel.url,
-              let identifier = InstalledApps.infoDictionary(ofAppAt: url)?["CFBundleIdentifier"] as? String else { return }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        // Final review M5: a shortcut, this one included, is never a target.
+        guard !TargetGuard.isShortcutBundle(at: url) else {
+            targetError = TargetGuard.refusalMessage(forAppAt: url)
+            return
+        }
+        guard let identifier = InstalledApps.infoDictionary(ofAppAt: url)?["CFBundleIdentifier"] as? String else { return }
+        targetError = nil
         draft.targetPath = url.path
         draft.targetBundleIdentifier = identifier
     }
@@ -139,7 +150,7 @@ struct LaunchSection: View {
                 HStack {
                     Text(draft.dataPath ?? defaultPath)
                         .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-                    Button("Choose…") { chooseDataFolder() }
+                    Button("Browse…") { chooseDataFolder() }
                     if draft.dataPath != nil, draft.dataPath != defaultPath {
                         Button("Default") {
                             draft.dataPath = nil

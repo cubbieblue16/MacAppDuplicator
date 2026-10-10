@@ -46,17 +46,21 @@ struct TargetStep: View {
     @State private var query = ""
     @State private var selection: URL?
 
-    private var filtered: [InstalledApp] {
-        query.isEmpty ? apps : apps.filter { $0.name.localizedCaseInsensitiveContains(query) }
-    }
+    private var filtered: [InstalledApp] { WizardModel.filteredApps(apps, query: query) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Choose the application").font(.title3)
             TextField("Search applications", text: $query)
                 .textFieldStyle(.roundedBorder)
-            InstalledAppsGrid(apps: filtered, selection: $selection)
-                .frame(minHeight: 220)
+            if WizardModel.showsNoMatches(apps: apps, query: query) {
+                ContentUnavailableView("No matches", systemImage: "magnifyingglass",
+                                       description: Text("No installed app matches “\(query)”. Drop the app below or browse for it."))
+                    .frame(minHeight: 220)
+            } else {
+                InstalledAppsGrid(apps: filtered, selection: $selection)
+                    .frame(minHeight: 220)
+            }
             AppDropZone(onDrop: { select($0) }, onBrowse: browse)
             if let error = model.inspectError {
                 Label(error, systemImage: "xmark.octagon").foregroundStyle(.red).font(.caption)
@@ -105,7 +109,7 @@ struct IdentityStep: View {
                 LabeledContent("Icon file") {
                     HStack {
                         Text(model.customIconPath ?? "No file chosen").lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-                        Button("Choose…") { chooseIcon() }
+                        Button("Browse…") { chooseIcon() }
                     }
                 }
             }
@@ -155,7 +159,7 @@ struct DataStep: View {
     @Bindable var model: WizardModel
     @State private var dataFolderError: String?
 
-    private var slug: String { ShortcutConfig.slug(for: model.name.trimmingCharacters(in: .whitespaces)) }
+    private var slug: String { model.slug }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -171,7 +175,7 @@ struct DataStep: View {
                 HStack {
                     Text(model.dataPath ?? ShortcutConfig.defaultDataPath(forSlug: slug, home: FileManager.default.homeDirectoryForCurrentUser))
                         .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-                    Button("Choose…") { choose() }
+                    Button("Browse…") { choose() }
                     if model.dataPath != nil {
                         Button("Default") {
                             model.dataPath = nil

@@ -82,7 +82,7 @@ final class ShortcutBuilderEndToEndTests: XCTestCase {
         XCTAssertEqual(record.config.appearance, .light)
         XCTAssertEqual(try codesignVerify(bundle), 0)
 
-        let copy = try builder.duplicate(record: record, newName: "Fixture B", in: dir)
+        let copy = try builder.duplicate(record: record, newName: "Fixture B", in: dir, takenSlugs: [record.config.slug])
         XCTAssertEqual(copy.lastPathComponent, "Fixture B.app")
         let copyRecord = try XCTUnwrap(LibraryScanner.record(forBundleAt: copy, fileManager: .default))
         XCTAssertEqual(copyRecord.config.slug, ShortcutConfig.slug(for: "Fixture B"))

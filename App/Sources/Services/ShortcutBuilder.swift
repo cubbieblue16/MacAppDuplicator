@@ -10,6 +10,8 @@ struct ShortcutBuilder: Sendable {
         case targetMissing(String)
         case exportOverlapsShortcut(URL)
         case exportOverlapsTarget(URL)
+        /// The target is an App Duplicator shortcut (final review M5); carries the refused target path.
+        case targetIsShortcut(String)
 
         var errorDescription: String? {
             switch self {
@@ -17,6 +19,7 @@ struct ShortcutBuilder: Sendable {
             case .targetMissing(let path): "The target app was not found at \(path)."
             case .exportOverlapsShortcut(let url): "Cannot export to \(url.path): it is, contains or is inside the shortcut itself."
             case .exportOverlapsTarget(let url): "Cannot export to \(url.path): it is, contains or is inside the target app."
+            case .targetIsShortcut(let path): TargetGuard.refusalMessage(forAppAt: URL(fileURLWithPath: path))
             }
         }
     }
@@ -67,10 +70,13 @@ struct ShortcutBuilder: Sendable {
     }
 
     /// A new shortcut with the same target and launch settings, its own slug, bundle id and default data folder.
-    func duplicate(record: ShortcutRecord, newName: String, in directory: URL) throws -> URL {
+    /// `takenSlugs` are the slugs the library already uses (`SlugAllocator.takenSlugs(in:)`); a name that folds onto
+    /// one of them, or onto the original's own slug, gets `-2`, `-3`, … (final review M6). The nil data path resolves
+    /// to the final slug's default folder at write time.
+    func duplicate(record: ShortcutRecord, newName: String, in directory: URL, takenSlugs: Set<String>) throws -> URL {
         var config = record.config
         config.name = newName
-        config.slug = ShortcutConfig.slug(for: newName)
+        config.slug = SlugAllocator.uniqueSlug(proposed: ShortcutConfig.slug(for: newName), taken: takenSlugs.union([record.config.slug]))
         config.bundleIdentifier = ShortcutConfig.bundleIdentifier(forSlug: config.slug)
         config.dataPath = nil
         return try create(config: config, in: directory)
@@ -206,6 +212,8 @@ struct ShortcutBuilder: Sendable {
         config.engineVersion = ShortcutConfig.currentEngineVersion
         let targetURL = URL(fileURLWithPath: config.targetPath)
         guard fileManager.fileExists(atPath: targetURL.path) else { throw BuilderError.targetMissing(config.targetPath) }
+        // Final review M5: a shortcut target chains launchers, and a self-target makes the launcher exec itself again.
+        guard !TargetGuard.isShortcutBundle(at: targetURL) else { throw BuilderError.targetIsShortcut(config.targetPath) }
         let app = try AppInspector().inspect(appAt: targetURL)
         let scratch = fileManager.temporaryDirectory.appending(path: "mad-build-\(UUID().uuidString)", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: scratch, withIntermediateDirectories: true)

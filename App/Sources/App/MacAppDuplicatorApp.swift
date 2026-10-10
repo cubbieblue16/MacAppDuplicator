@@ -41,7 +41,7 @@ struct MacAppDuplicatorApp: App {
         WindowGroup("App Duplicator") {
             ContentView()
                 .environment(appState)
-                .frame(minWidth: 820, minHeight: 520)
+                .frame(minWidth: 820, minHeight: 720)
                 .task {
                     // As the unit-test host the app must not scan or watch the real library folders.
                     if !Self.isTestHost { appState.library.start() }

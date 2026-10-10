@@ -88,6 +88,64 @@ final class WizardModelTests: XCTestCase {
         XCTAssertNil(config.dataPath)
     }
 
+    func testAShortcutIsRefusedAsTheTargetWithTheExactMessage() throws {
+        let shortcut = try writeShortcutBundle(named: "Claude Work", in: dir, config: makeConfig(name: "Claude Work", targetPath: target.path))
+        let model = WizardModel()
+        model.selectTarget(target)
+        XCTAssertNotNil(model.inspected, "precondition: a real app is accepted")
+
+        model.selectTarget(shortcut)
+        XCTAssertNil(model.targetURL)
+        XCTAssertNil(model.inspected)
+        XCTAssertNil(model.profile)
+        XCTAssertEqual(model.inspectError, "Claude Work is an App Duplicator shortcut, not an app. Choose the original app instead.")
+        model.step = .target
+        XCTAssertFalse(model.canAdvance)
+    }
+
+    func testAShortcutPrefillIsRefusedAndStaysOnTheFirstStep() throws {
+        let shortcut = try writeShortcutBundle(named: "Claude Work", in: dir, config: makeConfig(name: "Claude Work", targetPath: target.path))
+        let model = WizardModel(prefillTarget: shortcut)
+        XCTAssertEqual(model.step, .kind)
+        XCTAssertNil(model.inspected)
+        XCTAssertEqual(model.inspectError, "Claude Work is an App Duplicator shortcut, not an app. Choose the original app instead.")
+    }
+
+    func testMakeConfigStepsAroundTakenSlugs() {
+        XCTAssertEqual(ShortcutConfig.slug(for: "Claude-Work"), "claude-work", "precondition: the name folds to a taken slug")
+        let model = WizardModel(takenSlugs: ["claude-work", "claude-work-2"])
+        model.selectTarget(target)
+        model.name = "Claude-Work"
+
+        let config = model.makeConfig()
+        XCTAssertEqual(model.slug, "claude-work-3")
+        XCTAssertEqual(config.slug, "claude-work-3")
+        XCTAssertEqual(config.bundleIdentifier, ShortcutConfig.bundleIdentifier(forSlug: "claude-work-3"))
+        XCTAssertNil(config.dataPath, "the default data folder stays nil until the builder resolves it from the final slug")
+        let home = URL(fileURLWithPath: "/Users/someone", isDirectory: true)
+        XCTAssertEqual(config.resolvingDefaultDataPath(home: home).dataPath, ShortcutConfig.defaultDataPath(forSlug: "claude-work-3", home: home))
+    }
+
+    func testAFreeSlugIsKeptAsIs() {
+        let model = WizardModel(takenSlugs: ["claude-home"])
+        model.name = "Claude Work"
+        XCTAssertEqual(model.slug, ShortcutConfig.slug(for: "Claude Work"))
+    }
+
+    func testSearchDistinguishesAnEmptyFilterFromNoMatches() {
+        let apps = [
+            InstalledApp(url: URL(fileURLWithPath: "/Applications/Claude.app"), name: "Claude", bundleIdentifier: "com.anthropic.claudefordesktop", version: "1.0"),
+            InstalledApp(url: URL(fileURLWithPath: "/Applications/Slack.app"), name: "Slack", bundleIdentifier: "com.tinyspeck.slackmacgap", version: nil),
+        ]
+        XCTAssertEqual(WizardModel.filteredApps(apps, query: ""), apps)
+        XCTAssertFalse(WizardModel.showsNoMatches(apps: apps, query: ""), "an empty filter is not a no-match state")
+        XCTAssertEqual(WizardModel.filteredApps(apps, query: "sla").map(\.name), ["Slack"])
+        XCTAssertFalse(WizardModel.showsNoMatches(apps: apps, query: "sla"))
+        XCTAssertEqual(WizardModel.filteredApps(apps, query: "zzz"), [])
+        XCTAssertTrue(WizardModel.showsNoMatches(apps: apps, query: "zzz"))
+        XCTAssertFalse(WizardModel.showsNoMatches(apps: [], query: ""), "no apps and no filter (scan still running) is not a search result")
+    }
+
     func testReviewStepBuildsPreview() {
         let model = WizardModel(prefillTarget: target)
         model.next() // data

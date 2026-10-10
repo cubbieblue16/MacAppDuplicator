@@ -89,7 +89,7 @@ final class ShortcutBuilderTests: XCTestCase {
         let out = dir.appending(path: "out", directoryHint: .isDirectory)
         let first = try builder.create(config: config(), in: out)
         let record = try LibraryScanner.record(forBundleAt: first)
-        let second = try builder.duplicate(record: record, newName: "Target Personal", in: out)
+        let second = try builder.duplicate(record: record, newName: "Target Personal", in: out, takenSlugs: [record.config.slug])
         let copy = try LibraryScanner.record(forBundleAt: second)
         XCTAssertEqual(second.lastPathComponent, "Target Personal.app")
         XCTAssertEqual(copy.config.slug, ShortcutConfig.slug(for: "Target Personal"))
@@ -97,6 +97,50 @@ final class ShortcutBuilderTests: XCTestCase {
         XCTAssertEqual(copy.config.dataPath, ShortcutConfig.defaultDataPath(forSlug: copy.config.slug, home: FileManager.default.homeDirectoryForCurrentUser))
         XCTAssertNotEqual(copy.config.dataPath, record.config.dataPath, "a duplicate gets its own default data folder, not the original's")
         XCTAssertEqual(copy.config.targetPath, record.config.targetPath)
+    }
+
+    func testCreateRefusesAShortcutAsTheTarget() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let shortcut = try builder.create(config: config(), in: out)
+        var chained = config(name: "Chained")
+        chained.targetPath = shortcut.path
+
+        XCTAssertThrowsError(try builder.create(config: chained, in: out)) { error in
+            guard case ShortcutBuilder.BuilderError.targetIsShortcut(let path) = error else { return XCTFail("unexpected error \(error)") }
+            XCTAssertEqual(path, shortcut.path)
+            XCTAssertEqual(error.localizedDescription, "Target Work is an App Duplicator shortcut, not an app. Choose the original app instead.")
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: out.appending(path: "Chained.app").path), "nothing is written for a refused target")
+    }
+
+    func testRegenerateRefusesTheShortcutItselfAsTheTarget() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: config(), in: out)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        var selfTarget = record.config
+        selfTarget.targetPath = bundle.path
+
+        XCTAssertThrowsError(try builder.regenerate(record: record, config: selfTarget)) { error in
+            guard case ShortcutBuilder.BuilderError.targetIsShortcut = error else { return XCTFail("unexpected error \(error)") }
+        }
+        XCTAssertEqual(try LibraryScanner.record(forBundleAt: bundle).config.targetPath, record.config.targetPath, "the refused write leaves the bundle as it was")
+    }
+
+    func testDuplicateDeDuplicatesTheSlugAgainstTheLibrary() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let first = try builder.create(config: config(), in: out)
+        let record = try LibraryScanner.record(forBundleAt: first)
+        // "Target-Work" gets its own file name but folds to the original's slug.
+        XCTAssertEqual(ShortcutConfig.slug(for: "Target-Work"), record.config.slug, "precondition: the names collide on the slug")
+
+        let second = try builder.duplicate(record: record, newName: "Target-Work", in: out, takenSlugs: [record.config.slug])
+        let copy = try LibraryScanner.record(forBundleAt: second)
+        let expected = "\(record.config.slug)-2"
+        XCTAssertEqual(second.lastPathComponent, "Target-Work.app")
+        XCTAssertEqual(copy.config.slug, expected)
+        XCTAssertEqual(copy.config.bundleIdentifier, ShortcutConfig.bundleIdentifier(forSlug: expected))
+        XCTAssertEqual(copy.config.dataPath, ShortcutConfig.defaultDataPath(forSlug: expected, home: FileManager.default.homeDirectoryForCurrentUser))
+        XCTAssertNotEqual(copy.config.bundleIdentifier, record.config.bundleIdentifier)
     }
 
     func testCreateResolvesDefaultDataPathWhenNil() throws {

@@ -44,8 +44,12 @@ final class WizardModel {
     /// Looks up the profile for a target bundle identifier; the sheet passes `AppState.profile(forBundleIdentifier:)`.
     private let profileLookup: @MainActor (String) -> AppProfile?
 
-    init(prefillTarget: URL? = nil, profileLookup: @escaping @MainActor (String) -> AppProfile? = { _ in nil }) {
+    /// Slugs the library already uses (`SlugAllocator.takenSlugs(in:)`); `slug` steps around them (final review M6).
+    private let takenSlugs: Set<String>
+
+    init(prefillTarget: URL? = nil, takenSlugs: Set<String> = [], profileLookup: @escaping @MainActor (String) -> AppProfile? = { _ in nil }) {
         self.profileLookup = profileLookup
+        self.takenSlugs = takenSlugs
         if let prefillTarget {
             selectTarget(prefillTarget)
             if inspected != nil { step = .identity }
@@ -53,6 +57,24 @@ final class WizardModel {
     }
 
     var isLastStep: Bool { step == .review }
+
+    /// The slug the new shortcut gets: the name's slug, or its first free `-2`, `-3`, … variant. Its bundle id and
+    /// default data folder follow it.
+    var slug: String {
+        SlugAllocator.uniqueSlug(proposed: ShortcutConfig.slug(for: name.trimmingCharacters(in: .whitespaces)), taken: takenSlugs)
+    }
+
+    /// The installed apps the target step shows for `query`: all of them while it is empty, else the names that
+    /// contain it (case-insensitive).
+    static func filteredApps(_ apps: [InstalledApp], query: String) -> [InstalledApp] {
+        query.isEmpty ? apps : apps.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
+    /// True when a non-empty search hides every app, so the step shows "No matches" instead of an empty grid. An
+    /// empty query with no apps (the scan is still running, or found nothing) is not a search result.
+    static func showsNoMatches(apps: [InstalledApp], query: String) -> Bool {
+        !query.isEmpty && filteredApps(apps, query: query).isEmpty
+    }
 
     /// Dock Shortcut cannot exec a protected binary (spec §4.1); the picker is locked to System Launch.
     /// Same rule as the editor's (`InspectedApp.requiresSystemLaunch`).
@@ -71,6 +93,16 @@ final class WizardModel {
     }
 
     func selectTarget(_ url: URL) {
+        // Final review M5: a shortcut is never a target; it would chain launchers, or exec itself if it is this one.
+        guard !TargetGuard.isShortcutBundle(at: url) else {
+            targetURL = nil
+            inspected = nil
+            inspectError = TargetGuard.refusalMessage(forAppAt: url)
+            profile = nil
+            arguments = []
+            environment = [:]
+            return
+        }
         targetURL = url
         do {
             let app = try AppInspector().inspect(appAt: url)
@@ -112,12 +144,12 @@ final class WizardModel {
 
     func makeConfig() -> ShortcutConfig {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        let slug = ShortcutConfig.slug(for: trimmed)
+        let finalSlug = slug
         return ShortcutConfig(
             kind: kind,
             name: trimmed,
-            slug: slug,
-            bundleIdentifier: ShortcutConfig.bundleIdentifier(forSlug: slug),
+            slug: finalSlug,
+            bundleIdentifier: ShortcutConfig.bundleIdentifier(forSlug: finalSlug),
             targetPath: targetURL?.path ?? "",
             targetBundleIdentifier: inspected?.bundleIdentifier ?? "",
             launchMode: requiresSystemLaunch ? .systemLaunch : launchMode,

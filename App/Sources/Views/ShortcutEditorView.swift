@@ -30,7 +30,7 @@ struct ShortcutEditorView: View {
 
     var body: some View {
         Form {
-            IdentitySection(draft: $draft, record: record)
+            IdentitySection(draft: $draft, record: record, inspected: inspected)
             TargetSection(draft: $draft, inspected: inspected, profile: profile)
             ProfileSection(bundleIdentifier: draft.targetBundleIdentifier, profile: profile, detectedFamily: inspected?.family)
             LaunchSection(draft: $draft, record: record, inspected: inspected)
@@ -118,7 +118,9 @@ struct ShortcutEditorView: View {
         var config = draft
         config.name = config.name.trimmingCharacters(in: .whitespaces)
         if config.name != record.config.name {
-            config.slug = ShortcutConfig.slug(for: config.name)
+            // Final review M6: a rename steps around the slugs the other shortcuts use (this one's own stays free).
+            config.slug = SlugAllocator.uniqueSlug(proposed: ShortcutConfig.slug(for: config.name),
+                                                   taken: SlugAllocator.takenSlugs(in: appState.library.records, excluding: record.bundleURL))
             config.bundleIdentifier = ShortcutConfig.bundleIdentifier(forSlug: config.slug)
         }
         Task {

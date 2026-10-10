@@ -52,6 +52,11 @@ struct ContentView: View {
         }
         .dropDestination(for: URL.self) { urls, _ in
             guard let app = urls.first(where: { $0.pathExtension == "app" }) else { return false }
+            // Final review M5: a dropped shortcut is refused before the wizard opens on it.
+            guard !TargetGuard.isShortcutBundle(at: app) else {
+                appState.pendingError = AppError(context: "Not an app", message: TargetGuard.refusalMessage(forAppAt: app))
+                return false
+            }
             appState.wizardPrefillTarget = app
             appState.isWizardPresented = true
             return true

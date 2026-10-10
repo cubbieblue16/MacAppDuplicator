@@ -163,7 +163,9 @@ final class AppState {
 
     func duplicate(_ record: ShortcutRecord, newName: String) async {
         do {
-            let url = try builder.duplicate(record: record, newName: newName, in: record.bundleURL.deletingLastPathComponent())
+            let url = try builder.duplicate(
+                record: record, newName: newName, in: record.bundleURL.deletingLastPathComponent(),
+                takenSlugs: SlugAllocator.takenSlugs(in: library.records))
             await library.rescan()
             select(url)
         } catch {
