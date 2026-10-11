@@ -161,5 +161,44 @@ has out "dry-run: xcrun stapler staple $(shown "$T/dummy.dmg")" "dry run staples
 expect_exit 0 "notarize.sh --dry-run on a .zip exits 0" Tools/notarize.sh "$T/dummy.zip" --dry-run
 has out "dry-run: xcrun notarytool submit $(shown "$T/dummy.zip") --keychain-profile MAD-notary --wait --output-format json" "dry run submits the .zip as is"
 lacks out "stapler" "dry run never staples a .zip"
+# --- Task 3: make-dmg.sh ---
+mkdir -p "$T/dmg" "$T/Empty.app/Contents"
+expect_exit 0 "make-dmg.sh passes bash -n" bash -n Tools/make-dmg.sh
+if [ -x Tools/make-dmg.sh ]; then ok "make-dmg.sh is executable"; else fail "make-dmg.sh is executable"; fi
+expect_exit 0 "make-dmg.sh --help exits 0" Tools/make-dmg.sh --help
+has out 'Usage: Tools/make-dmg.sh <app> [--output dist/<name>.dmg] [--identity "<display name>"] [--volname "<name>"]' "make-dmg.sh --help prints the usage line"
+expect_exit 64 "make-dmg.sh without an app exits 64" Tools/make-dmg.sh
+has err "error: missing <app>" "make-dmg.sh names the missing app"
+expect_exit 64 "make-dmg.sh rejects a path that is not a .app" Tools/make-dmg.sh "$T/notes.txt" --output "$T/dmg/x.dmg"
+expect_exit 64 "make-dmg.sh rejects a .app without Contents/Info.plist" Tools/make-dmg.sh "$T/Empty.app" --output "$T/dmg/x.dmg"
+expect_exit 64 "make-dmg.sh wants an --output ending in .dmg" Tools/make-dmg.sh "$T/Fake.app" --output "$T/dmg/Fake.img"
+expect_exit 64 "make-dmg.sh rejects an unknown option" Tools/make-dmg.sh "$T/Fake.app" --background "$T/notes.txt"
+expect_exit 0 "make-dmg.sh builds a DMG from the fake app" Tools/make-dmg.sh "$T/Fake.app" --output "$T/dmg/Fake.dmg" --volname "Fake Test"
+LAST="$(tail -n 1 "$T/out")"
+if [ "$LAST" = "$T/dmg/Fake.dmg" ]; then ok "make-dmg.sh prints the DMG path last"; else fail "make-dmg.sh prints the DMG path last (got: $LAST)"; fi
+expect_exit 0 "hdiutil verify accepts the DMG" hdiutil verify "$T/dmg/Fake.dmg"
+expect_exit 0 "hdiutil imageinfo reads the DMG" hdiutil imageinfo "$T/dmg/Fake.dmg"
+has out "Format: UDZO" "the DMG is UDZO (compressed, read-only)"
+MNT="$(mktemp -d "$T/mnt.XXXXXX")"
+expect_exit 0 "the DMG mounts read-only" hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$T/dmg/Fake.dmg"
+if [ -f "$MNT/Fake.app/Contents/Info.plist" ]; then ok "the DMG holds Fake.app"; else fail "the DMG holds Fake.app"; fi
+LINK="$(readlink "$MNT/Applications" || true)"
+if [ "$LINK" = "/Applications" ]; then ok "the DMG has the Applications symlink"; else fail "the DMG has the Applications symlink (got: $LINK)"; fi
+expect_exit 0 "diskutil reads the mounted volume" diskutil info "$MNT"
+has out "Fake Test" "the volume is named by --volname"
+# Spotlight can hold a fresh volume busy for a moment; a forced detach is the fallback.
+if hdiutil detach "$MNT" >"$T/out" 2>"$T/err" || hdiutil detach "$MNT" -force >"$T/out" 2>"$T/err"; then
+    ok "the DMG detaches"
+else
+    fail "the DMG detaches"
+fi
+MNT=""
+mkdir -p "$T/mini/Tools" "$T/mini/App"
+cp Tools/make-dmg.sh "$T/mini/Tools/make-dmg.sh"
+printf 'settings:\n  base:\n    CURRENT_PROJECT_VERSION: "1"\n    MARKETING_VERSION: "9.8.7"\n' > "$T/mini/App/project.yml"
+expect_exit 0 "make-dmg.sh without --output builds dist/macOS-App-Duplicator-<version>.dmg" "$T/mini/Tools/make-dmg.sh" "$T/Fake.app"
+if [ -f "$T/mini/dist/macOS-App-Duplicator-9.8.7.dmg" ]; then ok "the default DMG name carries MARKETING_VERSION"; else fail "the default DMG name carries MARKETING_VERSION"; fi
+LAST="$(tail -n 1 "$T/out")"
+if [ "$LAST" = "$T/mini/dist/macOS-App-Duplicator-9.8.7.dmg" ]; then ok "the default DMG path is printed last"; else fail "the default DMG path is printed last (got: $LAST)"; fi
 
 echo "PASS $N checks"
