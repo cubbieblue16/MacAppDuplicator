@@ -15,14 +15,14 @@ Manual gate. Automated coverage is `Tools/test-app.sh` (MacAppDuplicatorTests), 
 Tools/build-app.sh --configuration Release
 ```
 
-- [ ] **1.1** The command prints `<repo>/.build/DerivedData/Build/Products/Release/macOS App Duplicator.app`. Open it with `open "<path>"` (the name contains spaces). Expected: the library window opens and the app menu's About panel shows `Version 0.4.0 (3)`.
+- [ ] **1.1** The command prints `<repo>/.build/DerivedData/Build/Products/Release/macOS App Duplicator.app`. Open it with `open "<path>"` (the name contains spaces). Expected: the library window opens and the app menu's About panel shows the version under test (the installed release when the phase runs against `~/Applications`; `Version 0.7.0 (6)` on 2026-10-11).
 
 ## Step 2: Create a web app
 
 - [ ] **2.1** Press ⌘N. Expected: the kind step offers `Web App` with the subtitle `Any website as its own app`, enabled. Choose it and click Next.
-- [ ] **2.2** Expected: the heading `Choose a website`, preset tiles including `WhatsApp`, `Teams` and `Outlook`, and an empty `Website URL` field. Click the `WhatsApp` tile. Expected: the field shows `https://web.whatsapp.com`. Type `ftp://example.com` into the field instead. Expected: the note `Enter an https:// address` and Next is disabled. Click the `WhatsApp` tile again and click Next.
-- [ ] **2.3** Identity: set the name to `Acceptance Chat`. Expected: the icon choice defaults to `Fetched from site` (a generated letter tile appears with a note if the fetch failed). Next.
-- [ ] **2.4** `Web App Options`: expected `User agent` shows `Chrome`, `Also open in app` lists `whatsapp.com` and `whatsapp.net`, `Menu bar icon` is off and `Keep running in the menu bar when the window closes` is disabled with the hint `Turn on the menu bar icon first`. Leave everything as is and click Next.
+- [ ] **2.2** Expected: the heading `Choose a website`, preset tiles including `WhatsApp`, `Teams` and `Outlook`, and an empty `Website URL` field. Click the `WhatsApp` tile. Expected: the field shows `https://web.whatsapp.com`. Type `ftp://example.com` into the field instead. Expected: the note `Enter an https:// address` and Next is disabled. Click the `WhatsApp` tile again and click Next. If the tiles do not react to clicks (on 2026-10-11 an invisible, unanswered privacy dialog sat over the window centre and swallowed them), type `https://web.whatsapp.com` into the field instead and note that the preset hosts were not applied.
+- [ ] **2.3** Identity: set the name to `Acceptance Chat`. Expected: the icon choice defaults to `Fetched from site` (a generated letter tile appears with a note if the fetch failed). Next. Known on 0.7.0: `web.whatsapp.com` answers the fetcher's page request with HTTP 400, and the fetcher then skips the `/favicon.ico` fallback, so the tile is generated even though the favicon is reachable. Fixed in 0.7.1; until then the fallback tile is the expected result.
+- [ ] **2.4** `Web App Options`: expected `User agent` shows `Chrome`, `Also open in app` lists `whatsapp.com` and `whatsapp.net`, `Menu bar icon` is off and `Keep running in the menu bar when the window closes` is disabled with the hint `Turn on the menu bar icon first`. Leave everything as is and click Next. If the URL was typed by hand in 2.2, `Also open in app` is empty and `User agent` shows `Safari`; both are correct for a non-preset site.
 - [ ] **2.5** Review. Expected: rows for the name, the address, the user agent and the web data id, and no `Compatibility`, `Profile` or `Launch plan` line. Create. Expected: `Acceptance Chat` appears in the library and its bundle is `~/Applications/App Duplicator/Acceptance Chat.app`.
 - [ ] **2.6** `plutil -extract CFBundleIdentifier raw -o - ~/Applications/App\ Duplicator/Acceptance\ Chat.app/Contents/Info.plist` prints `com.mikekuta.appduplicator.acceptance-chat`. Note the web data id shown in the editor's `Web data` row (Step 7) as `<UUID>`; the WebKit folder name is the same id in lowercase.
 
@@ -47,7 +47,7 @@ Tools/build-app.sh --configuration Release
 ## Step 6: Menu bar icon and background mode
 
 - [ ] **6.1** Quit `Acceptance Chat`. In its editor (Step 7 describes the section) switch `Menu bar icon` on, then `Keep running in the menu bar when the window closes` on, and Save. Launch it again.
-- [ ] **6.2** Expected: an icon appears in the menu bar. Close the window with ⌘W. Expected: the window closes, the Dock icon disappears and the menu bar icon stays.
+- [ ] **6.2** Expected: an icon appears in the menu bar (with a menu bar manager such as Ice running on macOS 27 the icon may not be drawn, Known Limitations entry 197; the launcher log then still shows `features statusItem=true background=true`). Close the window with ⌘W. Expected: the window closes, the Dock icon disappears and the menu bar icon stays.
 - [ ] **6.3** Click the menu bar icon and choose `Show Acceptance Chat`. Expected: the window returns and so does the Dock icon.
 - [ ] **6.4** Close the window again, then click the menu bar icon and choose `Quit Acceptance Chat`. Expected: the app quits and the menu bar icon is gone.
 - [ ] **6.5** In the editor, switch `Menu bar icon` off. Expected: `Keep running in the menu bar when the window closes` turns off and is disabled with the hint `Turn on the menu bar icon first`. Save.
@@ -77,14 +77,14 @@ Quit `Acceptance Chat` first if it is running. Replace `<ID>` below with `com.mi
 ## Step 9: Duplicate and Delete
 
 - [ ] **9.1** Duplicate `Acceptance Chat` as `Acceptance Chat Copy`. Expected: the copy's `Web data` shows a different id from the original, and its Web App section keeps the same address and options. Launch the copy briefly, expecting a QR code (it has its own logins), then quit it.
-- [ ] **9.2** Delete `Acceptance Chat Copy`. Expected: after the usual confirmation a second question `Also remove web data (logins, cookies, cache)?` with the buttons `Keep Web Data` (the default), `Remove Web Data` and `Cancel`. Click `Cancel`. Expected: nothing was deleted.
+- [ ] **9.2** Delete `Acceptance Chat Copy`. Expected: after the usual confirmation a second question `Also remove web data (logins, cookies, cache)?` with the buttons `Keep Web Data` (the default), `Remove Web Data` and `Cancel`. Click `Cancel`. Expected: nothing was deleted (the first `Delete “Acceptance Chat Copy”?` alert returns so you can cancel that too).
 - [ ] **9.3** Delete it again and choose `Keep Web Data`. Expected: the shortcut is in the Trash and `ls ~/Library/WebKit/com.mikekuta.appduplicator.acceptance-chat-copy/WebsiteDataStore` still lists a folder.
 - [ ] **9.4** Put `Acceptance Chat Copy.app` back into `~/Applications/App Duplicator` from the Trash, wait for it to appear in the library, and delete it again, this time choosing `Remove Web Data`. Expected: the shortcut is in the Trash and the folder from 9.3 is gone. If the delete fails, the shortcut is not trashed and an alert shows why.
 - [ ] **9.5** Empty nothing: the Trash holds the two `Acceptance Chat Copy.app` bundles until Teardown.
 
 ## Step 10: Diagnostics
 
-- [ ] **10.1** Change the address of `Acceptance Chat` to `https://web.whatsapp.com/?token=mad-secret-4471#x` and Save. Open `Diagnostics…`. Expected: rows `Kind` (`Web app`), `URL` (`https://web.whatsapp.com/`), `User agent` (`Safari`), `Data store` (`<UUID>`), `Background` (`Off`), `Menu bar icon` (`Off`), `Badge pattern` (`\((\d+)\) (default)`), `Also open` (`whatsapp.com, whatsapp.net, login.example.com`), `Zoom` (`100%`), and a log section ending with the lines Step 3 and Step 4 produced. There are no `Target`, `Executable`, `Arguments` or `Environment` entries.
+- [ ] **10.1** Change the address of `Acceptance Chat` to `https://web.whatsapp.com/?token=mad-secret-4471#x` and Save. Open `Diagnostics…`. Expected: rows `Kind` (`Web app`), `URL` (`https://web.whatsapp.com/`), `User agent` (`Safari`), `Data store` (`<UUID>`), `Background` (`Off`), `Menu bar icon` (`Off`), `Badge pattern` (`\((\d+)\) (default)`), `Also open` (`whatsapp.com, whatsapp.net, login.example.com`; only `login.example.com` when 2.2 was typed by hand), `Zoom` (`100%`), and a log section ending with the lines Step 3 and Step 4 produced. There are no `Target`, `Executable`, `Arguments` or `Environment` entries.
 - [ ] **10.2** Click `Copy Report`, then run `pbpaste | grep -c 'mad-secret-4471'`. Expected: `0`. Done. Restore the address to `https://web.whatsapp.com` and Save.
 
 ## Step 11: Known Limitations
@@ -95,6 +95,12 @@ Quit `Acceptance Chat` first if it is running. Replace `<ID>` below with `com.mi
 
 - [ ] **12.1** Launch `Acceptance Chat`, press ⌘+ three times, quit, launch again. Expected: the page is still zoomed. The editor's `Zoom` still reads `100%`.
 - [ ] **12.2** `defaults read com.mikekuta.appduplicator.acceptance-chat MADPageZoom` prints a number above 1. Press ⌘0 in the app, quit, and run the command again. Expected: `1`.
+
+## Observations (2026-10-11, 0.7.0 (6))
+
+- Every launch of a web app logs `error notification authorization: Notifications are not allowed for this application` until the user answers the macOS notification prompt. Harmless, but noisy; a quieter log line is a candidate for 0.7.1.
+- Steps that need eyes on the web app's own window (3–5, 6.3, 6.4, ⌘W in 6.2, the QR code in 8.5 and 9.1, 12) were not driven by the acceptance harness, which had no access to the `Acceptance Chat` window; disk, plist and log evidence stands in where noted in the record.
+- Cancel on the second delete question returns to the first delete alert rather than closing both; acceptable, noted so the behaviour is intentional.
 
 ## Teardown
 
@@ -109,15 +115,15 @@ Move only the test items to the Trash (nothing here is deleted outright):
 
 | Step | Date | Result | Notes |
 |---|---|---|---|
-| 1 | | | |
-| 2 | | | |
-| 3 | | | |
-| 4 | | | |
-| 5 | | | |
-| 6 | | | |
-| 7 | | | |
-| 8 | | | |
-| 9 | | | |
-| 10 | | | |
-| 11 | | | |
-| 12 | | | |
+| 1 | 2026-10-11 | N/A | Installed 0.7.0 (6) used; build step covered by Phase 7. 1.1 version text generalised |
+| 2 | 2026-10-11 | PASS / BUG (2.3) | 2.1 Web App kind enabled. 2.2 preset tiles not clickable under an invisible privacy dialog; URL typed by hand, `ftp://` note and disabled Next confirmed. 2.3 icon fetch fell back to a generated tile: `web.whatsapp.com` returns HTTP 400 to the fetcher and the favicon fallback is skipped (fix in 0.7.1). 2.4 Safari UA and empty Also-open as expected for a typed URL. 2.5–2.6 created, bundle id `com.mikekuta.appduplicator.acceptance-chat` |
+| 3 | 2026-10-11 | PENDING | Mike-present (WhatsApp QR sign-in) |
+| 4 | 2026-10-11 | PENDING | Mike-present (real messages for the Dock badge) |
+| 5 | 2026-10-11 | PENDING | Mike-present (notification prompt and banner click) |
+| 6 | 2026-10-11 | PASS (6.1, 6.2 partial) / PENDING | 6.1 toggles save: plist `menuBarIcon` and `webApp.backgroundMode` true, log `features statusItem=true background=true`. 6.2 status item not drawn with Ice running (Known Limitations 197); ⌘W, 6.3, 6.4 need eyes on the window. 6.5 not run (shortcut deleted at teardown) |
+| 7 | 2026-10-11 | PASS | 7.1 Web App section complete, no Target/Profile/Launch/Advanced. 7.2–7.4 `AppIcon.icns` hash unchanged after Save, bundle id and web data id unchanged. 7.5 Mike-present (signed-in check). 7.6 `ftp://` disables Save, Revert restores. 7.7 `(` shows the invalid-pattern note with the default `\((\d+)\)` |
+| 8 | 2026-10-11 | PASS | 8.1 `Could not remove web data` alert while running. 8.2–8.4 `WebsiteDataStore/<uuid>` listed before, gone after, shortcut keeps the same id. 8.5 by evidence: relaunch recreated the store under the same uuid; QR check Mike-present |
+| 9 | 2026-10-11 | PASS | 9.1 copy gets its own web data id, same address and options. 9.2 second question shown; Cancel returns to the first alert, nothing deleted. 9.3 Keep Web Data leaves the store. 9.4 restored from the Trash with `mv` + ⌘R, deleted with Remove Web Data, store folder gone. 9.5 Trash left alone |
+| 10 | 2026-10-11 | PASS | 10.1 URL row shows the origin only, no Target/Executable/Arguments/Environment; Also open lists only `login.example.com` (no preset hosts, see 2.2). 10.2 copied report does not contain the token |
+| 11 | 2026-10-11 | PASS | 37 entries; all four web app titles present |
+| 12 | 2026-10-11 | PENDING | Mike-present (⌘+ in the web app); `MADPageZoom` absent before any zoom, as expected |
