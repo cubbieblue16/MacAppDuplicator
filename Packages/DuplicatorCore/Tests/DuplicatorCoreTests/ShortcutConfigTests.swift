@@ -266,4 +266,19 @@ final class ShortcutConfigTests: XCTestCase {
             }
         }
     }
+
+    func testNewWindowCommandRoundTripsThroughMADConfig() throws {
+        var config = makeConfig()
+        config.newWindowCommand = "open -na {target} --args --user-data-dir={dataPath}"
+        let dictionary = config.plistDictionary()
+        XCTAssertEqual(dictionary["newWindowCommand"] as? String, "open -na {target} --args --user-data-dir={dataPath}")
+        XCTAssertEqual(try ShortcutConfig(plistDictionary: dictionary), config)
+    }
+
+    func testNewWindowCommandDefaultsToNilAndPhase5DictionariesStillDecode() throws {
+        XCTAssertNil(makeConfig().newWindowCommand)
+        let phase5Dictionary = makeConfig().plistDictionary()
+        XCTAssertNil(phase5Dictionary["newWindowCommand"])
+        XCTAssertNil(try ShortcutConfig(plistDictionary: phase5Dictionary).newWindowCommand)
+    }
 }

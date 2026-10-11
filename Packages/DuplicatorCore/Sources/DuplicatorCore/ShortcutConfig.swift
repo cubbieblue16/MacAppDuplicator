@@ -26,6 +26,9 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
     public var languageCode: String?
     public var eraseOnQuit: Bool
     public var menuBarIcon: Bool
+    /// Template for the helper's New Window menu item (spec §4.6), copied from the compatibility profile when the wizard
+    /// selects a target; nil or blank hides the item. `NewWindowCommandBuilder` renders it; it never reaches a shell.
+    public var newWindowCommand: String?
     /// Icon source for the shortcut bundle (spec §7). Default `.copied`.
     public var iconMode: IconMode
     /// Image file converted to the bundle icon when `iconMode == .custom` (PNG, JPEG, TIFF or ICNS).
@@ -56,6 +59,7 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         languageCode: String? = nil,
         eraseOnQuit: Bool = false,
         menuBarIcon: Bool = false,
+        newWindowCommand: String? = nil,
         iconMode: IconMode = .copied,
         customIconPath: String? = nil,
         homeSymlinkEntries: [String]? = nil,
@@ -79,6 +83,7 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         self.languageCode = languageCode
         self.eraseOnQuit = eraseOnQuit
         self.menuBarIcon = menuBarIcon
+        self.newWindowCommand = newWindowCommand
         self.iconMode = iconMode
         self.customIconPath = customIconPath
         self.homeSymlinkEntries = homeSymlinkEntries
@@ -90,12 +95,12 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case kind, name, slug, bundleIdentifier, targetPath, targetBundleIdentifier, launchMode, dataMode, dataPath
-        case environment, arguments, appearance, languageCode, eraseOnQuit, menuBarIcon
+        case environment, arguments, appearance, languageCode, eraseOnQuit, menuBarIcon, newWindowCommand
         case iconMode, customIconPath, homeSymlinkEntries, webApp, file, cli, engineVersion
     }
 
-    /// Decodes Phase 1 to 4 dictionaries too: `iconMode`, `customIconPath`, `homeSymlinkEntries`, `webApp`, `file` and `cli`
-    /// are optional on input.
+    /// Decodes Phase 1 to 5 dictionaries too: `newWindowCommand`, `iconMode`, `customIconPath`, `homeSymlinkEntries`,
+    /// `webApp`, `file` and `cli` are optional on input.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         kind = try container.decode(ShortcutKind.self, forKey: .kind)
@@ -113,6 +118,7 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         languageCode = try container.decodeIfPresent(String.self, forKey: .languageCode)
         eraseOnQuit = try container.decode(Bool.self, forKey: .eraseOnQuit)
         menuBarIcon = try container.decode(Bool.self, forKey: .menuBarIcon)
+        newWindowCommand = try container.decodeIfPresent(String.self, forKey: .newWindowCommand)
         iconMode = try container.decodeIfPresent(IconMode.self, forKey: .iconMode) ?? .copied
         customIconPath = try container.decodeIfPresent(String.self, forKey: .customIconPath)
         homeSymlinkEntries = try container.decodeIfPresent([String].self, forKey: .homeSymlinkEntries)

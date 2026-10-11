@@ -18,7 +18,17 @@ func makeConfig(app: InspectedApp, options: ShortcutOptions) throws -> ShortcutC
         environment[String(entry[..<separator])] = String(entry[entry.index(after: separator)...])
     }
 
+    if let language = options.language, !LanguageCode.isValid(language) {
+        throw ValidationError("--language expects a code like en, fr or pt-BR: \(language)")
+    }
+    if let message = NewWindowCommandBuilder.validationMessage(for: options.newWindowCommand) {
+        throw ValidationError("--new-window-command: \(message)")
+    }
+
     let dataMode = options.dataMode.dataMode
+    if options.eraseOnQuit, dataMode == .disabled {
+        throw ValidationError("--erase-on-quit needs --data-mode auto or home")
+    }
     let dataPath: String?
     if let explicit = options.dataPath {
         dataPath = explicit
@@ -41,6 +51,9 @@ func makeConfig(app: InspectedApp, options: ShortcutOptions) throws -> ShortcutC
         environment: environment,
         arguments: options.arg,
         appearance: options.appearance.appearance,
-        languageCode: options.language
+        languageCode: options.language,
+        eraseOnQuit: options.eraseOnQuit,
+        menuBarIcon: options.menuBarIcon,
+        newWindowCommand: options.newWindowCommand
     )
 }

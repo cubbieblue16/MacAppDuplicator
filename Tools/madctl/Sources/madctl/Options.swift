@@ -46,4 +46,8 @@ struct ShortcutOptions: ParsableArguments {
     @Option(name: .customLong("arg"), help: "Extra argument; repeatable.") var arg: [String] = []
     @Option var appearance: AppearanceOption = .system
     @Option var language: String?
+    @Flag(name: .customLong("menu-bar-icon"), help: "Show the helper's menu bar icon (app shortcuts only).") var menuBarIcon = false
+    @Flag(name: .customLong("erase-on-quit"), help: "Empty the data folder after the app quits (app shortcuts only).") var eraseOnQuit = false
+    @Option(name: .customLong("new-window-command"), help: "New Window template; {target}, {bundleId} and {dataPath} are substituted.")
+    var newWindowCommand: String?
 }
