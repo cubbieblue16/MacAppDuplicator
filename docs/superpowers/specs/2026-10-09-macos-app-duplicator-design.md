@@ -241,7 +241,7 @@ SwiftUI, macOS 26, `NavigationSplitView`.
 - **Diagnostics** per shortcut: resolved target path, effective argv/env preview (masked), last 200 log lines.
 - **Compat badge**: Verified (profile tested) / Auto (family detected, untested) / HOME only / Unsupported (profile marks single-instance) / Unknown.
 - **Export**: copies the bundle to a chosen location and shows the receiver-side `xattr -dr com.apple.quarantine <path>` snippet (only needed after network transfer).
-- App bundle id `com.mikekuta.MacAppDuplicator`, display name "macOS App Duplicator". Sparkle deferred; releases via GitHub Releases + notarized DMG.
+- App bundle id `com.mikekuta.MacAppDuplicator`, display name "macOS App Duplicator". Sparkle deferred; releases via GitHub Releases + notarized DMG. Help → Check for Updates… opens the GitHub releases page.
 
 ### 7.1 App icon
 
@@ -277,7 +277,7 @@ Concept "Replicator": macOS 26 squircle. Background: deep indigo to electric vio
 ## 9. Security and signing
 
 - Shortcuts are signed with the selected Developer ID Application identity (hardened runtime, timestamp) or ad-hoc. Locally created bundles carry no quarantine attribute, so Gatekeeper does not block them. Exported bundles sent over the network need the receiver-side quarantine removal shown in the Export sheet.
-- The main app is Developer ID signed, hardened runtime, notarized (`notarytool`), shipped as DMG. Keychain-stored notarization credentials are referenced by profile name only.
+- The main app is Developer ID signed, hardened runtime, notarized (`notarytool`), shipped as DMG. Keychain-stored notarization credentials are referenced by profile name only (`Tools/notarize.sh`, `Tools/make-dmg.sh`, `Tools/release.sh`, `Tools/publish-release.sh`; profile `MAD-notary` by default).
 - No shell string interpolation in the launcher; `execve`/`posix_spawn` take argv arrays.
 - Apple platform binaries cannot be exec'd from a foreign bundle (launch constraints); they launch through System Launch only (§4.1).
 - The launcher verifies the target is a directory ending in `.app` containing `Contents/Info.plist` and an executable at the declared path before exec.

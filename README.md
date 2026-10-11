@@ -2,6 +2,20 @@
 
 macOS App Duplicator creates launcher shortcut bundles that run a second copy of a macOS app with its own data directory, Dock icon and settings (Apple Silicon, macOS 26+).
 
+## Install
+
+1. Download `macOS-App-Duplicator-<version>.dmg` from the [latest release](https://github.com/cubbieblue16/MacAppDuplicator/releases/latest).
+2. Open the DMG and drag `macOS App Duplicator.app` onto the `Applications` shortcut beside it.
+3. Eject the DMG and open macOS App Duplicator from Applications.
+
+From 0.7.0 the app and its DMG are notarized by Apple, so the first launch only shows macOS's one-time question about an app downloaded from the Internet; choose Open. Releases before 0.7.0 (the 0.3.0 to 0.6.0 zips) are not notarized, and on macOS 26 right-click (Control-click) → Open no longer gets them past Gatekeeper: open the app once, then choose Open Anyway in System Settings → Privacy & Security and confirm with your password or Touch ID.
+
+Requirements: Apple silicon and macOS 26 or later.
+
+App Duplicator does not update itself and never checks for updates in the background. Help → Check for Updates… opens the latest release page. To update, quit the app, open the new DMG and drag the app over your existing copy (onto the `Applications` shortcut if you installed it there), then choose Replace. Your shortcuts and settings are kept.
+
+Each release's notes end with the DMG's SHA-256. To check a download, compare it with the output of `shasum -a 256 ~/Downloads/macOS-App-Duplicator-<version>.dmg`.
+
 ## Phase 1 engine
 
 Phase 1 provides the core library (`DuplicatorCore`), the `Launcher` binary and the `madctl` command-line generator.
@@ -78,7 +92,7 @@ The Xcode project under `App/` is generated from `App/project.yml` and git-ignor
 - Actions: Launch, Reveal in Finder, Regenerate, Duplicate, Export (with the quarantine-clearing command), Delete (Trash, optional data folder), Rebuild All.
 - Diagnostics sheet: resolved target path (plus the stored path when it differs), executable, launch mode, argv, masked environment, warnings and the last 200 log lines, copyable.
 - Settings: output and library folders (a change rescans the library), signing identity (Ad-hoc or any codesigning identity in the keychain; defaults to the first Developer ID Application identity), the HOME-override symlink list copied into new shortcuts, and Open Logs Folder.
-- Help → Known Limitations (35 entries since Phase 6; the six profile entries are listed under Phase 3 profiles, the four web entries under Phase 4 web apps, the five launcher entries under Phase 5 files, folders and commands and the six helper entries under Phase 6 helper).
+- Help → Known Limitations (36 entries since Phase 7; the six profile entries are listed under Phase 3 profiles, the four web entries under Phase 4 web apps, the five launcher entries under Phase 5 files, folders and commands, the six helper entries under Phase 6 helper and the manual-updates entry under Install). Help → Check for Updates… opens the GitHub releases page.
 
 Acceptance checklist: `docs/acceptance/phase2-library-app.md`.
 
@@ -155,6 +169,43 @@ The helper runs only while the menu bar icon or erase on quit is on, and only fo
 Diagnostics adds `Menu bar icon`, `Erase on quit` (with the reason when the folder would never be emptied), `New Window command` (the masked command line, or why it is hidden) and `Language`, and Copy Report includes them. madctl gains `--menu-bar-icon`, `--erase-on-quit` (needs `--data-mode auto` or `home`) and `--new-window-command <template>`. Help → Known Limitations has six helper entries: the app counts as running until its helper exits, erase confirmation and refusals, apps that ignore `AppleLanguages`, the full-colour icon, New Window needs a command, and System Launch keeps the shortcut open.
 
 Acceptance checklist: `docs/acceptance/phase6-helper.md`.
+
+## Releasing (maintainers)
+
+A release is a Developer ID signed, notarized and stapled app inside a signed, notarized DMG on GitHub Releases. It needs a `Developer ID Application` identity in the login keychain, Xcode 26 or later, `xcodegen`, and `gh` logged in (`gh auth login`). Everything the scripts produce goes to `dist/`, which is git-ignored.
+
+One-time setup: store the notarization credentials as a keychain profile. The scripts refer to it only by name (`MAD-notary` unless you pass `--profile`) and never take an Apple ID or password.
+
+```sh
+xcrun notarytool store-credentials MAD-notary --apple-id <your Apple ID> --team-id 4NQ2UVJ4EZ
+xcrun notarytool history --keychain-profile MAD-notary   # exits 0 once the profile works
+```
+
+`store-credentials` prompts for an app-specific password; create one at appleid.apple.com (Sign-In and Security → App-Specific Passwords).
+
+Each release:
+
+1. Set `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `App/project.yml`, run the tests, commit as `Release: <version> (<build>)` and push it with `git push origin main`.
+2. Build, notarize and package from the clean release commit:
+
+   ```sh
+   Tools/release.sh --identity "Developer ID Application: <name> (<team>)"
+   ```
+
+   It refuses a dirty tree, checks the keychain profile before building, builds the Release configuration, checks every signature for a secure timestamp and no `get-task-allow` entitlement, notarizes and staples the app, builds and signs `dist/macOS-App-Duplicator-<version>.dmg`, notarizes and staples the DMG, prints both Gatekeeper verdicts and writes `dist/SHA256SUMS`. `--profile NAME` uses another keychain profile, `--dry-run` prints the steps without running them, `--skip-notarize` builds an un-notarized DMG for testing (Gatekeeper rejects it) and `--allow-dirty` builds with uncommitted changes.
+3. Tag the release commit: `git tag -a v<version> -m "v<version>"`.
+4. Write the release notes in Markdown under `dist/` (for example `dist/notes-<version>.md`; the publish script refuses a tree with untracked files), check the run with `--dry-run`, then publish:
+
+   ```sh
+   Tools/publish-release.sh v<version> dist/macOS-App-Duplicator-<version>.dmg --notes dist/notes-<version>.md --dry-run
+   Tools/publish-release.sh v<version> dist/macOS-App-Duplicator-<version>.dmg --notes dist/notes-<version>.md
+   ```
+
+   It checks that `gh` is logged in, that the tag points at `HEAD` and that the tree is clean, writes `dist/release-notes-v<version>.md` (your notes plus a `SHA-256` section), pushes the tag and creates the release with the DMG attached. `--title` sets a title other than the tag; `--dry-run` writes the notes copy and prints the push and `gh` commands instead of running them.
+
+`Tools/notarize.sh <path>` and `Tools/make-dmg.sh <app>` also work on their own; each takes `--help`. `Tools/tests/release-scripts.sh` tests the four scripts without submitting anything to Apple or publishing anything to GitHub: stand-ins replace the build, signing, notary and `gh` tools, the only real `notarytool` calls name a keychain profile that does not exist, and the DMG checks build a real image from a fake app in a temporary folder.
+
+Acceptance checklist: `docs/acceptance/phase7-release.md`.
 
 ## Core API used by the app
 
