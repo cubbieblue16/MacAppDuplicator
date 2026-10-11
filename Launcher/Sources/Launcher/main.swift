@@ -16,7 +16,7 @@ let realHome = FileManager.default.homeDirectoryForCurrentUser
 
 let shortcut: PreparedShortcut
 do {
-    shortcut = try LaunchPreparer(realHome: realHome).prepareShortcut(
+    shortcut = try LaunchPreparer(realHome: realHome, progress: { logger.log($0) }).prepareShortcut(
         infoDictionary: Bundle.main.infoDictionary ?? [:],
         shortcutBundleURL: Bundle.main.bundleURL,
         baseEnvironment: base,

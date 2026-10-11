@@ -1,3 +1,4 @@
+import os
 import XCTest
 @testable import DuplicatorCore
 
@@ -74,6 +75,23 @@ final class LaunchPreparerTests: XCTestCase {
         XCTAssertTrue(fileManager.fileExists(atPath: home.appending(path: "Library/Application Support").path))
         let link = home.appending(path: "Documents", directoryHint: .notDirectory)
         XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: link.path), fixture.realHome.appending(path: "Documents").path)
+    }
+
+    func testProgressReportsCreateAndDataFolderLines() throws {
+        let fixture = try makeFixture()
+        let home = fixture.root.appending(path: "home", directoryHint: .isDirectory)
+        let shortcut = config(for: fixture, dataMode: .homeOverride, dataPath: home.path)
+        let lines = OSAllocatedUnfairLock<[String]>(initialState: [])
+
+        let prepared = try LaunchPreparer(realHome: fixture.realHome, progress: { line in lines.withLock { $0.append(line) } })
+            .prepare(infoDictionary: ["MADConfig": shortcut.plistDictionary()], shortcutBundleURL: fixture.shortcutBundle, baseEnvironment: baseEnvironment)
+
+        let collected = lines.withLock { $0 }
+        let dataFolderLines = collected.filter { $0.hasPrefix("data folder ") }
+        XCTAssertEqual(dataFolderLines.count, 1)
+        XCTAssertEqual(dataFolderLines.first.map { String($0.dropFirst("data folder ".count)) }, try XCTUnwrap(prepared.plan.homeOverridePath).path)
+        XCTAssertEqual(try XCTUnwrap(prepared.plan.homeOverridePath).standardizedFileURL.path, home.standardizedFileURL.path)
+        XCTAssertTrue(collected.contains { $0.hasPrefix("create ") })
     }
 
     func testMissingConfigThrowsConfigMissing() throws {

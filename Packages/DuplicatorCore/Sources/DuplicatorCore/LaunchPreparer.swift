@@ -25,10 +25,16 @@ public enum PreparedShortcut: Sendable {
 public struct LaunchPreparer {
     let fileManager: FileManager
     let realHome: URL
+    let progress: (@Sendable (String) -> Void)?
 
-    public init(fileManager: FileManager = .default, realHome: URL) {
+    /// - Parameters:
+    ///   - fileManager: the file manager used for directory creation and the HOME tree.
+    ///   - realHome: the user's real home directory.
+    ///   - progress: receives one short status line before each filesystem step that can block on a folder-access prompt (the Launcher writes it to the shortcut log).
+    public init(fileManager: FileManager = .default, realHome: URL, progress: (@Sendable (String) -> Void)? = nil) {
         self.fileManager = fileManager
         self.realHome = realHome
+        self.progress = progress
     }
 
     /// - Parameters:
@@ -49,6 +55,7 @@ public struct LaunchPreparer {
         var plan = DataSeparationPlanner().plan(app: app, config: config, baseEnvironment: baseEnvironment, shortcutBundleURL: shortcutBundleURL)
 
         for directory in plan.directoriesToCreate {
+            progress?("create \(directory.path)")
             do {
                 try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
             } catch {
@@ -59,6 +66,7 @@ public struct LaunchPreparer {
             }
         }
         if let home = plan.homeOverridePath {
+            progress?("data folder \(home.path)")
             do {
                 let symlinkEntries = config.homeSymlinkEntries ?? HomeTreeBuilder.defaultSymlinkEntries
                 let effectiveHome = try HomeTreeBuilder(fileManager: fileManager, realHome: realHome, symlinkEntries: symlinkEntries)
