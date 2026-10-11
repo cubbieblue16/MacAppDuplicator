@@ -189,11 +189,16 @@ final class AppState {
     /// as the stored one; an item already at `destination` goes to the Trash and comes back if the export fails. The
     /// library is rescanned afterwards. Returns nil and sets `pendingError` on failure.
     func exportCopy(_ record: ShortcutRecord, to destination: URL) async -> ShortcutBuilder.ExportOutcome? {
+        // The copy can block on a folder-access prompt or a large bundle, so it runs off the main actor (like Rebuild All).
+        let builder = self.builder
+        let otherTargetPaths = library.records.map(\.config.targetPath)
         do {
-            let outcome = try builder.exportCopy(
-                record: record, to: destination, resolvedTargetPath: TargetResolver().resolvedPath(for: record.config),
-                otherTargetPaths: library.records.map(\.config.targetPath)
-            )
+            let outcome = try await Task.detached(priority: .userInitiated) {
+                try builder.exportCopy(
+                    record: record, to: destination, resolvedTargetPath: TargetResolver().resolvedPath(for: record.config),
+                    otherTargetPaths: otherTargetPaths
+                )
+            }.value
             await library.rescan()
             return outcome
         } catch {
