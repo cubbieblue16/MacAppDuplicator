@@ -1,6 +1,12 @@
 import AppKit
 import DuplicatorCore
 
+// Spec §3.4 step 5, §4.6: the helper role runs before anything below. A helper never logs a launcher `start` line, never
+// prepares a launch and never touches the globals below, which stay uninitialised in a helper process.
+if HelperArguments.isHelperInvocation(CommandLine.arguments) {
+    runHelperRole(arguments: CommandLine.arguments)
+}
+
 let shortcutName = Bundle.main.bundleURL.deletingPathExtension().lastPathComponent
 let logger = LaunchLogger(name: shortcutName)
 logger.log("start pid=\(getpid()) bundle=\(Bundle.main.bundlePath)")
@@ -86,18 +92,21 @@ logger.log(arguments: plan.arguments)
 logger.log("mode \(plan.launchMode)")
 logger.log(environment: plan.environment)
 
-spawnHelperIfNeeded(config: config)
-
-/// Fork point for the helper role (spec §4.6: status item, process watch, erase-on-quit). Phase 6 implements it;
-/// until then it intentionally does nothing, and the call site exists so the launch order in spec §3.4 step 5 is fixed.
-func spawnHelperIfNeeded(config: ShortcutConfig) {
-    _ = config
-}
-
 if plan.launchMode == .systemLaunch {
     logger.log("system launch")
     launchViaSystem(prepared: prepared, logger: logger)
 }
+
+// Spec §3.4 step 5: in Dock Shortcut mode the helper starts just before exec, so it watches this pid become the target.
+// System Launch never reaches this line (`launchViaSystem` never returns). A failed spawn is logged and the launch goes on.
+HelperLaunch.spawnIfNeeded(
+    config: config,
+    plan: plan,
+    bundlePath: Bundle.main.bundlePath,
+    executableURL: Bundle.main.executableURL,
+    baseEnvironment: base,
+    log: logger
+)
 
 // Dock Shortcut mode (spec §4.1). LaunchServices started this process as the shortcut bundle, so the Dock draws the tile from the shortcut: title is the bundle file name, icon is `CFBundleIconFile`. After `execve`, the target's `LSApplicationCheckIn` (about 0.5 to 1 s later) re-registers this process under the target's bundle id and path, so `lsappinfo`, Activity Monitor and `NSRunningApplication` report the target. The Dock does not redraw on check-in, so the tile keeps the shortcut's name and icon for the life of the process.
 logger.log("exec")

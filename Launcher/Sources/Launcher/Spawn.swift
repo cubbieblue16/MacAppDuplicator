@@ -5,13 +5,17 @@ import Foundation
 /// Starts a command shortcut's process and returns without waiting for it (spec §6). `POSIX_SPAWN_SETSID` puts the
 /// child in its own session, so it outlives the Launcher (which exits right after) and is re-parented to launchd.
 /// `environment` is the complete environment, passed as sorted `KEY=VALUE` strings like `execTarget`; a non-nil
-/// `workingDirectory` becomes the child's current directory. Every `strdup` copy is freed before returning.
+/// `workingDirectory` becomes the child's current directory. `isolatedStandardStreams` (the helper, spec §4.6) adds
+/// `POSIX_SPAWN_CLOEXEC_DEFAULT` and opens `/dev/null` on descriptors 0 to 2, so the child inherits no other descriptor
+/// of this process and never holds a caller's pipe open for the target's lifetime. Every `strdup` copy is freed before
+/// returning.
 /// - Returns: the child's pid, or `LauncherError.spawnFailed` with the `posix_spawn*` error code.
 func spawnDetached(
     executable: URL,
     arguments: [String],
     environment: [String: String],
-    workingDirectory: URL?
+    workingDirectory: URL?,
+    isolatedStandardStreams: Bool = false
 ) -> Result<pid_t, LauncherError> {
     let path = executable.path
     let argv = [path] + arguments
@@ -29,7 +33,11 @@ func spawnDetached(
         return .failure(.spawnFailed(errno: code, path: path))
     }
     defer { posix_spawnattr_destroy(&attributes) }
-    code = posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETSID))
+    var flags = Int32(POSIX_SPAWN_SETSID)
+    if isolatedStandardStreams {
+        flags |= Int32(POSIX_SPAWN_CLOEXEC_DEFAULT)
+    }
+    code = posix_spawnattr_setflags(&attributes, Int16(flags))
     guard code == 0 else {
         return .failure(.spawnFailed(errno: code, path: path))
     }
@@ -44,6 +52,17 @@ func spawnDetached(
         code = posix_spawn_file_actions_addchdir_np(&fileActions, workingDirectory.path)
         guard code == 0 else {
             return .failure(.spawnFailed(errno: code, path: path))
+        }
+    }
+    if isolatedStandardStreams {
+        let streams: [(descriptor: Int32, openFlags: Int32)] = [
+            (STDIN_FILENO, O_RDONLY), (STDOUT_FILENO, O_WRONLY), (STDERR_FILENO, O_WRONLY),
+        ]
+        for stream in streams {
+            code = posix_spawn_file_actions_addopen(&fileActions, stream.descriptor, "/dev/null", stream.openFlags, 0)
+            guard code == 0 else {
+                return .failure(.spawnFailed(errno: code, path: path))
+            }
         }
     }
 
