@@ -1,6 +1,7 @@
 #!/bin/bash
 # Builds macOS App Duplicator.app. Usage: Tools/build-app.sh [--identity "Developer ID Application: ..."] [--configuration Debug|Release]
-# Without --identity the app and the embedded Launcher and WebShell are ad hoc signed.
+# Without --identity the app and the embedded Launcher and WebShell are ad hoc signed. With --identity every signature
+# carries a secure timestamp and the app has no get-task-allow entitlement, as notarization requires.
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 IDENTITY=""
@@ -37,7 +38,9 @@ ARGS=(
   -derivedDataPath .build/DerivedData
 )
 if [ -n "$IDENTITY" ]; then
-  ARGS+=("CODE_SIGN_IDENTITY=$IDENTITY" "DEVELOPMENT_TEAM=4NQ2UVJ4EZ")
+  # Notarization rejects a signature without a secure timestamp and a hardened app that allows debugging; Xcode's
+  # build action signs with --timestamp=none and injects get-task-allow unless these two settings say otherwise.
+  ARGS+=("CODE_SIGN_IDENTITY=$IDENTITY" "DEVELOPMENT_TEAM=4NQ2UVJ4EZ" "OTHER_CODE_SIGN_FLAGS=--timestamp" "CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO")
 fi
 xcodebuild "${ARGS[@]}" build | { grep -E '^(\*\* BUILD|error:|warning: .*\.swift|.*\.swift:[0-9]+:[0-9]+: (error|warning):)' || true; }
 
