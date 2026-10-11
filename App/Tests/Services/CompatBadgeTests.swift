@@ -56,4 +56,11 @@ final class CompatBadgeTests: XCTestCase {
         XCTAssertTrue(CompatBadge.isShown(for: .app))
         XCTAssertFalse(CompatBadge.isShown(for: .webApp))
     }
+
+    func testWizardCaptionSpellsOutUnknownAndKeepsOtherLabels() {
+        XCTAssertEqual(TargetStep.targetCaption(name: "TextEdit", version: "1.21", badge: .unknown), "TextEdit 1.21 · No compatibility profile")
+        XCTAssertEqual(TargetStep.targetCaption(name: "Slack", version: "4", badge: .verified), "Slack 4 · Verified")
+        XCTAssertEqual(TargetStep.targetCaption(name: "Notes", version: "4", badge: .homeOnly), "Notes 4 · HOME only")
+        XCTAssertEqual(CompatBadge.unknown.label, "Unknown", "the sidebar and detail view keep the short label")
+    }
 }

@@ -46,6 +46,13 @@ struct KindStep: View {
 }
 
 struct TargetStep: View {
+    /// The line under the picker: the app and its compatibility. `Unknown` means no profile rates the app, which the
+    /// wizard says in words; the sidebar and detail view keep the short badge label.
+    nonisolated static func targetCaption(name: String, version: String, badge: CompatBadge) -> String {
+        let rating = badge == .unknown ? "No compatibility profile" : badge.label
+        return "\(name) \(version) · \(rating)"
+    }
+
     @Bindable var model: WizardModel
     @State private var apps: [InstalledApp] = []
     @State private var query = ""
@@ -71,7 +78,7 @@ struct TargetStep: View {
                 Label(error, systemImage: "xmark.octagon").foregroundStyle(.red).font(.caption)
             }
             if let app = model.inspected, CompatBadge.isShown(for: model.kind) {
-                Text("\(app.name) \(app.version) · \(CompatBadge.badge(for: app, profile: model.profile).label)")
+                Text(Self.targetCaption(name: app.name, version: app.version, badge: CompatBadge.badge(for: app, profile: model.profile)))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
