@@ -98,15 +98,31 @@ final class BundleWriterWebAppTests: XCTestCase {
         let appBundle = try BundleWriter().write(config: appConfig, app: app, launcherBinary: fixture.executable, iconFile: fixture.icon, to: fixture.output)
         let webBundle = try BundleWriter().write(config: webConfig(), executable: fixture.executable, iconFile: fixture.icon, to: fixture.output)
 
+        let baseKeys: Set<String> = [
+            "CFBundleName", "CFBundleDisplayName", "CFBundleIdentifier", "CFBundleExecutable", "CFBundlePackageType",
+            "CFBundleShortVersionString", "CFBundleVersion", "LSMinimumSystemVersion", "NSHighResolutionCapable",
+            "LSEnvironment", "MADConfig", "MADEngineVersion", "CFBundleIconFile",
+        ]
         XCTAssertEqual(Set(try readPlist(webBundle).keys), Set(try readPlist(appBundle).keys))
-        XCTAssertEqual(
-            Set(try readPlist(webBundle).keys),
-            [
-                "CFBundleName", "CFBundleDisplayName", "CFBundleIdentifier", "CFBundleExecutable", "CFBundlePackageType",
-                "CFBundleShortVersionString", "CFBundleVersion", "LSMinimumSystemVersion", "NSHighResolutionCapable",
-                "LSEnvironment", "MADConfig", "MADEngineVersion", "CFBundleIconFile",
-            ]
+        XCTAssertEqual(Set(try readPlist(webBundle).keys), baseKeys)
+
+        // Launcher kinds use the same writer. Only a command shortcut adds the Automation prompt text, because only it
+        // can drive Terminal.app or iTerm2 through Apple Events (spec §6).
+        let fileConfig = ShortcutConfig(
+            kind: .file, name: "Notes", slug: "notes", bundleIdentifier: "com.mikekuta.appduplicator.notes",
+            targetPath: "", targetBundleIdentifier: "", dataMode: .disabled, file: FileConfig(path: "/tmp/Notes.md")
         )
+        let cliConfig = ShortcutConfig(
+            kind: .cli, name: "Projects", slug: "projects", bundleIdentifier: "com.mikekuta.appduplicator.projects",
+            targetPath: "", targetBundleIdentifier: "", dataMode: .disabled,
+            cli: CLIConfig(executablePath: "/bin/echo", terminal: .terminal)
+        )
+        let fileBundle = try BundleWriter().write(config: fileConfig, executable: fixture.executable, iconFile: fixture.icon, to: fixture.output)
+        let cliBundle = try BundleWriter().write(config: cliConfig, executable: fixture.executable, iconFile: fixture.icon, to: fixture.output)
+        XCTAssertEqual(Set(try readPlist(fileBundle).keys), baseKeys)
+        let cliPlist = try readPlist(cliBundle)
+        XCTAssertEqual(Set(cliPlist.keys), baseKeys.union(["NSAppleEventsUsageDescription"]))
+        XCTAssertEqual(cliPlist["NSAppleEventsUsageDescription"] as? String, "Projects opens your terminal to run its command.")
     }
 
     func testLSEnvironmentIsExactlyTheConfigEnvironment() throws {

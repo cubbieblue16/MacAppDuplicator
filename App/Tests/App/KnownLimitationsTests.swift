@@ -115,7 +115,8 @@ final class KnownLimitationsTests: XCTestCase {
     /// Phase 5 (launchers): the five launcher limits are present with their prescribed ids and titles, and each states its point.
     func testPhase5LauncherEntriesStateTheirPoint() throws {
         let topics: [(id: String, title: String, mentions: [String])] = [
-            ("cli-terminal-applescript", "Commands in Terminal or iTerm2 need Automation permission", ["AppleScript", "allow"]),
+            ("cli-terminal-applescript", "Commands in Terminal or iTerm2 need Automation permission",
+             ["AppleScript", "allow", "System Settings > Privacy & Security > Automation", "tccutil reset AppleEvents <bundle id>"]),
             ("cli-terminal-history", "Terminal and iTerm2 keep the command in shell history",
              ["history file", "environment values", "No terminal", "Ghostty", "from a file"]),
             ("file-no-running-state", "File and folder shortcuts do not show a running state", ["Finder", "running indicator"]),

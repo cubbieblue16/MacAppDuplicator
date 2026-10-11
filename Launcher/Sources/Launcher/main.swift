@@ -41,13 +41,36 @@ case .launcher(let action, let launcherConfig):
         // environment in clear text. `displayArguments` is the user's command with secret values masked.
         logger.log(arguments: displayArguments)
         logger.log(environment: environment)
-        switch spawnDetached(executable: executable, arguments: arguments, environment: environment, workingDirectory: workingDirectory) {
-        case .success(let pid):
-            logger.log("spawned pid=\(pid)")
-            logger.log("exit 0")
-            exit(0)
-        case .failure(let error):
-            fail(error, logger: logger)
+        switch terminal {
+        case .terminal, .iterm2:
+            // `osascript` opens the terminal, types the command in and exits. Waiting for it is the only way to see a
+            // failed script, such as a denied Automation permission (-1743), which would otherwise vanish silently.
+            switch spawnAndWait(executable: executable, arguments: arguments, environment: environment, workingDirectory: workingDirectory) {
+            case .success(let result) where result.status == 0:
+                logger.log("osascript exit 0")
+                logger.log("exit 0")
+                exit(0)
+            case .success(let result):
+                // The shortcut bundle's own identifier is the one Automation (TCC) records for this shortcut.
+                let bundleIdentifier = Bundle.main.bundleIdentifier ?? launcherConfig.bundleIdentifier
+                fail(
+                    LauncherError.terminalScriptFailed(
+                        status: result.status, stderr: result.stderr, terminal: terminal, bundleIdentifier: bundleIdentifier
+                    ),
+                    logger: logger
+                )
+            case .failure(let error):
+                fail(error, logger: logger)
+            }
+        case .none, .ghostty:
+            switch spawnDetached(executable: executable, arguments: arguments, environment: environment, workingDirectory: workingDirectory) {
+            case .success(let pid):
+                logger.log("spawned pid=\(pid)")
+                logger.log("exit 0")
+                exit(0)
+            case .failure(let error):
+                fail(error, logger: logger)
+            }
         }
     }
 }

@@ -9,6 +9,7 @@ Manual checks for file, folder and command shortcuts on a real Mac. Run them in 
   `#!/bin/sh` / `for a in "$@"; do printf '[%s]\n' "$a"; done; echo "HOME=$HOME"; echo "MAD_SHORTCUT_NAME=$MAD_SHORTCUT_NAME"; read -r _`
   (`chmod +x args.sh`).
 - TextEdit installed (it is part of macOS). iTerm2 is optional; Step 5 is skipped without it.
+- Ghostty is optional; Step 9.3 is skipped without it. Steps 9.1 and 9.2 need a Developer ID Application identity in your keychain (it appears under Settings → Signing → Signing identity); skip them without one.
 - Note the modification time of `~/.zshrc` (or any dotfile in your HOME) before Step 6: `stat -f %m ~/.zshrc`.
 
 ## Step 1: Build
@@ -61,6 +62,12 @@ Manual checks for file, folder and command shortcuts on a real Mac. Run them in 
 - [ ] **8.5** Delete the Step 6 shortcut with Also move the command's own HOME folder to the Trash on: the shortcut and `~/Library/Application Support/App Duplicator/<slug>` are both in the Trash.
 - [ ] **8.6** Delete the Step 4 shortcut: no HOME toggle is shown, and `args.sh` is untouched.
 
+## Step 9: Automation permission and Ghostty (Mike-present)
+
+- [ ] **9.1** Settings → Signing → Signing identity: choose your Developer ID identity. New Shortcut → Command → `args.sh`, no arguments, Terminal: Terminal. Create and launch. macOS asks once to let the shortcut control Terminal, explaining "<Name> opens your terminal to run its command."; allow it. Terminal opens and runs the command; press Return to end it. Launch again: Terminal runs the command with no second prompt.
+- [ ] **9.2** Turn the 9.1 shortcut off for Terminal in System Settings → Privacy & Security → Automation (or run `tccutil reset AppleEvents <bundle id>`, launch, and choose Don't Allow), then launch it. No Terminal window opens. The "Shortcut could not start" alert says the terminal could not be opened, quotes the Not authorized to send Apple events error, and names the fix: System Settings > Privacy & Security > Automation, or `tccutil reset AppleEvents` followed by this shortcut's bundle id. Settings → General → Open Logs Folder: the shortcut's log ends with an `error …` line and `exit 3`. Turn the permission back on (or run the `tccutil` line from the alert and allow the prompt on the next launch).
+- [ ] **9.3** (skip without Ghostty) New Shortcut → Command → `args.sh`, one argument line `two words`, Terminal: Ghostty. Create and launch. A new Ghostty window opens and prints `[two words]` and `HOME=` your real HOME (`MAD_SHORTCUT_NAME` can be empty here: Ghostty commands start in Ghostty's own environment). Press Return to end the script.
+
 ## Teardown
 
 - Move every remaining Phase 5 shortcut and `~/Desktop/AD Phase 5` to the Trash. Do not empty the Trash as part of this checklist.
@@ -78,3 +85,4 @@ Manual checks for file, folder and command shortcuts on a real Mac. Run them in 
 | 6 | | | |
 | 7 | | | |
 | 8 | | | |
+| 9 | | | |

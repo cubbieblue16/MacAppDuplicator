@@ -34,7 +34,7 @@ public struct BundleWriter {
     /// Writes a bundle that has no target app (web app shortcuts, spec §5): `executable` (the WebShell binary) is copied
     /// to `Contents/MacOS/<Name>` with mode 0o755, `iconFile` (an `.icns`, or nil for no icon) to
     /// `Contents/Resources/AppIcon.icns`, and `LSEnvironment` is exactly `config.environment`. The Info.plist key set
-    /// is the same as for app shortcuts.
+    /// is the same as for app shortcuts, plus `NSAppleEventsUsageDescription` for command shortcuts.
     public func write(config: ShortcutConfig, executable: URL, iconFile: URL?, to directory: URL) throws -> URL {
         try assemble(config: config, executable: executable, iconFile: iconFile, lsEnvironment: config.environment, to: directory)
     }
@@ -76,7 +76,8 @@ public struct BundleWriter {
         return destination
     }
 
-    /// The complete shortcut Info.plist (spec §3.2), shared by app and web app shortcuts. Only these keys are ever written.
+    /// The complete shortcut Info.plist (spec §3.2), shared by every shortcut kind. Only these keys are ever written;
+    /// command shortcuts (`.cli`) also get `NSAppleEventsUsageDescription`.
     private static func infoDictionary(config: ShortcutConfig, lsEnvironment: [String: String], executableName: String, hasIcon: Bool) -> [String: Any] {
         var info: [String: Any] = [
             "CFBundleName": config.name,
@@ -94,6 +95,10 @@ public struct BundleWriter {
         ]
         if hasIcon {
             info["CFBundleIconFile"] = "AppIcon"
+        }
+        if config.kind == .cli {
+            // The Automation prompt's text when the command opens Terminal.app or iTerm2 through `osascript` (spec §6).
+            info["NSAppleEventsUsageDescription"] = "\(config.name) opens your terminal to run its command."
         }
         return info
     }

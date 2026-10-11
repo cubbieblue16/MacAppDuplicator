@@ -280,7 +280,7 @@ struct ShortcutBuilder: Sendable {
         defer { removeScratch(scratch) }
         let icon = try IconResolver.iconFile(for: config, app: app, scratchDirectory: scratch)
         let bundle = try BundleWriter(fileManager: fileManager).write(config: config, app: app, launcherBinary: launcherBinary, iconFile: icon, to: directory)
-        try Signer().sign(bundle: bundle, identity: signingIdentity)
+        try Signer().sign(bundle: bundle, identity: signingIdentity, needsAppleEvents: false)
         return bundle
     }
 
@@ -299,7 +299,7 @@ struct ShortcutBuilder: Sendable {
         defer { removeScratch(scratch) }
         let icon = try IconResolver.webAppIconFile(for: config, webIconData: webIconData, existingIcon: existingIcon, scratchDirectory: scratch)
         let bundle = try BundleWriter(fileManager: fileManager).write(config: config, executable: webShellBinary, iconFile: icon, to: directory)
-        try Signer().sign(bundle: bundle, identity: signingIdentity)
+        try Signer().sign(bundle: bundle, identity: signingIdentity, needsAppleEvents: false)
         return bundle
     }
 
@@ -340,7 +340,10 @@ struct ShortcutBuilder: Sendable {
             icon = kept
         }
         let bundle = try BundleWriter(fileManager: fileManager).write(config: config, executable: launcherBinary, iconFile: icon, to: directory)
-        try Signer().sign(bundle: bundle, identity: signingIdentity)
+        // Terminal.app and iTerm2 are driven through `osascript` (Apple Events), which the hardened runtime of a
+        // Developer ID signature refuses without the Apple Events entitlement.
+        let drivesTerminal = config.kind == .cli && (config.cli?.terminal == .terminal || config.cli?.terminal == .iterm2)
+        try Signer().sign(bundle: bundle, identity: signingIdentity, needsAppleEvents: drivesTerminal)
         return bundle
     }
 

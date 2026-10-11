@@ -137,7 +137,7 @@ enum KnownLimitations {
         KnownLimitation(
             id: "cli-terminal-applescript",
             title: "Commands in Terminal or iTerm2 need Automation permission",
-            detail: "A command shortcut that runs in Terminal or iTerm2 drives that app through AppleScript, so macOS asks once to let the shortcut control it, and the command does not start until you allow it."
+            detail: "A command shortcut that runs in Terminal or iTerm2 drives that app through AppleScript, so macOS asks once to let the shortcut control it, and the command does not start until you allow it. If you clicked Don't Allow, the shortcut reports that it could not start and names the fix: turn the shortcut on in System Settings > Privacy & Security > Automation, or run tccutil reset AppleEvents <bundle id> so macOS asks again."
         ),
         KnownLimitation(
             id: "cli-terminal-history",

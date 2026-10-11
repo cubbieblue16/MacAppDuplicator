@@ -41,6 +41,66 @@ final class SignerTests: XCTestCase {
         XCTAssertFalse(arguments.contains("--deep"))
     }
 
+    func testIdentityArgumentsWithEntitlementsPutThemBeforeTheBundle() {
+        let bundle = URL(filePath: "/tmp/Example.app", directoryHint: .isDirectory)
+        let entitlements = URL(filePath: "/tmp/mad-entitlements-test.plist", directoryHint: .notDirectory)
+        let arguments = Signer.arguments(bundle: bundle, identity: "Developer ID Application: Example", entitlements: entitlements)
+        XCTAssertEqual(arguments, [
+            "--force", "--sign", "Developer ID Application: Example", "--options", "runtime", "--timestamp",
+            "--entitlements", entitlements.path, bundle.path,
+        ])
+    }
+
+    func testAdHocArgumentsNeverCarryEntitlements() {
+        let bundle = URL(filePath: "/tmp/Example.app", directoryHint: .isDirectory)
+        let entitlements = URL(filePath: "/tmp/mad-entitlements-test.plist", directoryHint: .notDirectory)
+        let arguments = Signer.arguments(bundle: bundle, identity: nil, entitlements: entitlements)
+        XCTAssertEqual(arguments, ["--force", "--sign", "-", bundle.path])
+        XCTAssertFalse(arguments.contains("--entitlements"))
+    }
+
+    func testAppleEventsEntitlementsHoldOnlyTheAutomationKeySetToTrue() throws {
+        let plist = try PropertyListSerialization.propertyList(from: Data(Signer.appleEventsEntitlements.utf8), format: nil)
+        let dictionary = try XCTUnwrap(plist as? [String: Any])
+        XCTAssertEqual(dictionary.keys.sorted(), ["com.apple.security.automation.apple-events"])
+        XCTAssertEqual(dictionary["com.apple.security.automation.apple-events"] as? Bool, true)
+    }
+
+    func testEntitlementsFileHoldsTheConstantDuringTheBodyAndIsRemovedAfterwards() throws {
+        var seen: URL?
+        try Signer.withAppleEventsEntitlementsFile { entitlements in
+            seen = entitlements
+            XCTAssertEqual(entitlements.deletingLastPathComponent().standardizedFileURL, FileManager.default.temporaryDirectory.standardizedFileURL)
+            let plist = try PropertyListSerialization.propertyList(from: Data(contentsOf: entitlements), format: nil)
+            XCTAssertEqual((plist as? [String: Any])?["com.apple.security.automation.apple-events"] as? Bool, true)
+        }
+        let file = try XCTUnwrap(seen)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+    }
+
+    func testEntitlementsFileIsRemovedWhenTheBodyThrows() throws {
+        var seen: URL?
+        XCTAssertThrowsError(try Signer.withAppleEventsEntitlementsFile { entitlements in
+            seen = entitlements
+            throw FixtureError(description: "codesign failed")
+        }) { error in
+            XCTAssertEqual((error as? FixtureError)?.description, "codesign failed")
+        }
+        let file = try XCTUnwrap(seen)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+    }
+
+    func testAdHocSigningIgnoresNeedsAppleEvents() throws {
+        let bundle = try makeShortcutBundle()
+        try Signer().sign(bundle: bundle, identity: nil, needsAppleEvents: true)
+
+        let verify = try runCommand("/usr/bin/codesign", ["--verify", "--strict", bundle.path])
+        XCTAssertEqual(verify.status, 0, verify.output)
+        let entitlements = try runCommand("/usr/bin/codesign", ["-d", "--entitlements", "-", "--xml", bundle.path])
+        XCTAssertEqual(entitlements.status, 0, entitlements.output)
+        XCTAssertFalse(entitlements.output.contains("com.apple.security.automation.apple-events"), entitlements.output)
+    }
+
     func testSigningMissingPathThrowsSignerError() throws {
         let root = try makeTemporaryDirectory()
         let missing = root.appending(path: "Missing.app", directoryHint: .isDirectory)

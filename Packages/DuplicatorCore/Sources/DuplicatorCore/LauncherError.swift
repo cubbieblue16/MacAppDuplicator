@@ -16,6 +16,9 @@ public enum LauncherError: Error, LocalizedError {
     case spawnFailed(errno: Int32, path: String)
     /// A launcher-kind `MADConfig` has no `file` / `cli` settings.
     case launcherConfigMissing(ShortcutKind)
+    /// `osascript` exited non-zero while opening Terminal.app or iTerm2 for a command shortcut. `stderr` is its error
+    /// output; `bundleIdentifier` is the shortcut's own, for the `tccutil` recovery when Automation was denied.
+    case terminalScriptFailed(status: Int32, stderr: String, terminal: TerminalChoice, bundleIdentifier: String)
 
     public var errorDescription: String? {
         switch self {
@@ -39,7 +42,30 @@ public enum LauncherError: Error, LocalizedError {
             return "Could not start \(path): \(String(cString: strerror(code)))"
         case .launcherConfigMissing(let kind):
             return "Shortcut is damaged — open macOS App Duplicator and Regenerate. (The \(kind.rawValue) settings are missing.)"
+        case .terminalScriptFailed(let status, let stderr, let terminal, let bundleIdentifier):
+            return Self.terminalScriptFailedDescription(
+                status: status, stderr: stderr, terminal: terminal, bundleIdentifier: bundleIdentifier
+            )
         }
+    }
+
+    /// `osascript` reports a denied Automation permission as error -1743 "Not authorized to send Apple events".
+    private static func terminalScriptFailedDescription(
+        status: Int32,
+        stderr: String,
+        terminal: TerminalChoice,
+        bundleIdentifier: String
+    ) -> String {
+        let detail = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        var description = "The terminal could not be opened (osascript exit \(status))."
+        if !detail.isEmpty {
+            description += " \(detail)"
+        }
+        if detail.contains("-1743") || detail.contains("Not authorized to send Apple events") {
+            description += " Allow the shortcut to control \(terminalName(terminal)) in System Settings > Privacy & Security"
+                + " > Automation, or reset with: tccutil reset AppleEvents \(bundleIdentifier)"
+        }
+        return description
     }
 
     private static func terminalName(_ terminal: TerminalChoice) -> String {

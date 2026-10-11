@@ -8,7 +8,7 @@ extension LauncherError {
             return 1
         case .targetNotFound, .notAnAppBundle, .fileNotFound:
             return 2
-        case .execFailed, .spawnFailed:
+        case .execFailed, .spawnFailed, .terminalScriptFailed:
             return 3
         case .dataPathNotWritable:
             return 4

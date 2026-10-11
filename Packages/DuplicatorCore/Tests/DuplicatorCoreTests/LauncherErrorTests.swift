@@ -72,5 +72,67 @@ final class LauncherErrorTests: XCTestCase {
         XCTAssertEqual(LauncherError.fileNotFound(path: "/x").exitCode, 2)
         XCTAssertEqual(LauncherError.spawnFailed(errno: ENOENT, path: "/x").exitCode, 3)
         XCTAssertEqual(LauncherError.terminalNotFound(.ghostty).exitCode, 5)
+        XCTAssertEqual(
+            LauncherError.terminalScriptFailed(status: 1, stderr: "x", terminal: .terminal, bundleIdentifier: "y").exitCode,
+            3
+        )
+    }
+
+    func testTerminalScriptFailedShowsTheTrimmedErrorOutput() {
+        XCTAssertEqual(
+            LauncherError.terminalScriptFailed(
+                status: 1,
+                stderr: "  0:5: syntax error: Expected end of line but found identifier. (-2741)\n",
+                terminal: .terminal,
+                bundleIdentifier: "com.mikekuta.appduplicator.projects"
+            ).errorDescription,
+            "The terminal could not be opened (osascript exit 1). 0:5: syntax error: Expected end of line but found identifier. (-2741)"
+        )
+        XCTAssertEqual(
+            LauncherError.terminalScriptFailed(
+                status: 134,
+                stderr: " \n",
+                terminal: .iterm2,
+                bundleIdentifier: "com.mikekuta.appduplicator.projects"
+            ).errorDescription,
+            "The terminal could not be opened (osascript exit 134)."
+        )
+    }
+
+    func testTerminalScriptFailedAddsTheAutomationHintWhenAppleEventsAreDenied() {
+        XCTAssertEqual(
+            LauncherError.terminalScriptFailed(
+                status: 1,
+                stderr: "36:186: execution error: Not authorized to send Apple events to Terminal. (-1743)\n",
+                terminal: .terminal,
+                bundleIdentifier: "com.mikekuta.appduplicator.projects"
+            ).errorDescription,
+            "The terminal could not be opened (osascript exit 1). 36:186: execution error: Not authorized to send Apple events"
+                + " to Terminal. (-1743) Allow the shortcut to control Terminal in System Settings > Privacy & Security"
+                + " > Automation, or reset with: tccutil reset AppleEvents com.mikekuta.appduplicator.projects"
+        )
+        // Either marker alone is enough: the error number without the English text, and the text without the number.
+        XCTAssertEqual(
+            LauncherError.terminalScriptFailed(
+                status: 1,
+                stderr: "execution error: (-1743)",
+                terminal: .iterm2,
+                bundleIdentifier: "com.mikekuta.appduplicator.work"
+            ).errorDescription,
+            "The terminal could not be opened (osascript exit 1). execution error: (-1743) Allow the shortcut to control"
+                + " iTerm2 in System Settings > Privacy & Security > Automation, or reset with: tccutil reset AppleEvents"
+                + " com.mikekuta.appduplicator.work"
+        )
+        XCTAssertEqual(
+            LauncherError.terminalScriptFailed(
+                status: 1,
+                stderr: "Not authorized to send Apple events to iTerm2.",
+                terminal: .iterm2,
+                bundleIdentifier: "com.mikekuta.appduplicator.work"
+            ).errorDescription,
+            "The terminal could not be opened (osascript exit 1). Not authorized to send Apple events to iTerm2. Allow the"
+                + " shortcut to control iTerm2 in System Settings > Privacy & Security > Automation, or reset with: tccutil"
+                + " reset AppleEvents com.mikekuta.appduplicator.work"
+        )
     }
 }
