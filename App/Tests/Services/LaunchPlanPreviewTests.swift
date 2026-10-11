@@ -32,6 +32,25 @@ final class LaunchPlanPreviewTests: XCTestCase {
         XCTAssertEqual(preview.family, .native, "/bin/ls has no Electron, Chromium, Firefox or Eclipse markers")
     }
 
+    func testPreviewEnvironmentOmitsInheritedShellVariables() throws {
+        setenv("MAD_TEST_NOISE", "1", 1)
+        setenv("ZZ_SHELL_NOISE", "1", 1)
+        defer {
+            unsetenv("MAD_TEST_NOISE")
+            unsetenv("ZZ_SHELL_NOISE")
+        }
+        var config = makeConfig(targetPath: dir.appending(path: "Target.app").path)
+        config.environment = ["MY_VAR": "kept"]
+
+        let preview = try LaunchPlanPreview.make(config: config, bundleURL: nil)
+
+        XCTAssertNil(preview.maskedEnvironment["ZZ_SHELL_NOISE"], "a variable only this app's shell has is not part of the shortcut")
+        XCTAssertNil(preview.maskedEnvironment["MAD_TEST_NOISE"])
+        XCTAssertEqual(preview.maskedEnvironment["MY_VAR"], "kept")
+        XCTAssertNotNil(preview.maskedEnvironment["HOME"])
+        XCTAssertLessThanOrEqual(preview.maskedEnvironment.count, 6, "only HOME, PATH, CFFIXED_USER_HOME, the shortcut name and the config entries")
+    }
+
     func testPreviewMissingTargetThrows() {
         XCTAssertThrowsError(try LaunchPlanPreview.make(config: makeConfig(targetPath: dir.appending(path: "Nope.app").path), bundleURL: nil))
     }

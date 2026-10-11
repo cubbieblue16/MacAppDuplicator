@@ -43,7 +43,7 @@ struct LaunchPlanPreview: Sendable {
             break
         }
         let app = try AppInspector().inspect(appAt: URL(fileURLWithPath: config.targetPath))
-        let base = ProcessInfo.processInfo.environment
+        let base = previewBaseEnvironment(home: home)
         let plan = DataSeparationPlanner().plan(app: app, config: config, baseEnvironment: base, shortcutBundleURL: bundleURL)
         return LaunchPlanPreview(
             executablePath: plan.executableURL.path,
@@ -55,6 +55,14 @@ struct LaunchPlanPreview: Sendable {
             family: app.family,
             helper: HelperEditorPolicy.helperLine(for: config, home: home)
         )
+    }
+
+    /// The environment the preview plans against. The Launcher inherits LaunchServices' environment at run time, not this
+    /// app's shell, so the preview starts from only the real HOME and PATH; everything else listed is the shortcut's own.
+    static func previewBaseEnvironment(home: URL, processEnvironment: [String: String] = ProcessInfo.processInfo.environment) -> [String: String] {
+        var base = ["HOME": home.path]
+        if let path = processEnvironment["PATH"] { base["PATH"] = path }
+        return base
     }
 
     /// A file or folder shortcut opens its item: the preview shows the item as the "executable", with no arguments.
@@ -90,7 +98,7 @@ struct LaunchPlanPreview: Sendable {
             }
         }
         planned.environment = plannedEnvironment
-        let base = ProcessInfo.processInfo.environment
+        let base = previewBaseEnvironment(home: home)
         let action = try LauncherActionPlanner(realHome: home, terminalLocator: terminalLocator)
             .plan(config: planned, baseEnvironment: base, shortcutBundleURL: bundleURL)
         guard case .spawn(let executable, let arguments, _, let environment, _, _) = action else {
