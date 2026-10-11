@@ -1,3 +1,4 @@
+import AppKit
 import Darwin
 import DuplicatorCore
 import Foundation
@@ -174,6 +175,190 @@ enum HelperRunner {
             session.log.log(HelperLogLine.erased(path: folder.path, removed: outcome.removed, failed: outcome.failures.count))
         case .failure(let refusal):
             session.log.log(HelperLogLine.eraseSkipped(refusal.logReason))
+        }
+    }
+}
+
+/// What the AppKit helper shows and runs, fixed when the helper starts (spec §4.6): an edit to the shortcut reaches the
+/// helper at the shortcut's next launch.
+struct HelperMenuBarSettings: Sendable {
+    /// The shortcut's name, for Show <name>, Quit <name> and the tooltip.
+    var name: String
+    /// The shortcut bundle, for its icon.
+    var bundleURL: URL
+    /// False for a System Launch helper that runs only for erase-on-quit.
+    var showsStatusItem: Bool
+    /// The New Window argv (`argv[0]` absolute), or nil when the item is hidden.
+    var newWindowArguments: [String]?
+    /// The environment New Window runs with: the target's own, home variables included.
+    var targetEnvironment: [String: String]
+
+    init(config: ShortcutConfig, bundleURL: URL, targetPath: String, targetEnvironment: [String: String]) {
+        name = config.name
+        self.bundleURL = bundleURL
+        showsStatusItem = HelperPlan.showsMenuBarIcon(for: config)
+        newWindowArguments = HelperPlan.newWindowArguments(for: config, targetPath: targetPath)
+        self.targetEnvironment = targetEnvironment
+    }
+}
+
+/// The AppKit helper (spec §4.6): an `.accessory` `NSApplication` (no Dock tile, no menu bar of its own) that drives the
+/// same `HelperWatch` as the erase-only helper from a read source on the watcher's kqueue, so the run loop keeps serving
+/// the status item while the watch waits. Every end of the watch goes through `HelperRunner.finish`, erase included.
+/// Show and a reopen of the shortcut bring the target forward, New Window runs the shortcut's New Window command, and
+/// Quit sends the target `SIGTERM`, then `SIGKILL` after `killDelay` seconds if the same process still runs.
+@MainActor
+final class HelperMenuBarRunner: NSObject, NSApplicationDelegate {
+    /// Seconds between Quit's `SIGTERM` and the `SIGKILL` for a target that is still running (spec §4.6).
+    static let killDelay: TimeInterval = 10
+
+    private let watch: HelperWatch
+    private let watcher: ProcessWatcher
+    private let settings: HelperMenuBarSettings
+    private var statusItem: HelperStatusItem?
+    private var eventSource: DispatchSourceRead?
+
+    private init(watch: HelperWatch, watcher: ProcessWatcher, settings: HelperMenuBarSettings) {
+        self.watch = watch
+        self.watcher = watcher
+        self.settings = settings
+        super.init()
+    }
+
+    /// Starts the watch, becomes an `.accessory` application and runs AppKit until the watch ends. A watch that ends
+    /// before AppKit starts finishes at once. Never returns.
+    static func run(_ session: HelperSession, settings: HelperMenuBarSettings) -> Never {
+        let watch = HelperWatch(session: session)
+        if let end = watch.start() {
+            HelperRunner.finish(end, session: session)
+        }
+        guard let watcher = watch.watcher else {
+            HelperRunner.finish(.watchFailed("the watch did not start"), session: session)
+        }
+        let runner = HelperMenuBarRunner(watch: watch, watcher: watcher, settings: settings)
+        let application = NSApplication.shared
+        application.setActivationPolicy(.accessory)
+        // `NSApplication.delegate` is weak; `withExtendedLifetime` keeps the runner alive while AppKit runs.
+        application.delegate = runner
+        runner.startEventSource()
+        withExtendedLifetime(runner) {
+            application.run()
+        }
+        HelperRunner.finish(.watchFailed("the application run loop stopped"), session: session)
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        guard settings.showsStatusItem else {
+            return
+        }
+        var onNewWindow: (@MainActor () -> Void)?
+        if settings.newWindowArguments != nil {
+            onNewWindow = { [weak self] in self?.newWindow() }
+        }
+        statusItem = HelperStatusItem(
+            name: settings.name,
+            icon: HelperStatusItem.shortcutIcon(bundleURL: settings.bundleURL),
+            onShow: { [weak self] in self?.show() },
+            onNewWindow: onNewWindow,
+            onQuit: { [weak self] in self?.quit() }
+        )
+    }
+
+    /// Opening the shortcut again while this helper is its running instance shows the target instead.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        show()
+        return false
+    }
+
+    /// The kqueue descriptor is readable while an event is pending; each wake-up polls and folds the events in.
+    private func startEventSource() {
+        let source = DispatchSource.makeReadSource(fileDescriptor: watcher.fileDescriptor, queue: .main)
+        source.setEventHandler { [weak self] in
+            MainActor.assumeIsolated { self?.drainEvents() }
+        }
+        eventSource = source
+        source.resume()
+    }
+
+    private func drainEvents() {
+        let events: [ProcessWatchEvent]
+        do {
+            events = try watcher.wait(timeout: 0)
+        } catch {
+            HelperRunner.finish(.watchFailed(String(describing: error)), session: watch.session)
+        }
+        if let end = watch.handle(events) {
+            HelperRunner.finish(end, session: watch.session)
+        }
+    }
+
+    /// Unhides the target and asks macOS to activate it with all its windows: cooperatively first (this helper yields
+    /// its activation), then directly. A target that is gone, a reused pid and a refused activation are logged.
+    private func show() {
+        let pid = watch.session.watchedPID
+        guard watch.session.startTime.compare(toLiveProcess: pid) == .same,
+              let target = NSRunningApplication(processIdentifier: pid) else {
+            watch.session.log.log(HelperLogLine.showFailed("pid \(pid) is not a running application"))
+            return
+        }
+        _ = target.unhide()
+        NSApplication.shared.yieldActivation(to: target)
+        if !target.activate(from: NSRunningApplication.current, options: [.activateAllWindows]),
+           !target.activate(options: [.activateAllWindows]) {
+            watch.session.log.log(HelperLogLine.showFailed("macOS refused to activate pid \(pid)"))
+        }
+    }
+
+    /// Spec §4.6: `SIGTERM` now, `SIGKILL` after `killDelay` seconds if the same process still runs. The watch sees the
+    /// exit and finishes the helper as for any other quit, erase included.
+    private func quit() {
+        signalTarget(SIGTERM)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.killDelay) { [weak self] in
+            MainActor.assumeIsolated { self?.signalTarget(SIGKILL) }
+        }
+    }
+
+    /// Signals the watched pid only while its start time still matches, so a reused pid is never signalled.
+    private func signalTarget(_ signalNumber: Int32) {
+        let pid = watch.session.watchedPID
+        guard watch.session.startTime.compare(toLiveProcess: pid) == .same else {
+            return
+        }
+        if kill(pid, signalNumber) == 0 {
+            watch.session.log.log(HelperLogLine.quit(signal: signalNumber))
+        }
+    }
+
+    /// Runs the New Window argv detached, with the target's environment and `/dev/null` on its standard streams.
+    private func newWindow() {
+        guard let argv = settings.newWindowArguments, let program = argv.first else {
+            return
+        }
+        let result = spawnDetached(
+            executable: URL(filePath: program),
+            arguments: Array(argv.dropFirst()),
+            environment: settings.targetEnvironment,
+            workingDirectory: nil,
+            isolatedStandardStreams: true
+        )
+        switch result {
+        case .success(let pid):
+            watch.session.log.log(HelperLogLine.newWindow(argv: argv))
+            Self.reap(pid)
+        case .failure(let error):
+            watch.session.log.log(HelperLogLine.newWindowFailed(error.localizedDescription))
+        }
+    }
+
+    /// Collects a New Window child's exit status on a background thread, so a short-lived `open` never stays a zombie
+    /// of the helper.
+    nonisolated private static func reap(_ pid: pid_t) {
+        Thread.detachNewThread {
+            var status: Int32 = 0
+            var result = waitpid(pid, &status, 0)
+            while result < 0 && errno == EINTR {
+                result = waitpid(pid, &status, 0)
+            }
         }
     }
 }

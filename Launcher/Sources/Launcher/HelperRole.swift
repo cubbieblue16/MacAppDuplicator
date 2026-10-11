@@ -43,7 +43,16 @@ func runHelperRole(arguments argv: [String]) -> Never {
         home: FileManager.default.homeDirectoryForCurrentUser,
         log: helperLog
     )
-    HelperRunner.runBlocking(session)
+    // Spec §4.6: AppKit only for the status item. The erase-only helper stays a plain kqueue wait.
+    guard HelperPlan.showsMenuBarIcon(for: helperConfig) else {
+        HelperRunner.runBlocking(session)
+    }
+    HelperMenuBarRunner.run(session, settings: HelperMenuBarSettings(
+        config: helperConfig,
+        bundleURL: URL(filePath: helperArguments.bundlePath, directoryHint: .isDirectory),
+        targetPath: resolvedTargetPath(for: helperConfig),
+        targetEnvironment: HelperEnvironment.targetEnvironment(helper: ProcessInfo.processInfo.environment)
+    ))
 }
 
 /// `MADConfig` from this bundle's Info.plist, read the way `LaunchPreparer` reads it.
@@ -55,4 +64,14 @@ private func readHelperConfig() throws -> ShortcutConfig {
         throw LauncherError.configCorrupt("MADConfig is not a dictionary")
     }
     return try ShortcutConfig(plistDictionary: configDictionary)
+}
+
+/// The path New Window's `{target}` names: the app `TargetResolver` finds now (the launch resolved it the same way a
+/// moment ago), or the stored path when it finds none.
+private func resolvedTargetPath(for shortcutConfig: ShortcutConfig) -> String {
+    do {
+        return try TargetResolver().resolve(config: shortcutConfig).path
+    } catch {
+        return shortcutConfig.targetPath
+    }
 }

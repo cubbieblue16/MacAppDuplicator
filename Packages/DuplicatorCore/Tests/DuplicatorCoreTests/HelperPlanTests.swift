@@ -53,4 +53,49 @@ final class HelperPlanTests: XCTestCase {
         XCTAssertTrue(HelperPlan.isNeeded(for: withIcon))
         XCTAssertNil(HelperPlan.eraseDataPath(for: withIcon))
     }
+
+    func testMenuBarIconShowsOnlyForApplicationShortcuts() {
+        XCTAssertTrue(HelperPlan.showsMenuBarIcon(for: makeConfig(menuBarIcon: true)))
+        XCTAssertTrue(HelperPlan.showsMenuBarIcon(for: makeConfig(dataMode: .disabled, menuBarIcon: true)))
+        XCTAssertFalse(HelperPlan.showsMenuBarIcon(for: makeConfig(eraseOnQuit: true)))
+        for kind in [ShortcutKind.webApp, .file, .folder, .cli] {
+            XCTAssertFalse(HelperPlan.showsMenuBarIcon(for: makeConfig(kind: kind, menuBarIcon: true)), kind.rawValue)
+        }
+    }
+
+    func testNewWindowArgumentsUseTheResolvedTargetAndTheDataFolder() {
+        var config = makeConfig()
+        config.newWindowCommand = "open -na {target} --args --user-data-dir={dataPath} --bundle={bundleId}"
+        XCTAssertEqual(
+            HelperPlan.newWindowArguments(for: config, targetPath: "/Applications/Moved/Claude.app"),
+            [
+                "/usr/bin/env", "open", "-na", "/Applications/Moved/Claude.app", "--args",
+                "--user-data-dir=\(Self.dataPath)", "--bundle=com.anthropic.claudefordesktop",
+            ]
+        )
+    }
+
+    func testNewWindowArgumentsAreNilWithoutATemplateOrWithoutTheDataFolderTheTemplateNames() {
+        XCTAssertNil(HelperPlan.newWindowArguments(for: makeConfig(), targetPath: "/Applications/Claude.app"))
+        var disabled = makeConfig(dataMode: .disabled)
+        disabled.newWindowCommand = "open -na {target} --args --user-data-dir={dataPath}"
+        XCTAssertNil(HelperPlan.newWindowArguments(for: disabled, targetPath: "/Applications/Claude.app"))
+        var emptyPath = makeConfig(dataPath: "")
+        emptyPath.newWindowCommand = "open -na {target} --args --user-data-dir={dataPath}"
+        XCTAssertNil(HelperPlan.newWindowArguments(for: emptyPath, targetPath: "/Applications/Claude.app"))
+        // A template without {dataPath} still works when data separation is disabled.
+        disabled.newWindowCommand = "open -na {target}"
+        XCTAssertEqual(
+            HelperPlan.newWindowArguments(for: disabled, targetPath: "/Applications/Claude.app"),
+            ["/usr/bin/env", "open", "-na", "/Applications/Claude.app"]
+        )
+    }
+
+    func testNewWindowArgumentsAreNilForOtherKinds() {
+        for kind in [ShortcutKind.webApp, .file, .folder, .cli] {
+            var config = makeConfig(kind: kind)
+            config.newWindowCommand = "open -na {target}"
+            XCTAssertNil(HelperPlan.newWindowArguments(for: config, targetPath: "/Applications/Claude.app"), kind.rawValue)
+        }
+    }
 }
