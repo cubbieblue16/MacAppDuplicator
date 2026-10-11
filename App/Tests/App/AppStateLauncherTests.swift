@@ -36,8 +36,9 @@ final class AppStateLauncherTests: XCTestCase {
     override func tearDown() async throws {
         library.stop()
         defaults.removePersistentDomain(forName: suite)
+        // A Trash fixture that is already gone needs no cleanup; any other removal error fails the test.
         for url in trashed {
-            do { try FileManager.default.removeItem(at: url) } catch { /* fixture already gone */ }
+            if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
         }
         try FileManager.default.removeItem(at: dir)
     }
