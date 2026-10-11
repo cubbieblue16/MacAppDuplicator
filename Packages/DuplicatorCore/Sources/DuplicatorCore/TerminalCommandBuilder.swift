@@ -31,12 +31,19 @@ public struct TerminalCommandBuilder: Sendable {
         """
     }
 
-    /// iTerm2: activate, then a new window with the default profile running the command.
+    /// iTerm2: activate, open a new window with the default profile, then `write text` the command into its session.
+    /// The command goes through the session's shell (like Terminal's `do script`), so `cd … &&` works and the window
+    /// stays open after the command ends. `create window with default profile command` is not used: iTerm2 treats that
+    /// string as the profile command, tokenises and execs it with no shell (so `cd` and `&&` fail), interpolates `\(…)`,
+    /// and closes the window when the process exits.
     public static func iTermScript(command: String, workingDirectory: String?) -> String {
         """
         tell application "iTerm2"
             activate
-            create window with default profile command \(appleScriptLiteral(shellCommand(command, workingDirectory: workingDirectory)))
+            create window with default profile
+            tell current session of current window
+                write text \(appleScriptLiteral(shellCommand(command, workingDirectory: workingDirectory)))
+            end tell
         end tell
         """
     }

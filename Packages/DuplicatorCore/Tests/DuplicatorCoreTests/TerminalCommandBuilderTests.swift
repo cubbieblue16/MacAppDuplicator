@@ -45,7 +45,10 @@ final class TerminalCommandBuilderTests: XCTestCase {
             #"""
             tell application "iTerm2"
                 activate
-                create window with default profile command "'/usr/bin/top'"
+                create window with default profile
+                tell current session of current window
+                    write text "'/usr/bin/top'"
+                end tell
             end tell
             """#
         )
@@ -54,10 +57,28 @@ final class TerminalCommandBuilderTests: XCTestCase {
             #"""
             tell application "iTerm2"
                 activate
-                create window with default profile command "cd '/Users/test/it'\\''s' && '/usr/bin/top'"
+                create window with default profile
+                tell current session of current window
+                    write text "cd '/Users/test/it'\\''s' && '/usr/bin/top'"
+                end tell
             end tell
             """#
         )
+    }
+
+    func testITermWriteTextKeepsInterpolationSyntaxAndSingleQuotesApartFromTheDocumentedEscapes() throws {
+        let cli = CLIConfig(executablePath: "/bin/echo", arguments: [#"\(x)"#, "it's"], workingDirectory: "/tmp", terminal: .iterm2)
+        let argv = try TerminalCommandBuilder().argv(for: cli, terminalApp: iTermApp, inlineEnvironment: [:])
+        let shellCommand = #"cd '/tmp' && '/bin/echo' '\(x)' 'it'\''s'"#
+        let quoted = TerminalCommandBuilder.shellQuoted(["/bin/echo", #"\(x)"#, "it's"])
+        XCTAssertEqual(TerminalCommandBuilder.shellCommand(quoted, workingDirectory: "/tmp"), shellCommand)
+        // Only the documented escapes apply: each backslash is doubled (there are no double quotes here); `(x)` and
+        // every single quote pass through byte for byte.
+        let literal = #""cd '/tmp' && '/bin/echo' '\\(x)' 'it'\\''s'""#
+        XCTAssertEqual(TerminalCommandBuilder.appleScriptLiteral(shellCommand), literal)
+        XCTAssertEqual(literal.replacingOccurrences(of: #"\\"#, with: #"\"#), "\"" + shellCommand + "\"")
+        XCTAssertTrue(argv[2].contains("write text " + literal), argv[2])
+        XCTAssertFalse(argv[2].contains("profile command"), argv[2])
     }
 
     func testArgvForNoneIsTheCommandItself() throws {
@@ -77,7 +98,8 @@ final class TerminalCommandBuilderTests: XCTestCase {
         let cli = CLIConfig(executablePath: "/usr/bin/ssh", arguments: ["it's"], terminal: .iterm2)
         let argv = try TerminalCommandBuilder().argv(for: cli, terminalApp: iTermApp, inlineEnvironment: [:])
         XCTAssertEqual(argv, ["/usr/bin/osascript", "-e", TerminalCommandBuilder.iTermScript(command: #"'/usr/bin/ssh' 'it'\''s'"#, workingDirectory: nil)])
-        XCTAssertTrue(argv[2].contains(#"create window with default profile command "'/usr/bin/ssh' 'it'\\''s'""#), argv[2])
+        XCTAssertTrue(argv[2].contains(#"write text "'/usr/bin/ssh' 'it'\\''s'""#), argv[2])
+        XCTAssertTrue(argv[2].contains("create window with default profile\n"), argv[2])
     }
 
     func testArgvForGhosttyRunsTheGhosttyBinaryWithDashE() throws {

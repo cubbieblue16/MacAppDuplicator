@@ -220,7 +220,7 @@ Same Launcher binary, `MADConfig.kind`:
 - `file` / `folder`: `NSWorkspace.shared.open(url)` or open with a chosen app (`openApplication(at:… , urls:)`), then exit. Default icon = `NSWorkspace.shared.icon(forFile:)` rendered to `.icns`.
 - `cli`: executable path, args, working directory, env, optional HOME override (reuses `HomeTreeBuilder`), terminal choice:
   - `Terminal.app`: AppleScript `do script` with the command.
-  - `iTerm2`: AppleScript `create window with default profile command`.
+  - `iTerm2`: AppleScript `create window with default profile`, then `write text` the command into that window's current session (it runs through the session's shell like Terminal's `do script`, so `cd … &&` works and the window stays open).
   - `Ghostty`: `ghostty -e <cmd>` via `posix_spawn`.
   - `none`: `posix_spawn` detached, no window.
   Commands are built as argv arrays; when a shell string is unavoidable (AppleScript terminals) every element is single-quote-escaped.

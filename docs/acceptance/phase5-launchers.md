@@ -36,8 +36,9 @@ Manual checks for file, folder and command shortcuts on a real Mac. Run them in 
 
 ## Step 5: Command in iTerm2 (skip without iTerm2)
 
-- [ ] **5.1** Duplicate the Step 4 shortcut, set Terminal to iTerm2, Save, launch. Allow the Automation prompt.
-- [ ] **5.2** iTerm2 prints the same three bracketed lines, the real HOME and `MAD_SHORTCUT_NAME=` the shortcut's name.
+- [ ] **5.1** Duplicate the Step 4 shortcut, set Terminal to iTerm2, set Working directory to `~/Desktop/AD Phase 5/Projects`, and add a fourth argument line `\(x) it's` (typed exactly: backslash, parentheses, single quote). Save, launch. Allow the Automation prompt.
+- [ ] **5.2** A new iTerm2 window opens with the command echoed at its prompt (`cd '…/Projects' && /usr/bin/env … '…/args.sh' …`), then prints the same three bracketed lines, `[\(x) it's]` exactly as typed, the real HOME and `MAD_SHORTCUT_NAME=` the shortcut's name.
+- [ ] **5.3** Press Return to end the script: the window stays open at a shell prompt, and `pwd` there prints the `Projects` folder (the command ran in its working directory).
 
 ## Step 6: Background command with its own HOME
 
