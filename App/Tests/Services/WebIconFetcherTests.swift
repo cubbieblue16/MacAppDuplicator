@@ -206,15 +206,29 @@ final class URLSessionWebIconFetcherTests: XCTestCase {
     func testNilWhenThePageIsNotSuccessfulOrNothingDecodes() async throws {
         route("/down", StubbedResponse(status: 503, body: Data("<link rel=icon href=/i.png>".utf8)))
         route("/i.png", StubbedResponse(body: try pngData(letter: "X")))
+        route("/favicon.ico", StubbedResponse(status: 404))
         let serverError = try await fetcher.fetchIcon(for: url("/down"))
         XCTAssertNil(serverError)
-        XCTAssertEqual(StubURLProtocol.requests(forHost: host).map(\.url), [url("/down")], "a failed page stops the search")
+        let requests = StubURLProtocol.requests(forHost: host).map(\.url)
+        XCTAssertEqual(requests, [url("/down"), url("/favicon.ico")], "a failed page only tries /favicon.ico")
+        XCTAssertFalse(requests.contains(url("/i.png")), "the error body's <link> is ignored")
 
         route("/junk", StubbedResponse(html: #"<link rel="icon" href="/junk.png">"#))
         route("/junk.png", StubbedResponse(body: Data("not an image".utf8)))
-        route("/favicon.ico", StubbedResponse(status: 404))
         let undecodable = try await fetcher.fetchIcon(for: url("/junk"))
         XCTAssertNil(undecodable)
+    }
+
+    func testFallsBackToFaviconIcoWhenThePageItselfFails() async throws {
+        let png = try pngData(letter: "W")
+        route("/", StubbedResponse(status: 400, body: Data("<link rel=icon href=/declared.png>".utf8)))
+        route("/favicon.ico", StubbedResponse(body: png))
+
+        let data = try await fetcher.fetchIcon(for: url("/"))
+
+        XCTAssertEqual(data, png)
+        XCTAssertEqual(StubURLProtocol.requests(forHost: host).map(\.url), [url("/"), url("/favicon.ico")])
+        XCTAssertFalse(StubURLProtocol.requests(forHost: host).map(\.url).contains(url("/declared.png")))
     }
 
     func testAnUnreachableIconCandidateMovesOnAndAnUnreachablePageThrows() async throws {

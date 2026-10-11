@@ -170,7 +170,8 @@ final class RedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
 }
 
 /// Downloads a page's icon with an injected `URLSession`. Reads at most 1 MiB of the page and of the icon, gives each
-/// request 15 seconds, and never throws for an HTTP error status: those mean "no icon" (nil).
+/// request 15 seconds, and never throws for an HTTP error status: those mean "no icon" (nil), except that a page that
+/// answers with an HTTP error is not parsed and `/favicon.ico` on the address the user typed is tried instead.
 struct URLSessionWebIconFetcher: WebIconFetching {
     static let maxBytes = 1_048_576
     static let requestTimeout: TimeInterval = 15
@@ -195,17 +196,27 @@ struct URLSessionWebIconFetcher: WebIconFetching {
 
     func fetchIcon(for pageURL: URL) async throws -> Data? {
         guard let scheme = pageURL.scheme?.lowercased(), scheme == "https" || scheme == "http", pageURL.host != nil else { return nil }
-        guard let page = try await get(pageURL, oversize: .truncate) else { return nil }
-        // Redirects (for example web.whatsapp.com → another host) change what relative hrefs mean.
-        let baseURL = page.finalURL
-        let html = String(decoding: page.data, as: UTF8.self)
+        var pageStatus: Int?
+        let page = try await get(pageURL, oversize: .truncate) { pageStatus = $0 }
         var candidates: [URL] = []
-        if let declared = WebIconHTMLParser.iconURL(inHTML: html, pageURL: baseURL),
-           WebIconHTMLParser.isFetchableIconURL(declared, pageHost: baseURL.host(percentEncoded: false)) {
-            candidates.append(declared)
-        }
-        if let favicon = URL(string: "/favicon.ico", relativeTo: baseURL)?.absoluteURL, !candidates.contains(favicon) {
-            candidates.append(favicon)
+        if let page {
+            // Redirects (for example web.whatsapp.com → another host) change what relative hrefs mean.
+            let baseURL = page.finalURL
+            let html = String(decoding: page.data, as: UTF8.self)
+            if let declared = WebIconHTMLParser.iconURL(inHTML: html, pageURL: baseURL),
+               WebIconHTMLParser.isFetchableIconURL(declared, pageHost: baseURL.host(percentEncoded: false)) {
+                candidates.append(declared)
+            }
+            if let favicon = URL(string: "/favicon.ico", relativeTo: baseURL)?.absoluteURL, !candidates.contains(favicon) {
+                candidates.append(favicon)
+            }
+        } else {
+            // Some sites answer the page request with an error yet serve /favicon.ico (web.whatsapp.com answers 400). The
+            // error body is not parsed, and no redirect information exists, so the typed address is the base.
+            if let pageStatus {
+                Self.logger.info("Page answered HTTP \(pageStatus, privacy: .public); trying /favicon.ico")
+            }
+            if let favicon = URL(string: "/favicon.ico", relativeTo: pageURL)?.absoluteURL { candidates.append(favicon) }
         }
         for candidate in candidates {
             do {
@@ -230,13 +241,17 @@ struct URLSessionWebIconFetcher: WebIconFetching {
         case reject
     }
 
-    /// GET `url`. Nil for a non-2xx status, and for a body over the cap when `oversize` is `.reject`.
-    private func get(_ url: URL, oversize: Oversize) async throws -> Fetched? {
+    /// GET `url`. Nil for a non-2xx status (reported to `onHTTPError`), and for a body over the cap when `oversize` is `.reject`.
+    private func get(_ url: URL, oversize: Oversize, onHTTPError: (Int) -> Void = { _ in }) async throws -> Fetched? {
         var request = URLRequest(url: url, timeoutInterval: Self.requestTimeout)
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("text/html,image/*;q=0.9,*/*;q=0.5", forHTTPHeaderField: "Accept")
         let (bytes, response) = try await session.bytes(for: request, delegate: RedirectGuard.shared)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
+        guard let http = response as? HTTPURLResponse else { return nil }
+        guard (200..<300).contains(http.statusCode) else {
+            onHTTPError(http.statusCode)
+            return nil
+        }
         var data = Data()
         for try await byte in bytes {
             if data.count >= Self.maxBytes {
