@@ -96,6 +96,36 @@ final class ShortcutConfigTests: XCTestCase {
         XCTAssertEqual(ShortcutConfig.slug(for: "***"), "shortcut")
     }
 
+    /// Final review M1: a slug names folders under the data root, so only `^[a-z0-9-]+$` is valid.
+    func testIsValidSlugAcceptsOnlyLowercaseLettersDigitsAndHyphens() {
+        for slug in ["claude-work", "chatgpt-2", "shortcut", "a", "0-9"] {
+            XCTAssertTrue(ShortcutConfig.isValidSlug(slug), slug)
+        }
+        for slug in ["", "../escape", "Ok Name", "Claude", "a/b", "a.b", "..", "a_b", " a", "caf\u{E9}"] {
+            XCTAssertFalse(ShortcutConfig.isValidSlug(slug), slug)
+        }
+        for name in ["Claude Work", "  Claude -- Personal!! ", "Café Zürich", "***"] {
+            XCTAssertTrue(ShortcutConfig.isValidSlug(ShortcutConfig.slug(for: name)), name)
+        }
+    }
+
+    /// Final review M1: decoding refuses a slug that fails `isValidSlug` with `configCorrupt("invalid slug")`.
+    func testDecodingRefusesAnInvalidSlug() throws {
+        for slug in ["../escape", "Ok Name"] {
+            var dictionary = makeConfig().plistDictionary()
+            dictionary["slug"] = slug
+            XCTAssertThrowsError(try ShortcutConfig(plistDictionary: dictionary), slug) { error in
+                guard case LauncherError.configCorrupt(let detail) = error else {
+                    return XCTFail("expected configCorrupt for \(slug), got \(error)")
+                }
+                XCTAssertEqual(detail, "invalid slug")
+            }
+        }
+        var valid = makeConfig().plistDictionary()
+        valid["slug"] = "claude-work"
+        XCTAssertEqual(try ShortcutConfig(plistDictionary: valid).slug, "claude-work")
+    }
+
     func testBundleIdentifierAndDefaultDataPath() {
         XCTAssertEqual(ShortcutConfig.bundleIdentifier(forSlug: "claude-work"), "com.mikekuta.appduplicator.claude-work")
         XCTAssertEqual(

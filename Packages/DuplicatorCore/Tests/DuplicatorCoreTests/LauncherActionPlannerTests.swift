@@ -375,6 +375,21 @@ final class LauncherActionPlannerTests: XCTestCase {
         }
     }
 
+    /// Final review M1: a slug built in memory that could climb out of the data root never reaches the file system.
+    func testInvalidSlugThrowsConfigCorruptBeforeCreatingTheHome() throws {
+        let realHome = try makeTemporaryDirectory()
+        var config = makeConfig(kind: .cli, cli: CLIConfig(executablePath: "/bin/ls", terminal: TerminalChoice.none, homeOverride: true))
+        config.slug = "../escape"
+
+        assertLauncherError(
+            try makePlanner(realHome: realHome).plan(config: config, baseEnvironment: [:], shortcutBundleURL: nil)
+        ) { error in
+            if case .configCorrupt(let detail) = error { return detail == "invalid slug" }
+            return false
+        }
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: realHome.path), [])
+    }
+
     func testShortcutEnvironmentWinsOverTheHomeOverride() throws {
         let realHome = try makeTemporaryDirectory()
         let cli = CLIConfig(executablePath: "/bin/ls", terminal: TerminalChoice.none, homeOverride: true)

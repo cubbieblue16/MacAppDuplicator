@@ -137,8 +137,13 @@ public struct LauncherActionPlanner {
     }
 
     /// Creates `ShortcutConfig.defaultDataPath(forSlug:home:)` and builds the HOME tree in it. Returns the effective
-    /// HOME, which is `<path>/<NSUserName()>` when the folder already held other files (spec §4.3).
+    /// HOME, which is `<path>/<NSUserName()>` when the folder already held other files (spec §4.3). A slug that
+    /// `ShortcutConfig.isValidSlug` refuses throws `LauncherError.configCorrupt` before anything is created.
     private func materializeHome(for config: ShortcutConfig) throws -> URL {
+        // A decoded config was checked already; this also covers a config built in memory.
+        guard ShortcutConfig.isValidSlug(config.slug) else {
+            throw LauncherError.configCorrupt("invalid slug")
+        }
         let path = URL(filePath: ShortcutConfig.defaultDataPath(forSlug: config.slug, home: realHome), directoryHint: .isDirectory)
         do {
             try fileManager.createDirectory(at: path, withIntermediateDirectories: true)

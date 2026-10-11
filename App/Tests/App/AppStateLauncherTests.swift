@@ -91,19 +91,28 @@ final class AppStateLauncherTests: XCTestCase {
     }
 
     func testCommandHomeSlugEscapeIsRefused() async throws {
-        // dataRoot/../../escape resolves to <home>/Library/escape, outside App Duplicator's data folder.
+        // Final review M1: a slug that fails `ShortcutConfig.isValidSlug` no longer decodes, so the scan skips the bundle
+        // with a warning instead of listing it.
         let config = commandConfig(name: "Escape Tool", slug: "../../escape", homeOverride: true)
-        let record = try await scannedRecord(for: config)
-        XCTAssertEqual(record.config.slug, "../../escape")
-        // The data root must exist, or the kernel cannot resolve the `..` hops and the folder reads as missing.
+        try FileManager.default.createDirectory(at: settings.outputFolder, withIntermediateDirectories: true)
+        let bundle = try writeShortcutBundle(named: config.name, in: settings.outputFolder, config: config)
+        await library.rescan()
+        XCTAssertNil(library.record(for: bundle))
+        XCTAssertTrue(library.warnings.contains { $0.contains("invalid slug") }, "\(library.warnings)")
+
+        // A record built in memory still gets no HOME folder offered. dataRoot/../../escape would resolve to
+        // <home>/Library/escape, outside App Duplicator's data folder; the data root must exist for the `..` hops to resolve.
         try FileManager.default.createDirectory(at: ShortcutConfig.dataRoot(home: home), withIntermediateDirectories: true)
         let escaped = home.appending(path: "Library/escape", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: escaped, withIntermediateDirectories: true)
+        let record = ShortcutRecord(
+            bundleURL: bundle, config: config, engineVersion: ShortcutConfig.currentEngineVersion, iconURL: nil,
+            targetVersion: nil, targetExists: true, modifiedDate: .distantPast
+        )
 
-        guard case .unavailable(let note) = state.dataFolderDeletionOption(for: record) else {
+        guard case .unavailable = state.dataFolderDeletionOption(for: record) else {
             return XCTFail("a slug that escapes the data root must not be offered")
         }
-        XCTAssertTrue(note.contains("outside App Duplicator's data folder"), note)
         XCTAssertTrue(FileManager.default.fileExists(atPath: escaped.path))
     }
 

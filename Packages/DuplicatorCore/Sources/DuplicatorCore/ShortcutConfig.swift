@@ -133,13 +133,18 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         return dictionary
     }
 
-    /// Decodes a `MADConfig` dictionary. Any problem is reported as `LauncherError.configCorrupt` (spec §4.7).
+    /// Decodes a `MADConfig` dictionary. Any problem is reported as `LauncherError.configCorrupt` (spec §4.7), including
+    /// a slug that `isValidSlug` refuses (`"invalid slug"`).
     public init(plistDictionary: [String: Any]) throws {
         do {
             let data = try PropertyListSerialization.data(fromPropertyList: plistDictionary, format: .binary, options: 0)
             self = try PropertyListDecoder().decode(ShortcutConfig.self, from: data)
         } catch {
             throw LauncherError.configCorrupt(String(describing: error))
+        }
+        // The slug names folders under the data root, so a hand-edited one must not be able to point outside it.
+        guard Self.isValidSlug(slug) else {
+            throw LauncherError.configCorrupt("invalid slug")
         }
     }
 
@@ -156,6 +161,17 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         }
         while slug.hasSuffix("-") { slug.removeLast() }
         return slug.isEmpty ? "shortcut" : slug
+    }
+
+    /// True when `slug` is non-empty and holds only lowercase ASCII letters, digits and "-" (`^[a-z0-9-]+$`), which is
+    /// what `slug(for:)` produces. `defaultDataPath(forSlug:home:)` builds a folder path from it, so a "/", "." or any
+    /// other character could lead outside the data root.
+    public static func isValidSlug(_ slug: String) -> Bool {
+        !slug.isEmpty && slug.utf8.allSatisfy { byte in
+            (UInt8(ascii: "a")...UInt8(ascii: "z")).contains(byte)
+                || (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(byte)
+                || byte == UInt8(ascii: "-")
+        }
     }
 
     /// `com.mikekuta.appduplicator.<slug>` (spec §3.2).

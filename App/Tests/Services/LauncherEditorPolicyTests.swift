@@ -89,5 +89,11 @@ final class LauncherEditorPolicyTests: XCTestCase {
             ShortcutConfig.defaultDataPath(forSlug: "notes", home: home)
         )
         XCTAssertNil(LauncherEditorPolicy.commandHomePath(for: launcher(kind: .file, file: FileConfig(path: "/a", openerAppPath: nil)), home: home))
+        // Final review M1: a slug that fails `ShortcutConfig.isValidSlug` never becomes a path.
+        for slug in ["../escape", "Ok Name", ""] {
+            var escaping = launcher(kind: .cli, cli: own)
+            escaping.slug = slug
+            XCTAssertNil(LauncherEditorPolicy.commandHomePath(for: escaping, home: home), slug)
+        }
     }
 }

@@ -85,9 +85,10 @@ nonisolated enum LauncherEditorPolicy {
         }
     }
 
-    /// A command's own HOME folder when it has one (`cli.homeOverride`), else nil.
+    /// A command's own HOME folder when it has one (`cli.homeOverride`), else nil. Also nil for a slug that
+    /// `ShortcutConfig.isValidSlug` refuses, so such a slug never becomes a path.
     static func commandHomePath(for config: ShortcutConfig, home: URL) -> String? {
-        guard config.kind == .cli, config.cli?.homeOverride == true else { return nil }
+        guard config.kind == .cli, config.cli?.homeOverride == true, ShortcutConfig.isValidSlug(config.slug) else { return nil }
         return ShortcutConfig.defaultDataPath(forSlug: config.slug, home: home)
     }
 
