@@ -10,8 +10,8 @@ struct KnownLimitation: Identifiable, Hashable {
 /// list also carries (single instance, login items, updates). Phase 3 adds the profile limits (advisory badges, partial
 /// profiles, manual updates from one host, sandboxed badges, numbered slugs, export's Trash replacement). Phase 4 adds
 /// the four web app limits (passkeys, zoom storage, notification permission, pop-up and off-site links). Phase 5 adds
-/// the four launcher limits (terminal AppleScript, no running state for files or commands, Ghostty path). Shown in the
-/// Known Limitations window and linked from the wizard's compatibility line.
+/// the five launcher limits (terminal AppleScript, terminal shell history, no running state for files or commands,
+/// Ghostty path). Shown in the Known Limitations window and linked from the wizard's compatibility line.
 enum KnownLimitations {
     static let all: [KnownLimitation] = [
         KnownLimitation(
@@ -138,6 +138,11 @@ enum KnownLimitations {
             id: "cli-terminal-applescript",
             title: "Commands in Terminal or iTerm2 need Automation permission",
             detail: "A command shortcut that runs in Terminal or iTerm2 drives that app through AppleScript, so macOS asks once to let the shortcut control it, and the command does not start until you allow it."
+        ),
+        KnownLimitation(
+            id: "cli-terminal-history",
+            title: "Terminal and iTerm2 keep the command in shell history",
+            detail: "A command shortcut that runs in Terminal or iTerm2 types the whole command, including the environment values it sets inline, into the terminal session, so it shows in the window and lands in the shell's history file. For a command that carries a password, token or key, choose No terminal (run in background) or Ghostty, or have the command read the secret from a file instead."
         ),
         KnownLimitation(
             id: "file-no-running-state",

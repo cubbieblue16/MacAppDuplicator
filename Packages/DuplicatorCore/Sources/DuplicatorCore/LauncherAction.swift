@@ -4,9 +4,19 @@ import Foundation
 public enum LauncherAction: Equatable, Sendable {
     /// Open `items` with `openerApp`, or with each item's default handler when nil (file and folder shortcuts).
     case open(items: [URL], openerApp: URL?)
-    /// Start `executable` detached with exactly these arguments (argv[1...]) and environment (command shortcuts).
-    /// `workingDirectory` is nil for Terminal.app and iTerm2, whose script `cd`s itself.
-    case spawn(executable: URL, arguments: [String], environment: [String: String], workingDirectory: URL?, terminal: TerminalChoice)
+    /// Start `executable` with exactly these arguments (argv[1...]) and environment (command shortcuts).
+    /// `workingDirectory` is nil for Terminal.app and iTerm2, whose script `cd`s itself. `displayArguments` is the
+    /// user's command, `[executable path] + arguments`, with secret values masked by `SecretMasking.maskArguments`, the
+    /// same for every terminal choice. It is what the Launcher logs; the raw argv is never logged, because for
+    /// Terminal.app and iTerm2 it is an AppleScript that holds the whole command and its inline environment.
+    case spawn(
+        executable: URL,
+        arguments: [String],
+        displayArguments: [String],
+        environment: [String: String],
+        workingDirectory: URL?,
+        terminal: TerminalChoice
+    )
 }
 
 /// Turns a launcher-kind `ShortcutConfig` into a `LauncherAction`: validates paths, finds the terminal, builds the
@@ -119,6 +129,7 @@ public struct LauncherActionPlanner {
         return .spawn(
             executable: URL(filePath: executable, directoryHint: .notDirectory),
             arguments: Array(argv.dropFirst()),
+            displayArguments: [resolved.executablePath] + SecretMasking.maskArguments(cli.arguments),
             environment: environment,
             workingDirectory: scriptsChangeDirectory ? nil : workingDirectory,
             terminal: cli.terminal

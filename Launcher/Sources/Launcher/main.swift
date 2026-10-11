@@ -35,9 +35,11 @@ case .launcher(let action, let launcherConfig):
     switch action {
     case .open(let items, let openerApp):
         openItems(items, openerApp: openerApp, logger: logger)
-    case .spawn(let executable, let arguments, let environment, let workingDirectory, let terminal):
+    case .spawn(let executable, let arguments, let displayArguments, let environment, let workingDirectory, let terminal):
         logger.log("spawn \(executable.path) argc=\(arguments.count + 1) terminal=\(terminal.rawValue)")
-        logger.log(arguments: [executable.path] + arguments)
+        // Never the raw argv: for Terminal.app and iTerm2 it is an AppleScript holding the whole command and its inline
+        // environment in clear text. `displayArguments` is the user's command with secret values masked.
+        logger.log(arguments: displayArguments)
         logger.log(environment: environment)
         switch spawnDetached(executable: executable, arguments: arguments, environment: environment, workingDirectory: workingDirectory) {
         case .success(let pid):

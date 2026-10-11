@@ -89,7 +89,7 @@ struct LaunchPlanPreview: Sendable {
         let base = ProcessInfo.processInfo.environment
         let action = try LauncherActionPlanner(realHome: home, terminalLocator: terminalLocator)
             .plan(config: planned, baseEnvironment: base, shortcutBundleURL: bundleURL)
-        guard case .spawn(let executable, let arguments, let environment, _, _) = action else {
+        guard case .spawn(let executable, let arguments, _, let environment, _, _) = action else {
             throw LauncherError.launcherConfigMissing(config.kind)
         }
         let additions = environment.filter { base[$0.key] != $0.value }

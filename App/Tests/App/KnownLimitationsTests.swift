@@ -90,11 +90,11 @@ final class KnownLimitationsTests: XCTestCase {
     }
 
     /// Phase 4 (web apps): the four web limits are present with their prescribed ids and titles, the earlier 20 are
-    /// kept (28 in all with Phase 5's four), ids stay unique, and each entry states its point.
+    /// kept (29 in all with Phase 5's five), ids stay unique, and each entry states its point.
     func testPhase4WebEntriesStateTheirPoint() throws {
         let ids = KnownLimitations.all.map(\.id)
         XCTAssertEqual(Set(ids).count, ids.count, "duplicate known-limitation ids")
-        XCTAssertEqual(ids.count, 28, "20 earlier entries plus the four web entries plus the four launcher entries")
+        XCTAssertEqual(ids.count, 29, "20 earlier entries plus the four web entries plus the five launcher entries")
         let topics: [(id: String, title: String, mentions: [String])] = [
             ("web-no-passkeys", "Web apps do not support passkeys", ["passkey", "WebAuthn"]),
             ("web-zoom-storage", "Web app zoom is remembered outside the shortcut", ["MADPageZoom", "sealed", "preferences"]),
@@ -112,10 +112,12 @@ final class KnownLimitationsTests: XCTestCase {
         }
     }
 
-    /// Phase 5 (launchers): the four launcher limits are present with their prescribed ids and titles, and each states its point.
+    /// Phase 5 (launchers): the five launcher limits are present with their prescribed ids and titles, and each states its point.
     func testPhase5LauncherEntriesStateTheirPoint() throws {
         let topics: [(id: String, title: String, mentions: [String])] = [
             ("cli-terminal-applescript", "Commands in Terminal or iTerm2 need Automation permission", ["AppleScript", "allow"]),
+            ("cli-terminal-history", "Terminal and iTerm2 keep the command in shell history",
+             ["history file", "environment values", "No terminal", "Ghostty", "from a file"]),
             ("file-no-running-state", "File and folder shortcuts do not show a running state", ["Finder", "running indicator"]),
             ("cli-no-running-state", "Command shortcuts do not track the command", ["background", "Dock icon"]),
             ("cli-ghostty-path", "Ghostty commands start in Ghostty's own environment", ["PATH", "full path"]),

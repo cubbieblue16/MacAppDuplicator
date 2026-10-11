@@ -148,6 +148,7 @@ final class LauncherActionPlannerTests: XCTestCase {
             .spawn(
                 executable: URL(filePath: "/bin/sh", directoryHint: .notDirectory),
                 arguments: ["-c", "env"],
+                displayArguments: ["/bin/sh", "-c", "env"],
                 environment: [
                     "PATH": "/opt/bin",
                     "LANG": "en_US.UTF-8",
@@ -172,6 +173,7 @@ final class LauncherActionPlannerTests: XCTestCase {
             .spawn(
                 executable: URL(filePath: "/bin/ls", directoryHint: .notDirectory),
                 arguments: [],
+                displayArguments: ["/bin/ls"],
                 environment: ["MAD_SHORTCUT_NAME": "Projects"],
                 workingDirectory: URL(filePath: NSHomeDirectory(), directoryHint: .isDirectory),
                 terminal: TerminalChoice.none
@@ -220,6 +222,7 @@ final class LauncherActionPlannerTests: XCTestCase {
                     command: "/usr/bin/env 'MAD_SHORTCUT_NAME=Projects' '/usr/bin/top' '-o' 'cpu'",
                     workingDirectory: root.path
                 )],
+                displayArguments: ["/usr/bin/top", "-o", "cpu"],
                 environment: ["MAD_SHORTCUT_NAME": "Projects"],
                 workingDirectory: nil,
                 terminal: .terminal
@@ -238,6 +241,7 @@ final class LauncherActionPlannerTests: XCTestCase {
             .spawn(
                 executable: URL(filePath: "/Applications/Ghostty.app/Contents/MacOS/ghostty", directoryHint: .notDirectory),
                 arguments: ["-e", "/bin/ls", "-la"],
+                displayArguments: ["/bin/ls", "-la"],
                 environment: ["MAD_SHORTCUT_NAME": "Projects"],
                 workingDirectory: URL(filePath: root.path, directoryHint: .isDirectory),
                 terminal: .ghostty
@@ -253,7 +257,7 @@ final class LauncherActionPlannerTests: XCTestCase {
 
         let action = try makePlanner(realHome: realHome).plan(config: config, baseEnvironment: ["PATH": "/usr/bin"], shortcutBundleURL: bundle)
 
-        guard case .spawn(_, let arguments, let environment, _, _) = action else {
+        guard case .spawn(_, let arguments, _, let environment, _, _) = action else {
             return XCTFail("expected spawn, got \(action)")
         }
         let home = try XCTUnwrap(environment["HOME"])
@@ -289,6 +293,37 @@ final class LauncherActionPlannerTests: XCTestCase {
         }
     }
 
+    // MARK: Launch log (main.swift logs `displayArguments` and the masked environment, never the raw argv)
+
+    func testLaunchLogMasksSecretArgumentsAndEnvironmentForTerminalITermAndNone() throws {
+        let root = try makeTemporaryDirectory()
+        let masked = SecretMasking.maskedValue
+        for choice in [TerminalChoice.terminal, TerminalChoice.iterm2, TerminalChoice.none] {
+            let cli = CLIConfig(executablePath: "/bin/echo", arguments: ["--token", "abc123", "--api-key=abc123"], terminal: choice)
+            let config = makeConfig(kind: .cli, cli: cli, environment: ["OPENAI_API_KEY": "abc123"])
+
+            let action = try makePlanner(realHome: root).plan(config: config, baseEnvironment: [:], shortcutBundleURL: nil)
+
+            guard case .spawn(let executable, let arguments, let displayArguments, let environment, _, let terminal) = action else {
+                return XCTFail("expected spawn, got \(action)")
+            }
+            XCTAssertEqual(displayArguments, ["/bin/echo", "--token", masked, "--api-key=\(masked)"], "\(choice)")
+            if choice != .none {
+                // The osascript argv holds the command and its inline environment in clear text: never log it.
+                XCTAssertTrue(arguments.joined(separator: " ").contains("abc123"), "\(choice)")
+            }
+            // The lines main.swift writes for a command shortcut, in its order.
+            let logger = LaunchLogger(name: "Log \(choice.rawValue)", directory: root, maxBytes: 100_000)
+            logger.log("spawn \(executable.path) argc=\(arguments.count + 1) terminal=\(terminal.rawValue)")
+            logger.log(arguments: displayArguments)
+            logger.log(environment: environment)
+            let logged = try String(contentsOf: logger.fileURL, encoding: .utf8)
+            XCTAssertFalse(logged.contains("abc123"), "\(choice): \(logged)")
+            XCTAssertTrue(logged.contains("argv /bin/echo --token \(masked) --api-key=\(masked)\n"), "\(choice): \(logged)")
+            XCTAssertTrue(logged.contains("env OPENAI_API_KEY=\(masked)\n"), "\(choice): \(logged)")
+        }
+    }
+
     // MARK: HOME override (spec §4.3)
 
     func testHomeOverrideBuildsTheShortcutHomeTree() throws {
@@ -298,7 +333,7 @@ final class LauncherActionPlannerTests: XCTestCase {
 
         let action = try makePlanner(realHome: realHome).plan(config: makeConfig(kind: .cli, cli: cli), baseEnvironment: [:], shortcutBundleURL: nil)
 
-        guard case .spawn(_, _, let environment, _, _) = action else {
+        guard case .spawn(_, _, _, let environment, _, _) = action else {
             return XCTFail("expected spawn, got \(action)")
         }
         let home = URL(filePath: ShortcutConfig.defaultDataPath(forSlug: "projects", home: realHome)).standardizedFileURL.path
@@ -320,7 +355,7 @@ final class LauncherActionPlannerTests: XCTestCase {
 
         let action = try makePlanner(realHome: realHome).plan(config: makeConfig(kind: .cli, cli: cli), baseEnvironment: [:], shortcutBundleURL: nil)
 
-        guard case .spawn(_, _, let environment, _, _) = action else {
+        guard case .spawn(_, _, _, let environment, _, _) = action else {
             return XCTFail("expected spawn, got \(action)")
         }
         XCTAssertEqual(environment["HOME"], dataPath.standardizedFileURL.appending(path: NSUserName()).path)
@@ -347,7 +382,7 @@ final class LauncherActionPlannerTests: XCTestCase {
 
         let action = try makePlanner(realHome: realHome).plan(config: config, baseEnvironment: ["HOME": "/Users/real"], shortcutBundleURL: nil)
 
-        guard case .spawn(_, _, let environment, _, _) = action else {
+        guard case .spawn(_, _, _, let environment, _, _) = action else {
             return XCTFail("expected spawn, got \(action)")
         }
         XCTAssertEqual(environment["HOME"], "/Users/test/custom")
