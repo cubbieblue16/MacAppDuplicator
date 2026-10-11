@@ -32,4 +32,18 @@ enum LaunchEnvironment {
         return FileManager.default.temporaryDirectory
             .appending(path: "mad-testhost-profiles-\(UUID().uuidString).json", directoryHint: .notDirectory)
     }
+
+    /// The AppKit defaults that give every NSTextView (and so SwiftUI's `TextEditor` and `TextField` on macOS) its initial
+    /// smart-quote, smart-dash and text-replacement flags. All off: Arguments, Environment and paths must stay literal.
+    static let textSubstitutionDefaults: [String: Bool] = [
+        "NSAutomaticQuoteSubstitutionEnabled": false,
+        "NSAutomaticDashSubstitutionEnabled": false,
+        "NSAutomaticTextReplacementEnabled": false
+    ]
+
+    /// Writes `textSubstitutionDefaults` with `set(_:forKey:)` into the application domain, which beats NSGlobalDomain
+    /// (System Settings → Keyboard → Text). `register(defaults:)` would not: the registration domain loses to it.
+    static func disableTextSubstitution(in defaults: UserDefaults) {
+        for (key, value) in textSubstitutionDefaults { defaults.set(value, forKey: key) }
+    }
 }

@@ -8,6 +8,9 @@ struct MacAppDuplicatorApp: App {
     init() {
         // As the unit-test host the app uses a throwaway defaults suite and never runs `security` (final review M15).
         let isTestHost = Self.isTestHost
+        // Smart quotes and dashes would turn "quoted" or it's in Arguments into curly characters the program then receives.
+        // Not under the test host: it must not write to the real standard domain.
+        if !isTestHost { LaunchEnvironment.disableTextSubstitution(in: .standard) }
         let settings = AppSettings(defaults: LaunchEnvironment.settingsDefaults(isTestHost: isTestHost),
                                    defaultSigningIdentity: AppSettings.adHocIdentityName)
         // As the test host the app never fetches profiles, and its cache path is a temporary file nothing writes.

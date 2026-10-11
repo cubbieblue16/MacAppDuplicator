@@ -31,6 +31,22 @@ final class LaunchEnvironmentTests: XCTestCase {
         XCTAssertEqual(UserDefaults(suiteName: suite)?.string(forKey: "signingIdentity"), "Ad-hoc", "writes land in the throwaway suite")
     }
 
+    func testTextSubstitutionIsSwitchedOffInTheGivenDomain() throws {
+        let name = "com.mikekuta.MacAppDuplicatorTests.textsubst-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        XCTAssertEqual(Set(LaunchEnvironment.textSubstitutionDefaults.keys), [
+            "NSAutomaticQuoteSubstitutionEnabled", "NSAutomaticDashSubstitutionEnabled", "NSAutomaticTextReplacementEnabled"
+        ])
+
+        LaunchEnvironment.disableTextSubstitution(in: defaults)
+
+        for key in LaunchEnvironment.textSubstitutionDefaults.keys {
+            XCTAssertNotNil(defaults.object(forKey: key), "\(key) is written, not just absent")
+            XCTAssertFalse(defaults.bool(forKey: key), key)
+        }
+    }
+
     func testTestHostSuiteIsNotTheAppDomain() {
         // `UserDefaults(suiteName:)` returns nil for the main bundle's own identifier.
         XCTAssertEqual(Bundle.main.bundleIdentifier, "com.mikekuta.MacAppDuplicator")
