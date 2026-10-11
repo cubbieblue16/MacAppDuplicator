@@ -297,7 +297,7 @@ struct ReviewStep: View {
                     }
                 }
                 if let preview = model.preview {
-                    DisclosureGroup("Launch plan", isExpanded: $showPlan) {
+                    DisclosureGroup(isExpanded: $showPlan) {
                         VStack(alignment: .leading, spacing: 6) {
                             planRow("Executable", preview.executablePath)
                             planRow("Arguments", preview.arguments.joined(separator: "\n"))
@@ -311,6 +311,16 @@ struct ReviewStep: View {
                             }
                         }
                         .padding(.top, 4)
+                    } label: {
+                        // A plain DisclosureGroup toggles only on its chevron; the label is a button so the text works too.
+                        Button {
+                            withAnimation { showPlan.toggle() }
+                        } label: {
+                            Text("Launch plan")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
