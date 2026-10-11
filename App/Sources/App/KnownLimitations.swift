@@ -12,8 +12,9 @@ struct KnownLimitation: Identifiable, Hashable {
 /// the four web app limits (passkeys, zoom storage, notification permission, pop-up and off-site links). Phase 5 adds
 /// the five launcher limits (terminal AppleScript, terminal shell history, no running state for files or commands,
 /// Ghostty path). Phase 6 adds the six helper limits (running until the helper exits, erase confirmation and refusals,
-/// AppleLanguages, colour menu bar icon, New Window command, System Launch helper). Shown in the Known Limitations
-/// window and linked from the wizard's compatibility line.
+/// AppleLanguages, colour menu bar icon, New Window command, System Launch helper). Phase 7 adds the manual-updates
+/// limit (the app never updates itself; Help > Check for Updates… opens the GitHub releases page). Shown in the Known
+/// Limitations window and linked from the wizard's compatibility line.
 enum KnownLimitations {
     static let all: [KnownLimitation] = [
         KnownLimitation(
@@ -190,6 +191,11 @@ enum KnownLimitations {
             id: "system-launch-helper",
             title: "With System Launch, the shortcut itself stays open as the helper",
             detail: "In System Launch mode the menu bar icon and Erase on quit are run by the shortcut's own process, which stays open in the background with no Dock icon for as long as the app runs, and Activity Monitor lists it beside the app. Opening the shortcut again while the app runs brings the app forward instead of starting another copy. Quitting the shortcut's process from Activity Monitor removes the menu bar icon and skips the erase, but leaves the app running."
+        ),
+        KnownLimitation(
+            id: "updates-manual",
+            title: "App Duplicator does not update itself",
+            detail: "App Duplicator never checks for a newer version of itself, and nothing runs in the background to look for one. Help > Check for Updates… opens the GitHub releases page in your browser; to update, download the new .dmg, open it and drag the app over the copy you already have. Your shortcuts and the app's settings are kept."
         ),
     ]
 }

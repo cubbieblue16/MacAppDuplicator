@@ -88,6 +88,7 @@ struct MacAppDuplicatorApp: App {
             }
             CommandGroup(after: .help) {
                 KnownLimitationsMenuItem()
+                Button("Check for Updates…") { NSWorkspace.shared.open(ReleaseLinks.latestRelease) }
             }
         }
         // Under the unit-test host no window may open or be restored: the main window's frame autosave wrote the

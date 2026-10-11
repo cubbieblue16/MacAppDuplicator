@@ -90,11 +90,12 @@ final class KnownLimitationsTests: XCTestCase {
     }
 
     /// Phase 4 (web apps): the four web limits are present with their prescribed ids and titles, the earlier 20 are
-    /// kept (35 in all with Phase 5's five and Phase 6's six), ids stay unique, and each entry states its point.
+    /// kept (36 in all with Phase 5's five, Phase 6's six and Phase 7's one), ids stay unique, and each entry states
+    /// its point.
     func testPhase4WebEntriesStateTheirPoint() throws {
         let ids = KnownLimitations.all.map(\.id)
         XCTAssertEqual(Set(ids).count, ids.count, "duplicate known-limitation ids")
-        XCTAssertEqual(ids.count, 35, "20 earlier, four web, five launcher and six helper entries")
+        XCTAssertEqual(ids.count, 36, "20 earlier, four web, five launcher, six helper and one release entry")
         let topics: [(id: String, title: String, mentions: [String])] = [
             ("web-no-passkeys", "Web apps do not support passkeys", ["passkey", "WebAuthn"]),
             ("web-zoom-storage", "Web app zoom is remembered outside the shortcut", ["MADPageZoom", "sealed", "preferences"]),
