@@ -16,11 +16,11 @@ Manual checks for the helper on a real Mac, with Mike present: the menu bar icon
 
 ## Step 1: Build
 
-- [ ] **1.1** `swift build -c release --product Launcher --product WebShell --product madctl 2>&1 | tail -1` prints `Build complete!`.
+- [ ] **1.1** Build the three products one at a time (`swift build` takes one `--product` per run): `swift build -c release --product Launcher 2>&1 | tail -1`, then `swift build -c release --product WebShell 2>&1 | tail -1`, then `swift build -c release --product madctl 2>&1 | tail -1`; each prints `Build complete!`.
 - [ ] **1.2** `Tools/build-app.sh --configuration Release` succeeds.
 - [ ] **1.3** About App Duplicator shows `Version 0.6.0 (5)`.
 - [ ] **1.4** `Tools/build-fixture.sh` succeeds and `ls .build/fixtures/FixtureApp.app/Contents/Resources` lists `AppIcon.icns`.
-- [ ] **1.5** `MAD_INTEGRATION=1 swift test --filter IntegrationTests 2>&1 | grep -E "Executed [0-9]+ tests?" | tail -1` prints `Executed 5 tests, with 0 failures (0 unexpected) in …`. Do not start Step 4 if it fails: this run includes the erase-on-quit test on a throwaway folder.
+- [ ] **1.5** `MAD_INTEGRATION=1 swift test --filter IntegrationTests 2>&1 | grep -E "Executed [0-9]+ tests?"` prints several lines; one of them reads `Executed 5 tests, with 0 failures (0 unexpected) in …` (the `IntegrationTests` bundle; the trailing `Executed 0 tests` lines belong to the other bundles). Do not start Step 4 if it fails: this run includes the erase-on-quit test on a throwaway folder.
 - [ ] **1.6** Create the two fixture shortcuts: `.build/release/madctl new .build/fixtures/FixtureApp.app --name "AD P6 Fixture" --env MAD_FIXTURE_LIFETIME=600 --out "$OUT"` and `.build/release/madctl new .build/fixtures/FixtureApp.app --name "AD P6 Erase" --data-mode home --env MAD_FIXTURE_LIFETIME=5 --out "$OUT"`. Both succeed and `ls "$OUT"` lists `AD P6 Erase.app` and `AD P6 Fixture.app`.
 - [ ] **1.7** Settings → General → Output folder → `Choose…`, press ⇧⌘G, paste the folder `echo "$OUT"` printed and choose it. The sidebar lists exactly `AD P6 Erase` and `AD P6 Fixture` under Apps (press ⌘R to refresh if they are missing).
 
