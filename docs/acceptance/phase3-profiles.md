@@ -58,31 +58,32 @@ In the `Accept Profile` editor, set the data folder to each path below (type it,
 
 - [ ] **5.1** `~/Documents` (a direct child of your home folder). Expected: Save is refused with an explanation; the stored data folder is unchanged.
 - [ ] **5.2** The shortcut's own bundle, `~/Applications/App Duplicator/Accept Profile.app`. Expected: refused the same way.
-- [ ] **5.3** The target's own folder, `~/Library/Application Support/<bundle id of P>` (bundle id from the Step 3 command, or `com.anthropic.claudefordesktop` for Claude). Expected: refused the same way.
+- [ ] **5.3** The target's own data folder in `~/Library/Application Support`: a folder named after the app or its bundle identifier (for Claude it is `~/Library/Application Support/Claude`; `ls ~/Library/Application\ Support | grep -i <app name>` finds it). Expected: refused the same way.
 - [ ] **5.4** Run `mkdir -p ~/Desktop/MAD\ Accept\ Data`, then set the data folder to `~/Desktop/MAD Accept Data` and Save. Expected: accepted; the editor shows the new folder (Step 9 uses it).
 
 ## Step 6: Check Profile Updates
 
 - [ ] **6.1** In Settings, copy the profiles URL value somewhere. Expected: an `https://raw.githubusercontent.com/` address on this repository's `main` branch.
-- [ ] **6.2** Online, choose Check Profile Updates. Expected: it reports success, and `ls -l ~/Library/Application\ Support/App\ Duplicator/profiles.json` shows a file written just now whose first lines (`head -3` of it) include `"schemaVersion": 1` and an `"updated"` date. Run `shasum -a 256 ~/Library/Application\ Support/App\ Duplicator/profiles.json` and note the hash.
+- [ ] **6.2** Online, choose Check Profile Updates. Expected: it reports success. The cache is written only when the downloaded catalog's `updated` date is newer than the bundled one: in that case `ls -l ~/Library/Application\ Support/App\ Duplicator/profiles.json` shows a file written just now whose first lines (`head -3` of it) include `"schemaVersion": 1` and an `"updated"` date; run `shasum -a 256` on it and note the hash. When the dates are equal (as on 2026-10-11, both `2026-10-10`) no cache file exists afterwards, and that is expected; the `shasum` checks in 6.3 and 6.4 then verify that the file still does not exist.
 - [ ] **6.3** Turn Wi-Fi off (or unplug the network cable) and choose Check Profile Updates. Expected: an error such as `The Internet connection appears to be offline.`, and the `shasum` command prints the 6.2 hash (the cache is untouched). Turn the network back on.
-- [ ] **6.4** Set the profiles URL to `https://example.com/profiles.json` and choose Check Profile Updates. Expected: refused with `https://example.com/profiles.json is not an https://raw.githubusercontent.com address.` (shown when you enter the URL or when you check), and the `shasum` command still prints the 6.2 hash. Paste the 6.1 URL back.
+- [ ] **6.4** Set the profiles URL to `https://example.com/profiles.json` and choose Check Profile Updates. Expected: as soon as the URL is entered the Settings pane shows `Use an https://raw.githubusercontent.com address.` and the Check Now button is disabled, so no check runs and the `shasum` command still prints the 6.2 hash (or the file still does not exist). Use `Reset to Default` to restore the 6.1 URL; it also removes the `profilesURLString` defaults key.
 
 ## Step 7: Export into the output folder
 
-- [ ] **7.1** Select `Accept Profile`, `Export…`; in the save panel go to `~/Applications/App Duplicator` (the output folder), name it `Accept Export.app` and Save. Expected: the Export Shortcut sheet shows the library-folder warning and the line saying an existing bundle at the destination is moved to the Trash; `Accept Export` appears in the sidebar. Done.
-- [ ] **7.2** Export `Accept Profile` again to the same folder and name, and confirm the save panel's Replace. Expected: the same warning and Trash line; `ls ~/.Trash | grep 'Accept Export'` lists the earlier copy, and `~/Applications/App Duplicator/Accept Export.app` exists. Done.
+- [ ] **7.1** Select `Accept Profile`, `Export…`; in the save panel go to `~/Applications/App Duplicator` (the output folder), name it `Accept Export.app` and Save. Expected: an alert `Export into a library folder?` warns that the copy would appear as a second shortcut with the same bundle identifier and data folder; choose Export Anyway. The Export Shortcut sheet then shows the signing identity and the quarantine command (no Trash line yet, because nothing was replaced). The copy appears in the sidebar labelled `Accept Profile` (the label comes from the stored shortcut name, not the file name), with the same slug. Done.
+- [ ] **7.2** Export `Accept Profile` again to the same folder and name, and confirm the save panel's Replace. Expected: the same library-folder alert, then the Export Shortcut sheet now also shows the Trash line (`The item that was at … is in the Trash: ~/.Trash/Accept Export.app`); `ls ~/.Trash | grep 'Accept Export'` lists the earlier copy (renamed with a timestamp suffix if the name was taken), and `~/Applications/App Duplicator/Accept Export.app` exists. Done.
 
 ## Step 8: Rebuild All
 
 - [ ] **8.1** Run `plutil -replace MADEngineVersion -integer 0 ~/Applications/App\ Duplicator/Accept\ Profile.app/Contents/Info.plist`, then choose View → Refresh (⌘R). Expected: `Accept Profile` shows `Needs rebuild` and the toolbar `Rebuild All` enables.
-- [ ] **8.2** Click `Rebuild All`. Expected: the sheet opens idle, listing what it will rebuild (including `Accept Profile`), and nothing runs until you start it.
+- [ ] **8.2** Click `Rebuild All`. Expected: the sheet opens idle as `Rebuild 1 shortcut?` (it shows the count of stale shortcuts, not their names) with `Each shortcut is rewritten with the current launcher and signed again. Settings are kept.`, and nothing runs until you start it.
 - [ ] **8.3** Start the rebuild. Expected: the sheet shows its running state with progress until every shortcut is done.
 - [ ] **8.4** Expected: the sheet shows results, with `Accept Profile` rebuilt successfully. Close it. Expected: the `Needs rebuild` badge is gone and `codesign --verify --deep --strict ~/Applications/App\ Duplicator/Accept\ Profile.app` exits 0 with no output. Note in the Record whether the results listed `Claude Work` and `Claude Personal`.
 
 ## Step 9: Delete with data outside the data root
 
-- [ ] **9.1** Select `Accept Profile`, `Delete`. Expected: the sheet offers the data-folder toggle for `~/Desktop/MAD Accept Data`. Turn it on and click Delete. Expected: a second destructive confirmation, because the folder is outside `~/Library/Application Support/App Duplicator`. Confirm. Expected: `Accept Profile.app` and `MAD Accept Data` are in the Trash and the app is still running.
+- [ ] **9.0** First move the Step 7 copy to the Trash through the app: select the second `Accept Profile` row (the exported `Accept Export.app`), `Delete`. Expected: the sheet says `The data folder stays: … is, contains or is inside another shortcut's data folder.` and offers no toggle; Delete moves only the bundle to the Trash. (While the copy exists it shares the data folder, so the toggle in 9.1 is withheld.)
+- [ ] **9.1** Select `Accept Profile`, `Delete`. Expected: the sheet offers the data-folder toggle for `~/Desktop/MAD Accept Data`. Turn it on and click Delete. Expected: a second destructive confirmation (`Also move "MAD Accept Data" to the Trash?` with `Move to Trash`), because the folder is outside `~/Library/Application Support/App Duplicator`. Confirm. Expected: `Accept Profile.app` and `MAD Accept Data` are in the Trash and the app is still running.
 
 ## Step 10: Claude Desktop after Rebuild All (Mike)
 
@@ -94,24 +95,20 @@ In the `Accept Profile` editor, set the data folder to each path below (type it,
 
 ## Teardown
 
-Move only the test shortcuts to the Trash:
-
-- `~/Applications/App Duplicator/Accept Export.app` (Step 7.2; never launched, so it has no data folder or log)
-
-`Accept Profile.app` and `MAD Accept Data` are already in the Trash (Step 9), and so is the first `Accept Export.app` (Step 7.2). Keep `~/Library/Application Support/App Duplicator/profiles.json`: it is the cache Step 6.2 downloaded. Leave `Claude Work.app` and `Claude Personal.app` in place.
+Nothing is left to move: `Accept Export.app` (Step 9.0), `Accept Profile.app` and `MAD Accept Data` (Step 9.1) and the first `Accept Export.app` (Step 7.2) are already in the Trash. Keep `~/Library/Application Support/App Duplicator/profiles.json` if Step 6.2 wrote it. Leave `Claude Work.app` and `Claude Personal.app` in place.
 
 ## Record
 
 | Step | Date | Result | Notes |
 |---|---|---|---|
-| 1 | | | |
-| 2 | | | |
-| 3 | | | |
-| 4 | | | |
-| 5 | | | |
-| 6 | | | |
-| 7 | | | |
-| 8 | | | |
-| 9 | | | |
-| 10 | | | |
-| 11 | | | |
+| 1 | 2026-10-11 | N/A | Installed 0.7.0 (6) used; build step covered by Phase 7 |
+| 2 | 2026-10-11 | PASS | 2.1–2.4 badges, hover text and Verified/Partial states as expected |
+| 3 | 2026-10-11 | PASS | 3.1–3.3 wizard prefill from the Claude profile; editor Profile section; `Accept Profile` created with env `API_TOKEN` |
+| 4 | 2026-10-11 | PASS | 4.1–4.2 Diagnostics shows profile status and masked env; nit: 0.7.0 report lists the app's inherited shell environment (fixed in `537c500`, ships in 0.7.1) |
+| 5 | 2026-10-11 | PASS | 5.1–5.4 guard messages shown on choosing the path; 5.3 used the real target folder `~/Library/Application Support/Claude` (doc path fixed); 5.4 accepted with Default button |
+| 6 | 2026-10-11 | PASS | 6.1 URL correct; 6.2 success with no cache file (remote `updated` equals bundled, by design; doc made conditional); 6.3 N/A (Mike, Wi-Fi off); 6.4 inline warning + Check Now disabled, Reset to Default removed the defaults key (doc wording fixed) |
+| 7 | 2026-10-11 | PASS | 7.1 library-folder alert, Export Anyway, sidebar label `Accept Profile`; 7.2 Replace, Trash line in result sheet, earlier copy in `~/.Trash` as `Accept Export 13-04-29-170.app`; codesign rc=0 (doc fixed) |
+| 8 | 2026-10-11 | PASS | 8.1 badge + footer + Rebuild All enabled; 8.2 sheet `Rebuild 1 shortcut?` (count, not names; doc fixed); 8.3 progress; 8.4 results listed only `Accept Profile` (Claude Work/Personal not rebuilt), badge gone, engine 1, codesign rc=0, settings kept |
+| 9 | 2026-10-11 | PASS | Export copy had to be trashed first (shared data folder withholds the toggle; doc gained 9.0); then toggle offered, second confirmation `Move to Trash`, both `Accept Profile.app` and `MAD Accept Data` in `~/.Trash`, app still running (pid 8949) |
+| 10 | 2026-10-11 | N/A | Mike-only |
+| 11 | 2026-10-11 | PASS | All six titles on screen and in the installed binary (`strings`); Help menu item opens `Known Limitations` window |

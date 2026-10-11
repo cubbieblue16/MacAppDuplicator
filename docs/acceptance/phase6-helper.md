@@ -117,5 +117,5 @@ Manual checks for the helper on a real Mac, with Mike present: the menu bar icon
 | 5.2 | 2026-10-11 | PASS | `fr` + Save: plist `languageCode = fr`; Diagnostics `Language: fr`, Arguments `-AppleLanguages (fr) -AppleLocale fr`. |
 | 5.3 | 2026-10-11 | PASS | TextEdit argv `-AppleLanguages (fr) -AppleLocale fr`; menu bar `Fichier Édition Format Présentation Fenêtre Aide`. |
 | 5.4 | 2026-10-11 | PARTIAL (env) | Icon not drawn (macOS 27 with Ice), so quit via SIGTERM to the helper and TextEdit; `open -a TextEdit` then started with plain argv (no -AppleLanguages). Menus not eyeballed. |
-| 5.5 | 2026-10-11 | NOT RUN | Usage limit reached. |
-| 6 | 2026-10-11 | NOT RUN | Usage limit reached; 6.1 to 6.3 not exercised. |
+| 5.5 | 2026-10-11 | PASS | Language cleared (fr → empty) and saved with Return; `languageCode` absent from MADConfig; Diagnostics `Language: System`; Launch → TextEdit with English menus, log `system launch ok` + `helper start pid=… watch=… data=-`; quit via SIGTERM, no leftover processes. Diagnostics Environment pane still lists this app's inherited shell variables on 0.7.0 (6) (fixed at ac8c155, ships in 0.7.1). |
+| 6 | 2026-10-11 | PASS | 6.1 `AD P6 Fixture` Diagnostics: `Menu bar icon: On`, `Erase on quit: Off`, `New Window command: /usr/bin/env open -na …/.build/fixtures/FixtureApp.app`, `Language: System`. 6.2 Copy Report → `pbpaste | grep -E` prints exactly those four lines. 6.3 `AD P6 Erase` Diagnostics: `Erase on quit: On: ~/Library/Application Support/App Duplicator/ad-p6-erase`. |
