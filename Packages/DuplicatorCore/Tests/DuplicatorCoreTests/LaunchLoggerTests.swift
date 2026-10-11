@@ -65,4 +65,15 @@ final class LaunchLoggerTests: XCTestCase {
         XCTAssertFalse(raw.contains("hunter2"))
         XCTAssertFalse(raw.contains("not-a-real-token"))
     }
+
+    func testConcurrentWritersNeverLoseLines() throws {
+        let logger = LaunchLogger(name: "Concurrent", directory: try makeTemporaryDirectory(), maxBytes: LaunchLogger.rotationThreshold)
+        DispatchQueue.concurrentPerform(iterations: 400) { index in
+            logger.log("line \(index)")
+        }
+        let indices = try lines(of: logger.fileURL).compactMap { line in
+            line.split(separator: " ").last.flatMap { Int($0) }
+        }
+        XCTAssertEqual(indices.sorted(), Array(0..<400))
+    }
 }

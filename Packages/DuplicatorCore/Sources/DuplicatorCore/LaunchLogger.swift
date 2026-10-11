@@ -1,7 +1,9 @@
+import Darwin
 import Foundation
 
-/// Appends launcher events to `~/Library/Logs/App Duplicator/<Name>.log`, rotating at 1 MB (spec §4.7).
-/// Logging never fails the launch: every file-system error is ignored.
+/// Appends launcher and helper events to `~/Library/Logs/App Duplicator/<Name>.log`, rotating at 1 MB (spec §4.7).
+/// Logging never fails the launch: every file-system error is ignored. Each line is one `write(2)` on an `O_APPEND`
+/// descriptor, so the launcher, its helper and concurrent threads never overwrite each other's lines.
 public struct LaunchLogger: Sendable {
     /// Rotation threshold: 1 MB.
     public static let rotationThreshold = 1_048_576
@@ -44,19 +46,39 @@ public struct LaunchLogger: Sendable {
     }
 
     private func append(_ data: Data) {
-        let fileManager = FileManager.default
-        try? fileManager.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let currentSize = ((try? fileManager.attributesOfItem(atPath: fileURL.path))?[.size] as? NSNumber)?.intValue ?? 0
-        if currentSize > 0, currentSize + data.count > maxBytes {
-            try? fileManager.removeItem(at: rotatedFileURL)
-            try? fileManager.moveItem(at: fileURL, to: rotatedFileURL)
+        let directory = fileURL.deletingLastPathComponent()
+        if !FileManager.default.fileExists(atPath: directory.path) {
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            } catch {
+                return // Logging never fails the launch.
+            }
         }
-        if !fileManager.fileExists(atPath: fileURL.path) {
-            fileManager.createFile(atPath: fileURL.path, contents: nil)
+        var info = stat()
+        if stat(fileURL.path, &info) == 0, info.st_size > 0, Int(info.st_size) + data.count > maxBytes {
+            // One step that replaces any previous `.log.1`; if it fails the file keeps growing.
+            _ = rename(fileURL.path, rotatedFileURL.path)
         }
-        guard let handle = try? FileHandle(forWritingTo: fileURL) else { return }
-        defer { try? handle.close() }
-        _ = try? handle.seekToEnd()
-        try? handle.write(contentsOf: data)
+        let descriptor = open(fileURL.path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0o644)
+        guard descriptor >= 0 else {
+            return
+        }
+        defer { close(descriptor) }
+        data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
+            guard let base = buffer.baseAddress else {
+                return
+            }
+            var offset = 0
+            while offset < buffer.count {
+                let written = write(descriptor, base + offset, buffer.count - offset)
+                if written > 0 {
+                    offset += written
+                } else if written < 0, errno == EINTR {
+                    continue
+                } else {
+                    return
+                }
+            }
+        }
     }
 }
