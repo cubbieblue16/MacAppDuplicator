@@ -44,10 +44,12 @@ final class WizardModel {
     var launchMode: LaunchMode = .dockShortcut
     /// The compatibility profile for the selected target, if the profiles in use have one (spec §8).
     private(set) var profile: AppProfile?
-    /// The profile's `args` and `env`, copied into the new shortcut by `makeConfig()` as editable defaults; replaced
-    /// whenever the target changes.
+    /// The profile's `args`, `env` and `newWindowCommand`, copied into the new shortcut by `makeConfig()` as editable
+    /// defaults; replaced whenever the target changes. A template `NewWindowCommandBuilder.validationMessage(for:)`
+    /// rejects is not copied, so a new shortcut never starts with a command its editor would refuse to save.
     private(set) var arguments: [String] = []
     private(set) var environment: [String: String] = [:]
+    private(set) var newWindowCommand: String?
     private(set) var preview: LaunchPlanPreview?
     private(set) var previewError: String?
     var isCreating = false
@@ -211,6 +213,7 @@ final class WizardModel {
             profile = nil
             arguments = []
             environment = [:]
+            newWindowCommand = nil
             return
         }
         targetURL = url
@@ -221,6 +224,11 @@ final class WizardModel {
             profile = profileLookup(app.bundleIdentifier)
             arguments = profile?.args ?? []
             environment = profile?.env ?? [:]
+            if let template = profile?.newWindowCommand, NewWindowCommandBuilder.validationMessage(for: template) == nil {
+                newWindowCommand = template
+            } else {
+                newWindowCommand = nil
+            }
             if name.isEmpty || name == suggestedName {
                 name = "\(app.name) Copy"
                 suggestedName = name
@@ -238,6 +246,7 @@ final class WizardModel {
             profile = nil
             arguments = []
             environment = [:]
+            newWindowCommand = nil
         }
     }
 
@@ -273,6 +282,7 @@ final class WizardModel {
             dataPath: dataPath,
             environment: environment,
             arguments: arguments,
+            newWindowCommand: newWindowCommand,
             iconMode: iconMode,
             customIconPath: iconMode == .custom ? customIconPath : nil
         )

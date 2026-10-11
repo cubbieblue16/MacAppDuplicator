@@ -16,7 +16,8 @@ public struct AppProfile: Decodable, Equatable, Sendable {
     public var args: [String]
     /// Copied into `ShortcutConfig.environment` when a shortcut is created.
     public var env: [String: String]
-    /// Stored but inert until Phase 6.
+    /// Copied into `ShortcutConfig.newWindowCommand` when the wizard creates a shortcut; the helper's New Window menu
+    /// item runs it through `NewWindowCommandBuilder`.
     public var newWindowCommand: String?
     public var notes: String?
 

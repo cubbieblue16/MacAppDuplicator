@@ -16,6 +16,9 @@ struct LaunchPlanPreview: Sendable {
     var launchMode: LaunchMode
     /// The family AppInspector detected for the target, the one the planner used (`.native` for launcher kinds).
     var family: AppFamily
+    /// What the spec §4.6 helper does for an application shortcut, `Menu bar icon · New Window · Erase on quit` or the
+    /// part that applies (`HelperEditorPolicy.helperLine(for:home:)`); nil when no helper starts and for other kinds.
+    var helper: String?
 
     /// Resolves a terminal choice to its installed app the way the Launcher does, through its bundle identifier.
     static let installedTerminal: @Sendable (TerminalChoice) -> URL? = { choice in
@@ -49,7 +52,8 @@ struct LaunchPlanPreview: Sendable {
             environmentAdditions: SecretMasking.mask(plan.environmentAdditions(relativeTo: base)),
             warnings: plan.warnings,
             launchMode: plan.launchMode,
-            family: app.family
+            family: app.family,
+            helper: HelperEditorPolicy.helperLine(for: config, home: home)
         )
     }
 

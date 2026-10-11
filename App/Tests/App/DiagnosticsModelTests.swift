@@ -257,4 +257,60 @@ final class DiagnosticsModelTests: XCTestCase {
         XCTAssertEqual(model.planError, "This web app has no web address saved. Regenerate the shortcut or recreate it.")
         XCTAssertTrue(model.reportText.contains("Launch plan error: This web app has no web address saved."))
     }
+
+    func testNativeShortcutShowsHelperRows() throws {
+        let target = try writeFakeTarget(named: "Target", bundleIdentifier: "com.example.target", version: "1.0", in: dir)
+        try FileManager.default.removeItem(at: target.appending(path: "Contents/MacOS/Target"))
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/ls"), to: target.appending(path: "Contents/MacOS/Target"))
+        let data = dir.appending(path: "Data", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+        let realHome = FileManager.default.homeDirectoryForCurrentUser
+        XCTAssertFalse(CanonicalPath(data.path).isInside(CanonicalPath(realHome.path)), "the test folder must lie outside the home folder")
+        var config = makeConfig(name: "Target Work", targetPath: target.path)
+        config.dataMode = .homeOverride
+        config.dataPath = data.path
+        config.menuBarIcon = true
+        config.eraseOnQuit = true
+        config.newWindowCommand = "open -na {target} --args --api-key hunter2"
+        config.languageCode = "fr"
+        let bundle = try writeShortcutBundle(named: "Target Work", in: dir, config: config)
+        let record = try XCTUnwrap(LibraryScanner.record(forBundleAt: bundle, fileManager: .default))
+
+        let model = DiagnosticsModel.make(record: record, logReader: LogReader(folder: dir))
+
+        XCTAssertNil(model.planError)
+        let targetPath = try XCTUnwrap(model.resolvedTargetPath)
+        XCTAssertEqual(model.helperRows, [
+            ProfileSummary.Row(label: "Menu bar icon", value: "On"),
+            ProfileSummary.Row(label: "Erase on quit", value: "On, but the folder is never erased: the folder is outside the home folder"),
+            ProfileSummary.Row(label: "New Window command", value: "/usr/bin/env open -na \(targetPath) --args --api-key \(SecretMasking.maskedValue)"),
+            ProfileSummary.Row(label: "Language", value: "fr"),
+        ])
+        for row in model.helperRows {
+            XCTAssertTrue(model.reportText.contains("\(row.label): \(row.value)"), row.label)
+        }
+        XCTAssertFalse(model.reportText.contains("hunter2"))
+    }
+
+    func testHelperRowsSurviveAPlanError() throws {
+        let missing = dir.appending(path: "Missing.app").path
+        var config = makeConfig(name: "Target Work", targetPath: missing, targetBundleIdentifier: "com.example.unregistered-\(UUID().uuidString)")
+        config.menuBarIcon = true
+        config.eraseOnQuit = false
+        config.languageCode = nil
+        config.newWindowCommand = "open -na {target}"
+        let bundle = try writeShortcutBundle(named: "Target Work", in: dir, config: config)
+        let record = try XCTUnwrap(LibraryScanner.record(forBundleAt: bundle, fileManager: .default))
+
+        let model = DiagnosticsModel.make(record: record, logReader: LogReader(folder: dir))
+
+        XCTAssertNotNil(model.planError)
+        XCTAssertEqual(model.helperRows, [
+            ProfileSummary.Row(label: "Menu bar icon", value: "On"),
+            ProfileSummary.Row(label: "Erase on quit", value: "Off"),
+            ProfileSummary.Row(label: "New Window command", value: "/usr/bin/env open -na \(missing)"),
+            ProfileSummary.Row(label: "Language", value: "System"),
+        ])
+        XCTAssertTrue(model.reportText.contains("Menu bar icon: On"))
+    }
 }

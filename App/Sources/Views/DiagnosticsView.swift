@@ -28,6 +28,9 @@ struct DiagnosticsModel {
     var web: WebDetails?
     /// Set for a file, folder or command shortcut (Phase 5); nil for every other kind. Defaulted like `web`.
     var launcher: LauncherDetails?
+    /// The helper settings of an application shortcut (`HelperEditorPolicy.diagnosticsRows(for:home:)`): Menu bar icon,
+    /// Erase on quit, New Window command and Language. Empty for every other kind. Defaulted like `web`.
+    var helperRows: [ProfileSummary.Row] = []
 
     /// What a launcher's Diagnostics shows besides the launch plan. Every value is display text.
     struct LauncherDetails: Equatable {
@@ -98,7 +101,8 @@ struct DiagnosticsModel {
                 environment: env,
                 warnings: preview.warnings,
                 logLines: logLines,
-                planError: nil
+                planError: nil,
+                helperRows: HelperEditorPolicy.diagnosticsRows(for: config, home: FileManager.default.homeDirectoryForCurrentUser)
             )
         } catch {
             return failed(record: record, resolvedTargetPath: resolvedTarget.path, logLines: logLines, profileMatch: profileMatch, profile: profile, error: error)
@@ -167,7 +171,10 @@ struct DiagnosticsModel {
     private static func failed(
         record: ShortcutRecord, resolvedTargetPath: String?, logLines: [String], profileMatch: String, profile: AppProfile?, error: Error
     ) -> DiagnosticsModel {
-        DiagnosticsModel(
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        var config = record.config.resolvingDefaultDataPath(home: home)
+        config.targetPath = resolvedTargetPath ?? record.config.targetPath
+        return DiagnosticsModel(
             shortcutName: record.name,
             bundlePath: record.bundleURL.path,
             engineVersion: record.engineVersion,
@@ -181,7 +188,8 @@ struct DiagnosticsModel {
             environment: [],
             warnings: [],
             logLines: logLines,
-            planError: error.localizedDescription
+            planError: error.localizedDescription,
+            helperRows: HelperEditorPolicy.diagnosticsRows(for: config, home: home)
         )
     }
 
@@ -262,6 +270,7 @@ struct DiagnosticsModel {
             if storedPathDiffers {
                 lines.append("Stored target path: \(storedTargetPath)")
             }
+            lines.append(contentsOf: helperRows.map { "\($0.label): \($0.value)" })
         }
         if let planError {
             lines.append("Launch plan error: \(planError)")

@@ -45,4 +45,28 @@ final class LaunchPlanPreviewTests: XCTestCase {
         // The /bin/ls stand-in is a native app, so the planner adds no arguments of its own.
         XCTAssertEqual(preview.arguments, ["--api-key", "••••••", "--token=••••••", "--plain", "visible"])
     }
+
+    func testPreviewHelperLineListsTheHelperFeatures() throws {
+        let home = dir.appending(path: "home", directoryHint: .isDirectory)
+        var config = makeConfig(targetPath: dir.appending(path: "Target.app").path)
+        config.menuBarIcon = true
+        config.newWindowCommand = "open -na {target}"
+        XCTAssertEqual(try LaunchPlanPreview.make(config: config, bundleURL: nil, home: home).helper, "Menu bar icon · New Window")
+        config.eraseOnQuit = true
+        config.dataMode = .homeOverride
+        let data = dir.appending(path: "Data", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+        config.dataPath = data.path
+        XCTAssertEqual(
+            try LaunchPlanPreview.make(config: config, bundleURL: nil, home: home).helper,
+            "Menu bar icon · New Window · Erase on quit"
+        )
+    }
+
+    func testPreviewHasNoHelperLineByDefault() throws {
+        var config = makeConfig(targetPath: dir.appending(path: "Target.app").path)
+        config.menuBarIcon = false
+        config.eraseOnQuit = false
+        XCTAssertNil(try LaunchPlanPreview.make(config: config, bundleURL: nil).helper)
+    }
 }

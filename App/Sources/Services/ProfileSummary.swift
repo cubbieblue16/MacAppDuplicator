@@ -32,7 +32,8 @@ enum ProfileSummary {
     }
 
     /// `Name`, `Status`, `Family` (when the profile names one), `Arguments` and `Environment` (masked, `None` when
-    /// empty), `Notes` (when the profile has any) and `Family note` (see `familyNote`). Empty without a profile.
+    /// empty), `New Window` (the masked template, when the profile has one), `Notes` (when the profile has any) and
+    /// `Family note` (see `familyNote`). Empty without a profile.
     static func rows(for profile: AppProfile?, detectedFamily: AppFamily?) -> [Row] {
         guard let profile else { return [] }
         var rows = [Row(label: "Name", value: profile.name), Row(label: "Status", value: statusLabel(profile.status))]
@@ -44,6 +45,10 @@ enum ProfileSummary {
         let environment = SecretMasking.mask(profile.env)
         rows.append(Row(label: "Environment",
                         value: environment.isEmpty ? "None" : environment.keys.sorted().map { "\($0)=\(environment[$0] ?? "")" }.joined(separator: " ")))
+        if let template = profile.newWindowCommand?.trimmingCharacters(in: .whitespacesAndNewlines), !template.isEmpty {
+            let tokens = template.split(whereSeparator: \.isWhitespace).map(String.init)
+            rows.append(Row(label: "New Window", value: SecretMasking.maskArguments(tokens).joined(separator: " ")))
+        }
         if let notes = profile.notes, !notes.isEmpty {
             rows.append(Row(label: "Notes", value: notes))
         }
