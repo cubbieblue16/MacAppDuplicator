@@ -18,6 +18,7 @@ struct WebAppOptionsStep: View {
                 VStack(alignment: .leading, spacing: 4) {
                     TextEditor(text: $model.extraHostsText)
                         .font(.body.monospaced())
+                        .multilineTextAlignment(.leading)
                         .frame(height: 72)
                         .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
                     Text("One host per line, for example whatsapp.com").font(.caption).foregroundStyle(.secondary)

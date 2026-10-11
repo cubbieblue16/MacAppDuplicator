@@ -144,6 +144,7 @@ struct HostsEditor: View {
     var body: some View {
         TextEditor(text: $text)
             .font(.body.monospaced())
+            .multilineTextAlignment(.leading)
             .frame(minHeight: 60)
             .help("One host per line, for example accounts.example.com")
             .onChange(of: text) { _, newText in

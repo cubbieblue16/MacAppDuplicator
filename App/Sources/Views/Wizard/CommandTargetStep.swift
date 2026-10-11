@@ -25,6 +25,7 @@ struct CommandTargetStep: View {
                 LabeledContent("Arguments") {
                     TextEditor(text: $argumentsText)
                         .font(.body.monospaced())
+                        .multilineTextAlignment(.leading)
                         .frame(minHeight: 72)
                         .help("One argument per line. Spaces and quotes are passed exactly as typed; empty lines are ignored.")
                 }
