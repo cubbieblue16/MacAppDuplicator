@@ -193,6 +193,7 @@ Final argv = `[targetExecutable] + plannerArgs + profileArgs + userArgs`. Final 
 | Target is a platform binary / launch-constrained | planner forces System Launch with a warning; editor shows Dock Shortcut as unavailable. Exec'd from a foreign bundle the target is killed with "Launch Constraint Violation" |
 | Data path not writable | `NSAlert`, exit 4 |
 | `execve` fails | `NSAlert` with `strerror(errno)`, exit 3 |
+| Terminal.app / iTerm2 script fails (`osascript` exits non-zero) | Launcher waits for `osascript`; `NSAlert` "The terminal could not be opened (osascript exit N)" with its stderr, plus the Automation fix (System Settings > Privacy & Security > Automation, or `tccutil reset AppleEvents <bundle id>`) when Apple Events were denied (-1743); exit 3. Terminal/iTerm2 command shortcuts signed with a Developer ID identity carry the `com.apple.security.automation.apple-events` entitlement and `NSAppleEventsUsageDescription` so macOS shows the prompt once |
 | Helper crash | never affects the target; target keeps running |
 
 All launcher events append to `~/Library/Logs/App Duplicator/<Name>.log` (rotated at 1 MB). Env values masked per §2.

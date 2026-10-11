@@ -75,7 +75,7 @@ The Xcode project under `App/` is generated from `App/project.yml` and git-ignor
 - Actions: Launch, Reveal in Finder, Regenerate, Duplicate, Export (with the quarantine-clearing command), Delete (Trash, optional data folder), Rebuild All.
 - Diagnostics sheet: resolved target path (plus the stored path when it differs), executable, launch mode, argv, masked environment, warnings and the last 200 log lines, copyable.
 - Settings: output and library folders (a change rescans the library), signing identity (Ad-hoc or any codesigning identity in the keychain; defaults to the first Developer ID Application identity), the HOME-override symlink list copied into new shortcuts, and Open Logs Folder.
-- Help → Known Limitations (24 entries since Phase 4; the six profile entries are listed under Phase 3 profiles and the four web entries under Phase 4 web apps).
+- Help → Known Limitations (29 entries since Phase 5; the six profile entries are listed under Phase 3 profiles, the four web entries under Phase 4 web apps and the five launcher entries under Phase 5 files, folders and commands).
 
 Acceptance checklist: `docs/acceptance/phase2-library-app.md`.
 
@@ -134,7 +134,7 @@ New Shortcut also makes shortcuts that are not apps:
 - **File or Folder** opens a document or folder from the Dock with the shortcut's own name and icon. A folder opens in Finder; a file opens in its default app or in an app you choose under Open with.
 - **Command** runs a program or script with one argument per line (spaces and quotes are passed as typed), an optional working directory, and a choice of Terminal, iTerm2, Ghostty or no terminal (run in background). In the background it can get its own HOME under `~/Library/Application Support/App Duplicator/<slug>`, so its dotfiles stay apart from yours.
 
-The default icon is the item's or the program's Finder icon. Diagnostics shows the item, opener, terminal, working directory, own HOME and the masked command line. The library row shows Item missing in red when the item or program is gone. Deleting never touches the item or program; a command's own HOME folder is offered for the Trash only when it has one. Commands in Terminal or iTerm2 ask once for Automation permission (see Known Limitations).
+The default icon is the item's or the program's Finder icon. Diagnostics shows the item, opener, terminal, working directory, own HOME and the masked command line. The library row shows Item missing in red when the item or program is gone. Deleting never touches the item or program; a command's own HOME folder is offered for the Trash only when it has one. Commands in Terminal or iTerm2 ask once for Automation permission and leave the command in that shell's history (see Known Limitations).
 
 Acceptance checklist: docs/acceptance/phase5-launchers.md
 
