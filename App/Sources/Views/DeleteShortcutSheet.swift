@@ -44,7 +44,8 @@ struct DeleteShortcutSheet: View {
             }
             HStack {
                 Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                // Return cancels: nothing is trashed by a reflexive keystroke. Escape is handled by `onExitCommand` below.
+                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.defaultAction)
                 Button("Delete", role: .destructive) {
                     if isWebApp {
                         pendingConfirmation = DeleteConfirmation.webData(shortcutName: record.name)
@@ -61,6 +62,7 @@ struct DeleteShortcutSheet: View {
         }
         .padding(20)
         .frame(width: 460)
+        .onExitCommand { dismiss() }
         .confirmationDialog(
             pendingConfirmation?.title ?? "",
             isPresented: Binding(get: { pendingConfirmation != nil }, set: { if !$0 { pendingConfirmation = nil } }),
@@ -73,7 +75,12 @@ struct DeleteShortcutSheet: View {
             } else {
                 Button("Move to Trash", role: .destructive) { delete(DeleteRequest(removeDataFolder: true, removeWebData: false)) }
             }
-            Button("Cancel", role: .cancel) {}
+            if isWebApp {
+                Button("Cancel", role: .cancel) {}
+            } else {
+                // Return keeps the data folder; "Keep Web Data" is already the default for web apps.
+                Button("Cancel", role: .cancel) {}.keyboardShortcut(.defaultAction)
+            }
         } message: { confirmation in
             Text(confirmation.message)
         }
