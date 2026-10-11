@@ -11,7 +11,9 @@ struct KnownLimitation: Identifiable, Hashable {
 /// profiles, manual updates from one host, sandboxed badges, numbered slugs, export's Trash replacement). Phase 4 adds
 /// the four web app limits (passkeys, zoom storage, notification permission, pop-up and off-site links). Phase 5 adds
 /// the five launcher limits (terminal AppleScript, terminal shell history, no running state for files or commands,
-/// Ghostty path). Shown in the Known Limitations window and linked from the wizard's compatibility line.
+/// Ghostty path). Phase 6 adds the six helper limits (running until the helper exits, erase confirmation and refusals,
+/// AppleLanguages, colour menu bar icon, New Window command, System Launch helper). Shown in the Known Limitations
+/// window and linked from the wizard's compatibility line.
 enum KnownLimitations {
     static let all: [KnownLimitation] = [
         KnownLimitation(
@@ -158,6 +160,36 @@ enum KnownLimitations {
             id: "cli-ghostty-path",
             title: "Ghostty commands start in Ghostty's own environment",
             detail: "A command sent to Ghostty runs with the PATH and shell setup of the Ghostty window it opens, not the shortcut's environment, so a program that is not on that PATH needs its full path."
+        ),
+        KnownLimitation(
+            id: "helper-running-until-exit",
+            title: "A shortcut with a helper stays running until the helper exits",
+            detail: "With the menu bar icon or Erase on quit turned on, a small helper process watches the app for the shortcut. The sidebar's running indicator stays on until that helper exits: a moment after the app quits, or once the erase has finished when Erase on quit is on."
+        ),
+        KnownLimitation(
+            id: "erase-custom-folder-confirm",
+            title: "Erase on quit asks before emptying a folder outside App Duplicator's data folder",
+            detail: "Erase on quit permanently deletes everything inside the shortcut's data folder each time the app quits; nothing goes to the Trash. A folder inside ~/Library/Application Support/App Duplicator/ needs no confirmation, any other folder needs you to confirm a warning first, and your home folder, folders outside it and top-level folders such as Desktop, Documents and Downloads are always refused. The erase runs only when the helper sees the app quit while no other copy of the shortcut is running, so a second copy, a logout, a restart or a helper quit from Activity Monitor can leave the data in place until the next time the app quits."
+        ),
+        KnownLimitation(
+            id: "language-applelanguages",
+            title: "The language setting works only in apps that honour AppleLanguages",
+            detail: "A shortcut's language reaches the app as the -AppleLanguages and -AppleLocale launch arguments. An app that chooses its language another way, such as its own language setting, keeps its usual language, and an app without a translation for the chosen language falls back to one it has. A blank language follows the system language."
+        ),
+        KnownLimitation(
+            id: "helper-colour-icon",
+            title: "The menu bar icon is the shortcut's icon in full colour",
+            detail: "The menu bar icon shows the shortcut's own icon in colour, as web app shortcuts do, instead of a monochrome template image, so it does not adapt to a light or dark menu bar the way system icons do."
+        ),
+        KnownLimitation(
+            id: "new-window-template",
+            title: "New Window needs a command",
+            detail: "The menu bar icon's New Window item appears only when the shortcut has a New Window command: a command line run each time you choose the item, in which {target}, {bundleId} and {dataPath} stand for the app's path, its bundle identifier and the shortcut's data folder. The wizard copies the command from the app's compatibility profile when the profile includes one; otherwise, and for shortcuts made before this version, enter it in the editor's Advanced section. A command that uses {dataPath} is hidden while data separation is off."
+        ),
+        KnownLimitation(
+            id: "system-launch-helper",
+            title: "With System Launch, the shortcut itself stays open as the helper",
+            detail: "In System Launch mode the menu bar icon and Erase on quit are run by the shortcut's own process, which stays open in the background with no Dock icon for as long as the app runs, and Activity Monitor lists it beside the app. Opening the shortcut again while the app runs brings the app forward instead of starting another copy. Quitting the shortcut's process from Activity Monitor removes the menu bar icon and skips the erase, but leaves the app running."
         ),
     ]
 }
