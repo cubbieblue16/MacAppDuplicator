@@ -19,7 +19,8 @@ struct ShortcutEditorView: View {
     @State private var isDiagnosticsPresented = false
     /// False while the web address field holds something that is not an https address (Save is disabled then).
     @State private var webURLIsValid = true
-    /// Bumped by Revert so the web section rebuilds its local text fields from the restored draft.
+    /// Bumped by Revert so the web, command and launch sections rebuild their local state (text fields, the folder and
+    /// Erase on quit messages, a pending erase confirmation) from the restored draft.
     @State private var revertCount = 0
 
     init(record: ShortcutRecord) {
@@ -52,7 +53,7 @@ struct ShortcutEditorView: View {
             } else {
                 TargetSection(draft: $draft, inspected: inspected, profile: profile)
                 ProfileSection(bundleIdentifier: draft.targetBundleIdentifier, profile: profile, detectedFamily: inspected?.family)
-                LaunchSection(draft: $draft, record: record, inspected: inspected)
+                LaunchSection(draft: $draft, record: record, inspected: inspected).id(revertCount)
                 AdvancedSection(draft: $draft)
             }
             Section("Actions") {
@@ -94,6 +95,7 @@ struct ShortcutEditorView: View {
                     .disabled(
                         !hasChanges || isSaving || !webURLIsValid || draft.name.trimmingCharacters(in: .whitespaces).isEmpty
                             || (isLauncher && LauncherEditorPolicy.validationMessage(for: draft) != nil)
+                            || HelperEditorPolicy.validationMessage(for: draft) != nil
                     )
             }
             .padding(12)
@@ -163,6 +165,8 @@ struct ShortcutEditorView: View {
                                                        taken: SlugAllocator.takenSlugs(in: appState.library.records, excluding: record.bundleURL))
                 config.bundleIdentifier = ShortcutConfig.bundleIdentifier(forSlug: config.slug)
             }
+            // Trims the language code and the New Window command, and drops an Erase on quit that could never run.
+            config = HelperEditorPolicy.saveConfig(draft: config)
         }
         Task {
             // The written config can differ from the draft (trimmed name, a nil data path resolved to the default,

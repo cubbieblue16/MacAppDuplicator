@@ -335,6 +335,7 @@ struct DiagnosticsView: View {
                                 if model.storedPathDiffers {
                                     row("Stored path", model.storedTargetPath)
                                 }
+                                ForEach(model.helperRows) { row($0.label, $0.value) }
                             }
                             if let error = model.planError {
                                 Label(error, systemImage: "xmark.octagon").foregroundStyle(.red)

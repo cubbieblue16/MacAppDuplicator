@@ -283,7 +283,7 @@ struct ReviewStep: View {
                     DisclosureGroup("Profile defaults", isExpanded: $showProfile) {
                         VStack(alignment: .leading, spacing: 6) {
                             ProfileSummaryView(rows: ProfileSummary.rows(for: profile, detectedFamily: model.inspected?.family))
-                            Text("The profile's arguments and environment are copied into the new shortcut; change them in its Advanced section after it is created.")
+                            Text("The profile's arguments, environment and New Window command are copied into the new shortcut; change them in its Advanced section after it is created.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         .padding(.top, 4)
@@ -295,6 +295,9 @@ struct ReviewStep: View {
                             planRow("Executable", preview.executablePath)
                             planRow("Arguments", preview.arguments.joined(separator: "\n"))
                             planRow("Environment additions", preview.environmentAdditions.keys.sorted().map { "\($0)=\(preview.environmentAdditions[$0] ?? "")" }.joined(separator: "\n"))
+                            if let helper = preview.helper {
+                                planRow("Helper", helper)
+                            }
                             if !preview.warnings.isEmpty {
                                 Text("Warnings").font(.caption).foregroundStyle(.secondary)
                                 ForEach(preview.warnings, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").font(.caption) }

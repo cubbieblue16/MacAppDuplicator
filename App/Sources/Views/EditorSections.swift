@@ -117,7 +117,7 @@ struct ProfileSection: View {
         } header: {
             Text("Profile")
         } footer: {
-            Text("A profile's arguments and environment are copied into a shortcut only when it is created; Check Profile Updates never changes an existing shortcut.")
+            Text("A profile's arguments, environment and New Window command are copied into a shortcut only when it is created; Check Profile Updates never changes an existing shortcut.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -130,9 +130,23 @@ struct LaunchSection: View {
     /// The editor's inspection of the current target; nil while it runs or when the target cannot be read.
     let inspected: InspectedApp?
     @State private var dataFolderError: String?
+    /// A data folder waiting for the spec §4.3 destructive confirmation.
+    @State private var pendingErase: PendingErase?
+    /// Why Erase on quit stayed off or was turned off; cleared when the folder, the data mode or the toggle changes.
+    @State private var eraseMessage: String?
+
+    /// Erase on quit for a folder outside App Duplicator's data folder, waiting for the confirmation.
+    private struct PendingErase {
+        /// The folder the helper would empty after every quit.
+        let dataPath: String
+        /// True when the folder was chosen with Browse… while Erase on quit was on: confirming stores it and Cancel keeps
+        /// the current folder. False when the toggle is being turned on for the current folder.
+        let isNewFolder: Bool
+    }
 
     var body: some View {
-        let defaultPath = ShortcutConfig.defaultDataPath(forSlug: draft.slug, home: FileManager.default.homeDirectoryForCurrentUser)
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let defaultPath = ShortcutConfig.defaultDataPath(forSlug: draft.slug, home: home)
         let requiresSystemLaunch = inspected?.requiresSystemLaunch ?? false
         // Spec §4.5: the dark override exists only for these families; unknown targets get no promise either.
         let isForcedDarkAvailable = inspected?.family.supportsForcedDarkMode ?? false
@@ -150,7 +164,18 @@ struct LaunchSection: View {
             if let reason = inspected?.dockShortcutUnavailableReason {
                 Label(reason, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
             }
-            Picker("Data", selection: $draft.dataMode) {
+            Picker("Data", selection: Binding(
+                get: { draft.dataMode },
+                set: { mode in
+                    draft.dataMode = mode
+                    // Erase on quit never runs without a data folder. Turning it off keeps the toggle truthful, and
+                    // turning it on again later goes through `setEraseOnQuit`, confirmation included.
+                    if mode == .disabled {
+                        draft.eraseOnQuit = false
+                    }
+                    eraseMessage = nil
+                }
+            )) {
                 Text("Auto").tag(DataMode.auto)
                 Text("HOME override").tag(DataMode.homeOverride)
                 Text("Disabled").tag(DataMode.disabled)
@@ -161,16 +186,36 @@ struct LaunchSection: View {
                         .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
                     Button("Browse…") { chooseDataFolder() }
                     if draft.dataPath != nil, draft.dataPath != defaultPath {
-                        Button("Default") {
-                            draft.dataPath = nil
-                            dataFolderError = nil
-                        }
+                        Button("Default") { useDataPath(nil, home: home) }
                     }
                 }
             }
             .disabled(draft.dataMode == .disabled)
             if let dataFolderError {
                 Label(dataFolderError, systemImage: "xmark.octagon").font(.caption).foregroundStyle(.red)
+            }
+            if HelperEditorPolicy.helperControlsVisible(kind: draft.kind) {
+                Toggle("Erase on quit", isOn: Binding(
+                    get: { draft.eraseOnQuit },
+                    set: { setEraseOnQuit($0, home: home) }
+                ))
+                .disabled(draft.dataMode == .disabled)
+                .help("Empties the data folder every time the app quits, so every launch starts clean and signed out.")
+                .alert(
+                    HelperEditorPolicy.eraseConfirmationTitle,
+                    isPresented: Binding(get: { pendingErase != nil }, set: { if !$0 { pendingErase = nil } }),
+                    presenting: pendingErase
+                ) { pending in
+                    Button(HelperEditorPolicy.eraseConfirmButton, role: .destructive) { confirmErase(pending) }
+                    Button("Cancel", role: .cancel) {}
+                } message: { pending in
+                    Text(verbatim: HelperEditorPolicy.eraseConfirmationMessage(name: draft.name, dataPath: pending.dataPath))
+                }
+                if draft.dataMode == .disabled {
+                    Label(HelperEditorPolicy.disabledDataMessage, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
+                } else if let eraseMessage {
+                    Label(eraseMessage, systemImage: "xmark.octagon").font(.caption).foregroundStyle(.red)
+                }
             }
             Picker("Appearance", selection: $draft.appearance) {
                 Text("Follow System").tag(Appearance.system)
@@ -189,7 +234,10 @@ struct LaunchSection: View {
                 get: { draft.languageCode ?? "" },
                 set: { draft.languageCode = $0.isEmpty ? nil : $0 }
             ), prompt: Text("en"))
-            .help("Two-letter language code, blank for system")
+            .help("A language code like en, fr or pt-BR; blank follows the system language.")
+            if let message = HelperEditorPolicy.languageValidation(draft.languageCode) {
+                Label(message, systemImage: "xmark.octagon").font(.caption).foregroundStyle(.red)
+            }
         }
     }
 
@@ -202,14 +250,65 @@ struct LaunchSection: View {
         // The same guard delete uses (final review I1): a folder that could never be trashed safely is never stored.
         switch appState.validateDataPath(url.path, targetPath: draft.targetPath, excluding: record.bundleURL, targetBundleIdentifier: draft.targetBundleIdentifier) {
         case .success:
-            draft.dataPath = url.path
-            dataFolderError = nil
+            useDataPath(url.path, home: FileManager.default.homeDirectoryForCurrentUser)
         case .failure(let error):
             dataFolderError = error.localizedDescription
         }
     }
+
+    /// Stores a new data folder (nil: the default folder). While Erase on quit is on, the folder goes through the check
+    /// that turning the toggle on uses: a folder inside App Duplicator's data folder is stored at once, any other folder
+    /// waits for the confirmation (Cancel keeps the current folder), and a folder the helper would never empty is stored
+    /// with Erase on quit turned off and the reason shown.
+    private func useDataPath(_ path: String?, home: URL) {
+        dataFolderError = nil
+        eraseMessage = nil
+        guard draft.eraseOnQuit else {
+            draft.dataPath = path
+            return
+        }
+        let candidate = path ?? ShortcutConfig.defaultDataPath(forSlug: draft.slug, home: home)
+        switch HelperEditorPolicy.eraseCheck(dataPath: candidate, dataMode: draft.dataMode, home: home) {
+        case .allowed:
+            draft.dataPath = path
+        case .needsConfirmation(let dataPath):
+            pendingErase = PendingErase(dataPath: dataPath, isNewFolder: true)
+        case .refused(let message):
+            draft.dataPath = path
+            draft.eraseOnQuit = false
+            eraseMessage = message
+        }
+    }
+
+    /// Turning the toggle off always works; turning it on follows `HelperEditorPolicy.eraseCheck(for:home:)`.
+    private func setEraseOnQuit(_ isOn: Bool, home: URL) {
+        eraseMessage = nil
+        guard isOn else {
+            draft.eraseOnQuit = false
+            return
+        }
+        switch HelperEditorPolicy.eraseCheck(for: draft, home: home) {
+        case .allowed:
+            draft.eraseOnQuit = true
+        case .needsConfirmation(let dataPath):
+            pendingErase = PendingErase(dataPath: dataPath, isNewFolder: false)
+        case .refused(let message):
+            eraseMessage = message
+        }
+    }
+
+    /// The confirmation's destructive button: turns Erase on quit on and, for a folder chosen with Browse…, stores it.
+    private func confirmErase(_ pending: PendingErase) {
+        if pending.isNewFolder {
+            draft.dataPath = pending.dataPath
+        }
+        draft.eraseOnQuit = true
+        eraseMessage = nil
+    }
 }
 
+/// Arguments, environment, and the spec §4.6 helper's menu bar icon and New Window command (spec §7). Erase on quit
+/// lives in `LaunchSection`, beside the data folder it empties.
 struct AdvancedSection: View {
     @Binding var draft: ShortcutConfig
 
@@ -219,10 +318,22 @@ struct AdvancedSection: View {
                 ArgumentsEditor(arguments: $draft.arguments)
             }
             EnvironmentTableView(environment: $draft.environment)
-            Toggle("Erase data on quit", isOn: $draft.eraseOnQuit).disabled(true).help("Coming in Phase 6")
-            Toggle("Menu bar icon", isOn: $draft.menuBarIcon).disabled(true).help("Coming in Phase 6")
-            // GC-22: the editor says inline that these settings are stored but inert until Phase 6.
-            Text("Stored now; takes effect in Phase 6").font(.caption).foregroundStyle(.secondary)
+            if HelperEditorPolicy.helperControlsVisible(kind: draft.kind) {
+                Toggle("Menu bar icon", isOn: $draft.menuBarIcon)
+                    .help("Shows the app's icon in the menu bar while it runs, with Show, New Window and Quit.")
+                TextField("New Window command", text: Binding(
+                    get: { draft.newWindowCommand ?? "" },
+                    set: { draft.newWindowCommand = $0.isEmpty ? nil : $0 }
+                ), prompt: Text(verbatim: HelperEditorPolicy.newWindowPrompt))
+                Text(verbatim: HelperEditorPolicy.newWindowHelp).font(.caption).foregroundStyle(.secondary)
+                if let message = HelperEditorPolicy.newWindowValidation(draft.newWindowCommand) {
+                    Label(message, systemImage: "xmark.octagon").font(.caption).foregroundStyle(.red)
+                } else if let note = HelperEditorPolicy.newWindowNote(for: draft, home: FileManager.default.homeDirectoryForCurrentUser) {
+                    Label(note, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary)
+                }
+            } else {
+                Text(verbatim: HelperEditorPolicy.unavailableCaption).font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 }
