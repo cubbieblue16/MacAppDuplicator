@@ -19,7 +19,7 @@ MAD_INTEGRATION=1 swift test --filter IntegrationTests
 
 ```sh
 madctl inspect <app-path>
-madctl plan <app-path> [--data-mode auto|home|disabled] [--data-path P] [--mode dock|system] [--env K=V ...] [--arg A ...] [--appearance system|light|dark] [--language CODE] [--name N]
+madctl plan <app-path> [--data-mode auto|home|disabled] [--data-path P] [--mode dock|system] [--env K=V ...] [--arg A ...] [--appearance system|light|dark] [--language CODE] [--menu-bar-icon] [--erase-on-quit] [--new-window-command T] [--name N]
 madctl new <app-path> --name N [same flags] [--out DIR] [--launcher PATH] [--identity NAME]
 ```
 
@@ -28,6 +28,9 @@ Defaults:
 - `--data-mode`: `auto`
 - `--mode`: `dock`
 - `--appearance`: `system`
+- `--language`: none (the system language); a code such as `en`, `fr` or `pt-BR`
+- `--menu-bar-icon`, `--erase-on-quit`: off; `--erase-on-quit` needs `--data-mode auto` or `home`
+- `--new-window-command`: none; a template such as `open -na {target}` (`{target}`, `{bundleId}` and `{dataPath}` are replaced; the result is split on spaces and never run by a shell)
 - `--name`: the target app's name (`plan` only; `new` requires `--name`)
 - `--out`: `~/Applications/App Duplicator` (created if missing)
 - `--launcher`: the `Launcher` binary beside the `madctl` executable
@@ -71,11 +74,11 @@ The Xcode project under `App/` is generated from `App/project.yml` and git-ignor
 
 - Sidebar of shortcuts grouped by kind, with target version, running indicator and a `Needs rebuild` badge when the shortcut's `MADEngineVersion` is below the app's engine version (`ShortcutConfig.currentEngineVersion`). The folder watcher picks up bundles added, removed or renamed; after editing a bundle in place, choose View → Refresh (⌘R).
 - New Shortcut wizard: pick an installed app (grid of `/Applications` and `~/Applications`, search, drag-and-drop or Browse; apps in `/System/Applications` such as TextEdit need Browse), name and icon (copied, custom file or generated tile), data mode, and a review step with the masked launch plan.
-- Editor: name, icon, target app, launch mode, data mode and folder, appearance, language, arguments and environment (secret-looking keys masked). The per-shortcut HOME symlink list is not editable; a new shortcut takes the list from Settings. `Erase data on quit` and `Menu bar icon` show their stored values but stay disabled for application shortcuts until Phase 6; a web app's `Menu bar icon` is live (see Phase 4 web apps).
+- Editor: name, icon, target app, launch mode, data mode and folder, appearance, language, arguments and environment (secret-looking keys masked). The per-shortcut HOME symlink list is not editable; a new shortcut takes the list from Settings. `Erase on quit` (Launch section), `Menu bar icon` and `New Window command` (Advanced) work for application shortcuts since Phase 6 (see Phase 6 helper); a web app's `Menu bar icon` belongs to its web shell (see Phase 4 web apps).
 - Actions: Launch, Reveal in Finder, Regenerate, Duplicate, Export (with the quarantine-clearing command), Delete (Trash, optional data folder), Rebuild All.
 - Diagnostics sheet: resolved target path (plus the stored path when it differs), executable, launch mode, argv, masked environment, warnings and the last 200 log lines, copyable.
 - Settings: output and library folders (a change rescans the library), signing identity (Ad-hoc or any codesigning identity in the keychain; defaults to the first Developer ID Application identity), the HOME-override symlink list copied into new shortcuts, and Open Logs Folder.
-- Help → Known Limitations (29 entries since Phase 5; the six profile entries are listed under Phase 3 profiles, the four web entries under Phase 4 web apps and the five launcher entries under Phase 5 files, folders and commands).
+- Help → Known Limitations (35 entries since Phase 6; the six profile entries are listed under Phase 3 profiles, the four web entries under Phase 4 web apps, the five launcher entries under Phase 5 files, folders and commands and the six helper entries under Phase 6 helper).
 
 Acceptance checklist: `docs/acceptance/phase2-library-app.md`.
 
@@ -120,7 +123,7 @@ Acceptance checklist: `docs/acceptance/phase3-profiles.md`. Promotion procedure:
 A web app is a Dock shortcut for a website: App Duplicator builds a bundle whose executable is a small embedded browser (WebKit) that opens one address in its own window, with its own bundle identifier, Dock icon and private website data store. Create one with ⌘N → `Web App`: pick a preset (WhatsApp, Teams, Outlook) or type an https address, then set the user agent, the badge pattern, the extra hosts that stay in the app, the menu bar icon and background mode.
 - Logins, cookies and cache live in a WebKit data store named by the id shown in the editor's `Web data` row, under `~/Library/WebKit/<shortcut bundle identifier>/WebsiteDataStore`. A duplicate gets a new id, so it has its own logins. The editor's `Remove Web Data…` and the second question when you delete a web app remove that store; the shortcut must be quit first.
 - The page title's unread count (default pattern `(3)`) and the site's own app-badge calls drive the Dock badge; notifications use macOS banners and a click fronts the window.
-- With `Menu bar icon` and `Keep running in the menu bar when the window closes` on, closing the window leaves the app running in the menu bar. For a web app the Menu bar icon is live in this phase; for application shortcuts it stays inert until Phase 6.
+- With `Menu bar icon` and `Keep running in the menu bar when the window closes` on, closing the window leaves the app running in the menu bar. A web app's menu bar icon belongs to its web shell; application shortcuts get theirs from the Phase 6 helper.
 - A rename keeps a web app's bundle identifier, so its logins survive. Editing never refetches the site icon; the icon stays as created unless you pick another.
 - Diagnostics shows the address (query and credentials removed), user agent, web data id, background and menu bar state, badge pattern, extra hosts, zoom and the shell's log tail.
 - Limits: no passkeys, zoom kept in the shell's own preferences, notification permission decided by macOS, and other sites open in your browser (four new Known Limitations entries).
@@ -138,6 +141,21 @@ The default icon is the item's or the program's Finder icon. Diagnostics shows t
 
 Acceptance checklist: docs/acceptance/phase5-launchers.md
 
+## Phase 6 helper
+
+Application shortcuts gain three options, all off until you turn them on, and a checked language field:
+
+- **Menu bar icon** (Advanced) shows the shortcut's own icon, in full colour, in the menu bar while the app runs. Its menu has `Show <Name>` (brings the app to the front), `New Window` (only when a New Window command is set) and `Quit <Name>`. Quit sends SIGTERM and, if the app is still running 10 seconds later, SIGKILL: the app does not get to ask about unsaved work.
+- **New Window command** (Advanced) is a template such as `open -na {target}`; `{target}`, `{bundleId}` and `{dataPath}` are replaced, and the result is split on spaces and run through `/usr/bin/env`, never a shell, with the shortcut's environment. An app started with `open` gets LaunchServices' environment rather than the shortcut's (no HOME override, no extra variables), so pass the data folder yourself, for example `open -na {target} --args --user-data-dir={dataPath}` for a Chromium browser. The wizard copies a profile's `newWindowCommand`; no bundled profile sets one yet.
+- **Erase on quit** (Launch section, under the data folder) empties the data folder every time the app quits, so each launch starts clean and signed out. It needs Data set to Auto or HOME override. A folder inside App Duplicator's data folder is accepted at once; any other folder needs a confirmation. Some folders are never emptied, whatever a shortcut says: your home folder and the folders directly inside it, the folders directly inside `~/Library`, App Duplicator's data folder itself, anything outside your home folder or fewer than four levels below `/`, and symbolic links. Links inside the folder (the HOME override's links to Desktop, Documents and the rest) are removed, never followed, and the folder itself stays. The erase is skipped while another copy of the same shortcut is still running.
+- **Language** (Launch section) takes a code such as `en`, `fr` or `pt-BR`; anything else shows a message and Save stays disabled. Apps that ignore `AppleLanguages` keep the system language.
+
+The helper runs only while the menu bar icon or erase on quit is on, and only for application shortcuts; with both off a shortcut leaves no process behind, as before. In Dock Shortcut mode the shortcut starts a second copy of its launcher (`posix_spawn`, in its own session) just before it becomes the app, and that copy erases only after it has seen the app start and then exit. In System Launch mode the shortcut itself stays open as the helper, so opening the shortcut again brings the app forward. Helper events go to the shortcut's log in `~/Library/Logs/App Duplicator/` as `helper …` lines: start, exec observed, new window, quit, target exited, erase (or why it was skipped) and exit.
+
+Diagnostics adds `Menu bar icon`, `Erase on quit` (with the reason when the folder would never be emptied), `New Window command` (the masked command line, or why it is hidden) and `Language`, and Copy Report includes them. madctl gains `--menu-bar-icon`, `--erase-on-quit` (needs `--data-mode auto` or `home`) and `--new-window-command <template>`. Help → Known Limitations has six helper entries: the app counts as running until its helper exits, erase confirmation and refusals, apps that ignore `AppleLanguages`, the full-colour icon, New Window needs a command, and System Launch keeps the shortcut open.
+
+Acceptance checklist: `docs/acceptance/phase6-helper.md`.
+
 ## Core API used by the app
 
 - `BundleWriter.write(config:app:launcherBinary:to:)`: creates `<Name>.app` in the target directory.
@@ -147,6 +165,9 @@ Acceptance checklist: docs/acceptance/phase5-launchers.md
 - `DataSeparationPlanner.plan(app:config:baseEnvironment:shortcutBundleURL:)` for previews.
 - `HomeTreeBuilder`.
 - `SecretMasking.mask`.
+- `HelperPlan.isNeeded(for:)`, `HelperPlan.eraseDataPath(for:)`, `HelperPlan.showsMenuBarIcon(for:)` and `HelperPlan.newWindowArguments(for:targetPath:)` for the editor notes, the preview's helper line and Diagnostics.
+- `EraseOnQuitPolicy.check(dataPath:home:)` and `EraseOnQuitRefusal` for the erase checks.
+- `NewWindowCommandBuilder.validationMessage(for:)` and `LanguageCode.validationMessage(for:)` for the field messages.
 - The `Launcher` release binary at `.build/release/Launcher`, to embed as a resource.
 
 Profiles feed `DataSeparationPlanner.plan` through the wizard prefill (`WizardModel(prefillTarget:profileLookup:)`); see "Phase 3 profiles" above.
