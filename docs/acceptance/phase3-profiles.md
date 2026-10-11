@@ -90,7 +90,7 @@ In the `Accept Profile` editor, set the data folder to each path below (type it,
 
 ## Step 11: Known Limitations
 
-- [ ] **11.1** Help → Known Limitations. Expected: 20 entries; the last six are `Compatibility profiles are advisory`, `Partial profiles need manual review`, `Check Profile Updates is manual and fetches from one host`, `Sandboxed native apps cannot be separated`, `Shortcuts whose names match get a numbered slug` and `Export replaces an existing shortcut by moving it to the Trash`.
+- [ ] **11.1** Help → Known Limitations. Expected: the list includes (37 entries at HEAD on 2026-10-11; later phases append after these) `Compatibility profiles are advisory`, `Partial profiles need manual review`, `Check Profile Updates is manual and fetches from one host`, `Sandboxed native apps cannot be separated`, `Shortcuts whose names match get a numbered slug` and `Export replaces an existing shortcut by moving it to the Trash`.
 
 ## Teardown
 

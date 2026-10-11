@@ -90,12 +90,12 @@ final class KnownLimitationsTests: XCTestCase {
     }
 
     /// Phase 4 (web apps): the four web limits are present with their prescribed ids and titles, the earlier 20 are
-    /// kept (36 in all with Phase 5's five, Phase 6's six and Phase 7's one), ids stay unique, and each entry states
+    /// kept (37 in all with Phase 5's five, Phase 6's seven and Phase 7's one), ids stay unique, and each entry states
     /// its point.
     func testPhase4WebEntriesStateTheirPoint() throws {
         let ids = KnownLimitations.all.map(\.id)
         XCTAssertEqual(Set(ids).count, ids.count, "duplicate known-limitation ids")
-        XCTAssertEqual(ids.count, 36, "20 earlier, four web, five launcher, six helper and one release entry")
+        XCTAssertEqual(ids.count, 37, "20 earlier, four web, five launcher, seven helper and one release entry")
         let topics: [(id: String, title: String, mentions: [String])] = [
             ("web-no-passkeys", "Web apps do not support passkeys", ["passkey", "WebAuthn"]),
             ("web-zoom-storage", "Web app zoom is remembered outside the shortcut", ["MADPageZoom", "sealed", "preferences"]),
@@ -134,10 +134,11 @@ final class KnownLimitationsTests: XCTestCase {
         }
     }
 
-    /// Phase 6 (helper): the six helper limits are present with their prescribed ids and titles, and each states its
+    /// Phase 6 (helper): the seven helper limits are present with their prescribed ids and titles, and each states its
     /// point: the running indicator waits for the helper, erase on quit confirms custom folders and refuses protected
     /// ones and can be skipped, the language needs AppleLanguages, the menu bar icon is in colour, New Window needs a
-    /// command, and System Launch keeps the shortcut's own process open as the helper.
+    /// command, System Launch keeps the shortcut's own process open as the helper, and a menu bar manager on macOS 27 can
+    /// leave the icon undrawn.
     func testPhase6HelperEntriesStateTheirPoint() throws {
         let topics: [(id: String, title: String, mentions: [String])] = [
             ("helper-running-until-exit", "A shortcut with a helper stays running until the helper exits",
@@ -152,6 +153,8 @@ final class KnownLimitationsTests: XCTestCase {
              ["{target}", "{bundleId}", "compatibility profile", "Advanced", "{dataPath}"]),
             ("system-launch-helper", "With System Launch, the shortcut itself stays open as the helper",
              ["no Dock icon", "Activity Monitor", "forward", "skips the erase"]),
+            ("helper-menu-bar-not-drawn", "The menu bar icon may not be drawn on macOS 27 with a menu bar manager running",
+             ["MenuBarAgent", "Ice", "kill -TERM", "Activity Monitor", "untested"]),
         ]
         let byID = Dictionary(KnownLimitations.all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for topic in topics {

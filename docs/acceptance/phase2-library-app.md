@@ -50,7 +50,7 @@ Same as Phase 1 Steps 3 to 5 in `phase1-claude-desktop.md`, but launched from th
 
 ## Step 7: Settings, Rebuild All, Known Limitations
 
-1. Settings → General: Output folder `Choose…`, create and choose an empty folder (for example `~/Desktop/MAD Temp`). Expected, without a restart: the sidebar empties (only the `Apps` header stays) and the detail pane shows the empty-library view. Click `Reset to Default`. Expected: `Claude Work`, `Claude Personal` and `Fixture Renamed` come back.
+1. Settings → General: Output folder `Browse…`, create and choose an empty folder (for example `~/Desktop/MAD Temp`). Expected, without a restart: the sidebar empties (only the `Apps` header stays) and the detail pane shows the empty-library view. Click `Reset to Default`. Expected: `Claude Work`, `Claude Personal` and `Fixture Renamed` come back.
 2. Settings → Signing. Expected: the picker already shows `Developer ID Application: Cubbieblue16 (4NQ2UVJ4EZ)`, the default when a Developer ID Application identity is in the keychain; its menu also lists `Ad-hoc` and any other valid codesigning identity. Leave it as is: picking an entry stores an explicit choice in place of the default. Create a fixture shortcut named `Fixture Signed` with the wizard (as in Step 3, defaults otherwise), then run:
 
    ```bash
@@ -65,7 +65,7 @@ Same as Phase 1 Steps 3 to 5 in `phase1-claude-desktop.md`, but launched from th
    ```
 
    The folder watcher sees bundles added, removed or renamed, not edits inside a bundle, so choose View → Refresh (⌘R). Expected: the row shows `Needs rebuild`, the `Fixture Renamed` editor footer reads `Built by an older engine version (0, current 1). Regenerate to update.`, and the toolbar `Rebuild All` enables. Click it and confirm with `Rebuild`. Expected: the badge clears, `Rebuild All` disables again, and `codesign --verify --deep --strict ~/Applications/App\ Duplicator/Fixture\ Renamed.app` exits 0 with no output.
-4. Help → Known Limitations. Expected: a `Known Limitations` window with the 14 entries from `KnownLimitations.all`.
+4. Help → Known Limitations. Expected: a `Known Limitations` window listing every entry of `KnownLimitations.all` (37 entries at HEAD on 2026-10-11; the count grows as later phases append entries).
 
 ## Teardown
 
@@ -84,10 +84,25 @@ Move these to the Trash:
 
 | Step | Date | Result | Notes |
 |---|---|---|---|
-| 1 | | | |
-| 2 | | | |
-| 3 | | | |
-| 4 | | | |
-| 5 | | | |
-| 6 | | | |
-| 7 | | | |
+| 1 | 2026-10-11 | NOT RUN | Build covered by the installed 0.7.0 (6) release. |
+| 2 | 2026-10-11 | NOT RUN | Not exercised in this pass. |
+| 3 | 2026-10-11 | PASS | Wizard opens from ⌘N / New; Kind step shows 4 kind buttons, Cancel, Next. |
+| 3 | 2026-10-11 | PASS | Kind → Next: Target step with search field, app grid (/Applications scan), `Browse…`. |
+| 3 | 2026-10-11 | BLOCKED | `Browse…` opens an NSOpenPanel hosted by a separate process; the computer-use grant covered App Duplicator only. Needs Mike: pick `.build/fixtures/FixtureApp.app` → Open. |
+| 3 | 2026-10-11 | PASS | Name/icon: Generated tile preview `FC`, Launch mode Dock Shortcut. |
+| 3 | 2026-10-11 | PASS | Data: Auto selected, note `Default: ~/Library/Application Support/App Duplicator/fixtureapp-copy`. |
+| 3 | 2026-10-11 | PASS | Review: Compatibility `HOME only`, Launch plan exec path, `CFFIXED_USER_HOME=`/`HOME=`, warning `untested app; HOME override applied`. Nit: clicking the `Launch plan` label does not toggle the disclosure, only the chevron. |
+| 3 | 2026-10-11 | PASS | Create: `~/Applications/App Duplicator/FixtureApp Copy.app`, MADConfig engineVersion 1, iconMode generated, sidebar row FixtureApp Copy / FixtureApp 1.0. |
+| 4 | 2026-10-11 | PASS | Rename to `Fixture Renamed`: preview initials `FR`, bundle renamed on disk, dataPath unchanged `fixtureapp-copy`, Developer ID Authority on the bundle. |
+| 4 | 2026-10-11 | PASS | Environment `API_TOKEN`: secure field masked while typing, row `API_TOKEN ••••••` with reveal/remove, Save. |
+| 4 | 2026-10-11 | PASS | Diagnostics…: Engine `1 (current 1)`, `API_TOKEN=••••••`; Copy Report pastes masked (39 lines). The Environment block also lists variables inherited from the shell that opened the app. |
+| 4 | 2026-10-11 | PASS | Duplicate: sheet `Duplicate Shortcut` prefilled `Fixture Renamed Copy`; `Fixture Dup` gets slug `fixture-dup`, dataPath `.../App Duplicator/fixture-dup`, `API_TOKEN` copied. |
+| 4 | 2026-10-11 | PASS | Export…: save panel on Desktop, Export Shortcut sheet with Developer ID line, quarantine command, orange plain-text notice naming `API_TOKEN`; `~/Desktop/Fixture Renamed.app` exists. Nits: the Desktop folder-access prompt appeared on first export and the UI freezes until it is answered. |
+| 4 | 2026-10-11 | PASS | Delete `Fixture Dup`: dialog `Delete "Fixture Dup"?` / "The shortcut is moved to the Trash. The target app is never touched." / "No data folder exists at /Users/cubbieblue16/Library/Application Support/App Duplicator/fixture-dup."; bundle in ~/.Trash, sidebar back to 3 rows. |
+| 5 | 2026-10-11 | PASS | Launch `Fixture Renamed`: green running dot, log has `target …/FixtureApp.app/Contents/MacOS/FixtureApp` and `exec`, data folder `fixtureapp-copy` created. FixtureApp self-terminates after 3 s, so the Dock-menu quit is moot; Dock tile not visible in captures. |
+| 6 | 2026-10-11 | PASS | Two Claude instances running: original (no flag) and `--user-data-dir=…/App Duplicator/claude-work`. |
+| 6 | 2026-10-11 | NEEDS MIKE | Dock two-tile check: Dock not visible in captures (Stage Manager on, Dock hidden). |
+| 7.1 | 2026-10-11 | PASS | Settings → General → Output folder `Browse…` → empty folder → sidebar empties → `Reset to Default` → 4 rows return. Nit: the Settings window dropped behind the main window after the panel closed. |
+| 7.2 | 2026-10-11 | PASS | Signing popup shows the Developer ID identity selected, plus `Ad-hoc` and an Apple Development entry; `Fixture Signed` has Authority=Developer ID Application, Timestamp and Runtime Version; `codesign --verify --deep --strict` exit 0. |
+| 7.3 | 2026-10-11 | PASS | MADEngineVersion 0 → verify reports "invalid Info.plist (plist or signature have been modified)"; ⌘R → `Needs rebuild`, footer `Built by an older engine version (0, current 1). Regenerate to update.`; `Rebuild 1 shortcut?` → `Rebuilt 1 of 1 shortcut.`; verify exit 0, env `API_TOKEN` kept. |
+| 7.4 | 2026-10-11 | PASS | Known Limitations window: first entry "Apple apps and launch-constrained binaries cannot use Dock Shortcut", last "App Duplicator does not update itself"; 36 entries at HEAD 32abfbc (37 after the macOS 27 menu bar entry). |

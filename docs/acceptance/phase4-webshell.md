@@ -89,7 +89,7 @@ Quit `Acceptance Chat` first if it is running. Replace `<ID>` below with `com.mi
 
 ## Step 11: Known Limitations
 
-- [ ] **11.1** Help → Known Limitations. Expected: 24 entries. The last four are `Web apps do not support passkeys`, `Web app zoom is remembered outside the shortcut`, `Web notifications are always allowed, but macOS decides whether they appear` and `Web apps open other sites in your browser`.
+- [ ] **11.1** Help → Known Limitations. Expected: the list includes (37 entries at HEAD on 2026-10-11; later phases append after these) `Web apps do not support passkeys`, `Web app zoom is remembered outside the shortcut`, `Web notifications are always allowed, but macOS decides whether they appear` and `Web apps open other sites in your browser`.
 
 ## Step 12: Zoom is kept outside the bundle
 

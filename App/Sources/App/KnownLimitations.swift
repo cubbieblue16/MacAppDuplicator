@@ -11,10 +11,10 @@ struct KnownLimitation: Identifiable, Hashable {
 /// profiles, manual updates from one host, sandboxed badges, numbered slugs, export's Trash replacement). Phase 4 adds
 /// the four web app limits (passkeys, zoom storage, notification permission, pop-up and off-site links). Phase 5 adds
 /// the five launcher limits (terminal AppleScript, terminal shell history, no running state for files or commands,
-/// Ghostty path). Phase 6 adds the six helper limits (running until the helper exits, erase confirmation and refusals,
-/// AppleLanguages, colour menu bar icon, New Window command, System Launch helper). Phase 7 adds the manual-updates
-/// limit (the app never updates itself; Help > Check for Updates… opens the GitHub releases page). Shown in the Known
-/// Limitations window and linked from the wizard's compatibility line.
+/// Ghostty path). Phase 6 adds the seven helper limits (running until the helper exits, erase confirmation and refusals,
+/// AppleLanguages, colour menu bar icon, New Window command, System Launch helper, macOS 27 menu bar managers).
+/// Phase 7 adds the manual-updates limit (the app never updates itself; Help > Check for Updates… opens the GitHub
+/// releases page). Shown in the Known Limitations window and linked from the wizard's compatibility line.
 enum KnownLimitations {
     static let all: [KnownLimitation] = [
         KnownLimitation(
@@ -191,6 +191,11 @@ enum KnownLimitations {
             id: "system-launch-helper",
             title: "With System Launch, the shortcut itself stays open as the helper",
             detail: "In System Launch mode the menu bar icon and Erase on quit are run by the shortcut's own process, which stays open in the background with no Dock icon for as long as the app runs, and Activity Monitor lists it beside the app. Opening the shortcut again while the app runs brings the app forward instead of starting another copy. Quitting the shortcut's process from Activity Monitor removes the menu bar icon and skips the erase, but leaves the app running."
+        ),
+        KnownLimitation(
+            id: "helper-menu-bar-not-drawn",
+            title: "The menu bar icon may not be drawn on macOS 27 with a menu bar manager running",
+            detail: "On macOS 27 every status item is hosted by the system's MenuBarAgent. With a menu bar manager such as Ice running, the helper creates its item (the log shows the helper starting) but the agent reports it as not visible and nothing is drawn, so Show, New Window and Quit are unreachable from the menu bar. Quit the shortcut from Activity Monitor or with kill -TERM on the helper process; quitting the menu bar manager and relaunching the shortcut restores the icon. Observed on macOS 27.0 with Ice 27.0; other versions are untested."
         ),
         KnownLimitation(
             id: "updates-manual",

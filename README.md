@@ -92,7 +92,7 @@ The Xcode project under `App/` is generated from `App/project.yml` and git-ignor
 - Actions: Launch, Reveal in Finder, Regenerate, Duplicate, Export (with the quarantine-clearing command), Delete (Trash, optional data folder), Rebuild All.
 - Diagnostics sheet: resolved target path (plus the stored path when it differs), executable, launch mode, argv, masked environment, warnings and the last 200 log lines, copyable.
 - Settings: output and library folders (a change rescans the library), signing identity (Ad-hoc or any codesigning identity in the keychain; defaults to the first Developer ID Application identity), the HOME-override symlink list copied into new shortcuts, and Open Logs Folder.
-- Help → Known Limitations (36 entries since Phase 7; the six profile entries are listed under Phase 3 profiles, the four web entries under Phase 4 web apps, the five launcher entries under Phase 5 files, folders and commands, the six helper entries under Phase 6 helper and the manual-updates entry under Install). Help → Check for Updates… opens the GitHub releases page.
+- Help → Known Limitations (37 entries since Phase 7; the six profile entries are listed under Phase 3 profiles, the four web entries under Phase 4 web apps, the five launcher entries under Phase 5 files, folders and commands, the seven helper entries under Phase 6 helper and the manual-updates entry under Install). Help → Check for Updates… opens the GitHub releases page.
 
 Acceptance checklist: `docs/acceptance/phase2-library-app.md`.
 
