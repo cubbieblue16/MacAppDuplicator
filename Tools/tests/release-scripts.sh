@@ -104,4 +104,62 @@ else
     fail "build-app.sh sets both overrides once, on the identity line only (found $TS_COUNT and $INJECT_COUNT)"
 fi
 
+# --- Task 2: notarize.sh ---
+mkdir -p "$T/Fake.app/Contents/MacOS"
+cat > "$T/Fake.app/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>Fake</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.mikekuta.MacAppDuplicator.release-test</string>
+    <key>CFBundleName</key>
+    <string>Fake</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+</dict>
+</plist>
+PLIST
+printf '#!/bin/sh\nexit 0\n' > "$T/Fake.app/Contents/MacOS/Fake"
+chmod 755 "$T/Fake.app/Contents/MacOS/Fake"
+printf 'not a real disk image\n' > "$T/dummy.dmg"
+printf 'not a real zip\n' > "$T/dummy.zip"
+printf 'plain text\n' > "$T/notes.txt"
+
+expect_exit 0 "notarize.sh passes bash -n" bash -n Tools/notarize.sh
+if [ -x Tools/notarize.sh ]; then ok "notarize.sh is executable"; else fail "notarize.sh is executable"; fi
+expect_exit 0 "notarize.sh --help exits 0" Tools/notarize.sh --help
+has out "Usage: Tools/notarize.sh <path> [--profile NAME] [--dry-run]" "notarize.sh --help prints the usage line"
+expect_exit 64 "notarize.sh without a path exits 64" Tools/notarize.sh
+has err "error: missing <path>" "notarize.sh names the missing path"
+expect_exit 64 "notarize.sh rejects a .txt path" Tools/notarize.sh "$T/notes.txt" --dry-run
+has err "must be a .app, .dmg or .zip" "notarize.sh explains the accepted path types"
+expect_exit 64 "notarize.sh rejects a missing file" Tools/notarize.sh "$T/missing.dmg" --dry-run
+has err "no such file" "notarize.sh names the missing file"
+expect_exit 64 "notarize.sh refuses an Apple ID option" Tools/notarize.sh "$T/Fake.app" --apple-id someone --dry-run
+has err "unknown option: --apple-id" "notarize.sh reports the unknown option"
+expect_exit 64 "notarize.sh needs a value after --profile" Tools/notarize.sh "$T/Fake.app" --profile
+expect_exit 64 "notarize.sh takes one path only" Tools/notarize.sh "$T/Fake.app" "$T/dummy.dmg" --dry-run
+expect_exit 69 "notarize.sh exits 69 when the keychain profile is missing" Tools/notarize.sh "$T/Fake.app" --profile MAD-notary-does-not-exist
+has err "xcrun notarytool store-credentials MAD-notary-does-not-exist --apple-id <your Apple ID> --team-id 4NQ2UVJ4EZ" "missing profile prints the store-credentials command"
+has err "app-specific password" "missing profile mentions the app-specific password"
+expect_exit 0 "notarize.sh --dry-run on a .app exits 0" Tools/notarize.sh "$T/Fake.app" --dry-run
+has out "dry-run: xcrun notarytool history --keychain-profile MAD-notary" "dry run checks the default profile"
+has out "dry-run: ditto -c -k --keepParent $(shown "$T/Fake.app") dist/Fake.zip" "dry run zips the .app into dist/"
+has out "dry-run: xcrun notarytool submit dist/Fake.zip --keychain-profile MAD-notary --wait --output-format json" "dry run submits the zip and waits"
+has out "dry-run: xcrun stapler staple $(shown "$T/Fake.app")" "dry run staples the original .app"
+has out "dry-run: xcrun stapler validate $(shown "$T/Fake.app")" "dry run validates the staple"
+if [ -e dist/Fake.zip ]; then fail "dry run writes nothing"; else ok "dry run writes nothing"; fi
+expect_exit 0 "notarize.sh --dry-run on a .dmg exits 0" Tools/notarize.sh "$T/dummy.dmg" --profile Other-profile --dry-run
+has out "dry-run: xcrun notarytool submit $(shown "$T/dummy.dmg") --keychain-profile Other-profile --wait --output-format json" "dry run submits the .dmg itself with the chosen profile"
+lacks out "ditto" "dry run does not zip a .dmg"
+has out "dry-run: xcrun stapler staple $(shown "$T/dummy.dmg")" "dry run staples the .dmg"
+expect_exit 0 "notarize.sh --dry-run on a .zip exits 0" Tools/notarize.sh "$T/dummy.zip" --dry-run
+has out "dry-run: xcrun notarytool submit $(shown "$T/dummy.zip") --keychain-profile MAD-notary --wait --output-format json" "dry run submits the .zip as is"
+lacks out "stapler" "dry run never staples a .zip"
+
 echo "PASS $N checks"
