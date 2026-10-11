@@ -222,3 +222,7 @@ Acceptance checklist: `docs/acceptance/phase7-release.md`.
 - The `Launcher` release binary at `.build/release/Launcher`, to embed as a resource.
 
 Profiles feed `DataSeparationPlanner.plan` through the wizard prefill (`WizardModel(prefillTarget:profileLookup:)`); see "Phase 3 profiles" above.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
