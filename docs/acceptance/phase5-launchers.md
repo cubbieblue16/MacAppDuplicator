@@ -31,7 +31,7 @@ Manual checks for file, folder and command shortcuts on a real Mac. Run them in 
 
 ## Step 4: Command in Terminal with spaces and quotes
 
-- [ ] **4.1** New Shortcut → Command → Choose… → `args.sh`. Arguments, one per line: `two words`, `"quoted"`, `it's`. Terminal: Terminal. On 0.7.0 the Arguments editor applies macOS smart-quote substitution while typing, so paste the three lines instead of typing them (0.7.1 turns substitution off in the Arguments and Environment editors).
+- [ ] **4.1** New Shortcut → Command → Choose… → `args.sh`. Arguments, one per line: `two words`, `"quoted"`, `it's`. Terminal: Terminal. On 0.7.0 the Arguments editor applies macOS smart-quote substitution while typing, so paste the three lines instead of typing them (0.7.1 turns substitution off in the Arguments and Environment editors; verified on 0.7.1 (7), 2026-10-11: typing `"quoted" it's -- dash` keeps straight quotes and two hyphens).
 - [ ] **4.2** Create and launch. macOS asks once to let the shortcut control Terminal; allow it.
 - [ ] **4.3** Terminal prints `[two words]`, `["quoted"]`, `[it's]` on three lines, `HOME=` your real HOME, and `MAD_SHORTCUT_NAME=` the shortcut's name (the shortcut's environment is written inline into the new shell, so it must show up here).
 
@@ -84,5 +84,6 @@ Manual checks for file, folder and command shortcuts on a real Mac. Run them in 
 | 5 | 2026-10-11 | N/A | iTerm2 not installed |
 | 6 | 2026-10-11 | PASS | 6.1–6.3 background command with own HOME; `~/Library/Application Support/App Duplicator/args-bg` created, `~/.zshrc` mtime unchanged |
 | 7 | 2026-10-11 | PASS | 7.1–7.3 Diagnostics for file and command shortcuts; `--token` value masked as `••••••` and absent from the copied report |
-| 8 | 2026-10-11 | PASS | 8.1–8.6 duplicate, regenerate, missing-item state, delete without toggle (file shortcut), delete with the own-HOME toggle (shortcut and HOME tree in the Trash), delete of a command without own HOME shows no toggle. Nit: Return in the Delete alert does nothing (no default button) |
+| 8 | 2026-10-11 | PASS | 8.1–8.6 duplicate, regenerate, missing-item state, delete without toggle (file shortcut), delete with the own-HOME toggle (shortcut and HOME tree in the Trash), delete of a command without own HOME shows no toggle. Nit: Return in the Delete alert does nothing (no default button). Fixed in 0.7.1 (7), verified 2026-10-11: Return cancels, Escape dismisses, the web-data question keeps `Keep Web Data` as its default |
 | 9 | 2026-10-11 | PENDING | Mike-present (Automation permission, Ghostty) |
+| 4.1 re-check | 2026-10-11 | PASS (0.7.1) | 0.7.1 (7): Arguments editor keeps `"quoted" it's -- dash` verbatim when typed (app-domain `NSAutomaticQuoteSubstitutionEnabled`/`Dash`/`TextReplacement` = 0; global still 1) |
