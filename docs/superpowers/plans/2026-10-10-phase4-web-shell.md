@@ -21,7 +21,7 @@ Phase 3 constraints carry over verbatim unless a Phase 4 line below overrides th
 - App bundle id `com.mikekuta.MacAppDuplicator`, product name and display name `macOS App Duplicator`, `PRODUCT_MODULE_NAME = MacAppDuplicator`, `LSApplicationCategoryType = public.app-category.utilities`, hardened runtime on, App Sandbox off, no entitlements file, no TCC-gated APIs (spec §9).
 - UI copy is verbatim from spec §7 where the spec gives it: sidebar sections `Apps`, `Web Apps`, `Files & Folders`, `Commands`; icon modes `Copied from target`, `Custom file`, `Generated tile`; appearance options `Follow System`, `Light`, `Force dark (Chromium/Electron only, best effort)`; actions `Launch`, `Reveal in Finder`, `Regenerate`, `Duplicate`, `Export…`, `Delete`; toolbar `New`, `Rebuild All`; compat badges `Verified`, `Auto`, `HOME only`, `Unsupported`, `Unknown`; signing option `Ad-hoc`.
 - Tests never touch `/Applications`, `~/Applications`, the real output folder, the real `UserDefaults` suite or the two Claude shortcuts; every test writes under `makeTemporaryDirectory()` / `FileManager.default.temporaryDirectory` and uses `UserDefaults(suiteName:)` with a unique suite that it removes in `tearDown`. No test launches a shortcut or a target app.
-- Every commit message ends with the line `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Repository `/Users/cubbieblue16/Developer/MacAppDuplicator`, branch `main`. Commit identity `git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com"`.
+- Every commit message ends with the line `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Repository `/Users/cubbieblue16/Developer/MacAppDuplicator`, branch `main`. Commit identity `git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com"`.
 - Additive-only toward Phase 1: no existing public symbol, test or behaviour is removed or weakened. New Core API goes next to the existing files.
 - Build-system conventions: `App/MacAppDuplicator.xcodeproj` is generated and git-ignored; `Tools/build-app.sh` and `Tools/test-app.sh` are the only documented ways to build and test the app. All `xcodebuild` runs use `-derivedDataPath .build/DerivedData` and `-destination 'platform=macOS,arch=arm64'`.
 - `CompatProfiles` imports Foundation and DuplicatorCore only. Only the app target, the app test target and `CompatProfilesTests` link it; the Launcher and `madctl` never do, so no shortcut bundle contains networking code.
@@ -65,7 +65,7 @@ Phase 4 additions and overrides:
 - Test commands (expected counts per step): Core `cd "$REPO" && swift test --filter DuplicatorCoreTests 2>&1 | grep -E 'Executed|error:' | tail -3`; Profiles `swift test --filter CompatProfilesTests`; Integration `swift test --filter IntegrationTests`; app, one class `cd "$REPO" && Tools/test-app.sh -only-testing:MacAppDuplicatorTests/<ClassName> 2>&1 | tail -4`; app, everything `cd "$REPO" && Tools/test-app.sh 2>&1 | tail -4` prints `** TEST SUCCEEDED **`. `Tools/test-app.sh` regenerates the Xcode project with xcodegen on every run, so new files under `App/Sources` and `App/Tests` need no `project.yml` edit; the `Embed WebShell` phase and the version bump do.
 - Task order and models: 1 (Core, sonnet) → 2 (WebShell window/navigation/embedding, opus) → 3 (WebShell badge/notifications/background, opus) → 4 (presets/icon/builder, sonnet) → 5 (wizard, sonnet) → 6 (editor/delete/diagnostics/docs/version, sonnet). 2 and 3 depend on 1; 4 on 1 and 2; 5 on 4; 6 on 5.
 - `swift test --filter` takes the dot form `--filter <Target>.<ClassName>` (for example `--filter DuplicatorCoreTests.WebAppConfigTests`). The slash form `<Target>/<ClassName>` matches nothing on Swift 6.4, runs 0 tests and still exits 0. Any test step whose output shows `Executed 0 tests` has NOT passed; fix the filter and rerun.
-- Commit identity `git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com"`; every commit ends with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
+- Commit identity `git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com"`; every commit ends with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
 
 ---
 
@@ -515,7 +515,7 @@ Expected: `Executed 12 tests, with 0 failures` (the existing exact-key-set test 
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/WebAppConfig.swift Packages/DuplicatorCore/Sources/DuplicatorCore/ShortcutConfig.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/WebAppConfigTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Add WebAppConfig and the optional ShortcutConfig.webApp field" -m "WebAppConfig, UserAgentPreset and WebAppURLValidator are new Core types. ShortcutConfig gains an optional webApp that decodes to nil when absent, so every existing shortcut still loads, and round-trips through the MADConfig plist dictionary." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/WebAppConfig.swift Packages/DuplicatorCore/Sources/DuplicatorCore/ShortcutConfig.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/WebAppConfigTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Add WebAppConfig and the optional ShortcutConfig.webApp field" -m "WebAppConfig, UserAgentPreset and WebAppURLValidator are new Core types. ShortcutConfig gains an optional webApp that decodes to nil when absent, so every existing shortcut still loads, and round-trips through the MADConfig plist dictionary." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
@@ -678,7 +678,7 @@ Expected: `Executed 6 tests, with 0 failures`.
 - [ ] **Step 11: Commit**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/WebHostPolicy.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/WebHostPolicyTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Add WebHostPolicy for web app navigation decisions" -m "Pure Foundation host matching: http and https URLs whose host equals or is a subdomain of the base host or an extra host stay in the window; everything else is for the default browser. The matrix test covers subdomains, look-alike suffixes, schemes and trailing dots." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/WebHostPolicy.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/WebHostPolicyTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Add WebHostPolicy for web app navigation decisions" -m "Pure Foundation host matching: http and https URLs whose host equals or is a subdomain of the base host or an extra host stay in the window; everything else is for the default browser. The matrix test covers subdomains, look-alike suffixes, schemes and trailing dots." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
@@ -840,7 +840,7 @@ Expected: `Executed 9 tests, with 0 failures`.
 - [ ] **Step 16: Commit**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/BadgeTitleParser.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/BadgeTitleParserTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Add BadgeTitleParser for page-title unread counts" -m "Compiles the configured pattern or the default (3) pattern, falls back to the default for invalid patterns or patterns without a capture group, and returns the first capture group as an Int." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/BadgeTitleParser.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/BadgeTitleParserTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Add BadgeTitleParser for page-title unread counts" -m "Compiles the configured pattern or the default (3) pattern, falls back to the default for invalid patterns or patterns without a capture group, and returns the first capture group as an Int." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1216,7 +1216,7 @@ Expected: `Executed 16 tests, with 0 failures`.
 - [ ] **Step 21: Commit**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/WebShellScripts.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/WebShellScriptsTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Add the web shell badge bridge and notification shim scripts" -m "The injected JavaScript is kept as Swift string constants because shortcut bundles carry no resources. The notification shim generates ids with crypto.randomUUID(), keeps a bounded registry and dispatches click through window.__madNotificationClicked. Tests run both scripts in JavaScriptCore with stubbed message handlers." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/WebShellScripts.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/WebShellScriptsTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Add the web shell badge bridge and notification shim scripts" -m "The injected JavaScript is kept as Swift string constants because shortcut bundles carry no resources. The notification shim generates ids with crypto.randomUUID(), keeps a bounded registry and dispatches click through window.__madNotificationClicked. Tests run both scripts in JavaScriptCore with stubbed message handlers." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
@@ -1507,7 +1507,7 @@ Expected: `Build complete!` (Launcher and `madctl` still compile against the unc
 - [ ] **Step 27: Commit**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/BundleWriter.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/BundleWriterWebAppTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "BundleWriter: write bundles from a plain executable for web apps" -m "write(config:executable:iconFile:to:) copies the WebShell binary with mode 0755 and sets LSEnvironment to the shortcut environment. Both overloads now share one private bundle assembler and one Info.plist builder, so the key set is identical for app and web app shortcuts." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/BundleWriter.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/BundleWriterWebAppTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "BundleWriter: write bundles from a plain executable for web apps" -m "write(config:executable:iconFile:to:) copies the WebShell binary with mode 0755 and sets LSEnvironment to the shortcut environment. Both overloads now share one private bundle assembler and one Info.plist builder, so the key set is identical for app and web app shortcuts." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ## Progress
@@ -2382,7 +2382,7 @@ Expected: `Executed 171 tests, with 0 failures` (Task 1 count; Task 2 adds no Co
 - [ ] **Step 10: Commit the shell**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Package.swift WebShell/Sources/WebShell Tests/Integration/WebShellLaunchTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Add the WebShell executable for web-app shortcuts
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Package.swift WebShell/Sources/WebShell Tests/Integration/WebShellLaunchTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Add the WebShell executable for web-app shortcuts
 
 WebShell is a programmatic AppKit and WebKit app that runs inside each web-app shortcut bundle under the
 shortcut's own identity. It reads MADConfig (exit 2 with an alert when the webApp settings are missing or
@@ -2508,7 +2508,7 @@ Expected: exactly `App/Sources/App/EmbeddedWebShell.swift`, `App/Tests/SmokeTest
 - [ ] **Step 16: Commit the embedding**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/App/EmbeddedWebShell.swift App/Tests/SmokeTests.swift App/project.yml Tools/build-app.sh Tools/test-app.sh && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Embed the WebShell binary in the app bundle
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/App/EmbeddedWebShell.swift App/Tests/SmokeTests.swift App/project.yml Tools/build-app.sh Tools/test-app.sh && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Embed the WebShell binary in the app bundle
 
 The app now builds the WebShell product and copies it into Contents/Resources/WebShell with an
 Embed WebShell build phase shaped like Embed Launcher, signed the same way. EmbeddedWebShell locates
@@ -2953,7 +2953,7 @@ Expected: `Executed 11 tests, with 0 failures`.
 - [ ] **Step 5: Commit.**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Package.swift WebShell/Tests/WebShellTests/TestSupport.swift WebShell/Tests/WebShellTests/WebShellMessagesTests.swift WebShell/Sources/WebShell/WebShellMessages.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Validate WebShell badge and notification messages" -m "Adds the WebShellTests target and pure validation of madBadge and madNotification bodies. A notification with an id that is not a UUID is dropped, a missing badge count clears the badge, and only a notification's title is ever made loggable." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Package.swift WebShell/Tests/WebShellTests/TestSupport.swift WebShell/Tests/WebShellTests/WebShellMessagesTests.swift WebShell/Sources/WebShell/WebShellMessages.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Validate WebShell badge and notification messages" -m "Adds the WebShellTests target and pure validation of madBadge and madNotification bodies. A notification with an id that is not a UUID is dropped, a missing badge count clears the badge, and only a notification's title is ever made loggable." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
@@ -3147,7 +3147,7 @@ Expected: `Executed 6 tests, with 0 failures`.
 - [ ] **Step 10: Commit.**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add WebShell/Tests/WebShellTests/BackgroundModePolicyTests.swift WebShell/Tests/WebShellTests/StatusItemTextTests.swift WebShell/Sources/WebShell/BackgroundModePolicy.swift WebShell/Sources/WebShell/StatusItemController.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Add the WebShell background-mode policy and status item" -m "Background mode keeps the shell running only when the menu bar icon is also on. The status item shows the bundle icon at 18 points, shows the unread count when it is above zero, and has Show and Quit items named after CFBundleName." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add WebShell/Tests/WebShellTests/BackgroundModePolicyTests.swift WebShell/Tests/WebShellTests/StatusItemTextTests.swift WebShell/Sources/WebShell/BackgroundModePolicy.swift WebShell/Sources/WebShell/StatusItemController.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Add the WebShell background-mode policy and status item" -m "Background mode keeps the shell running only when the menu bar icon is also on. The status item shows the bundle icon at 18 points, shows the unread count when it is above zero, and has Show and Quit items named after CFBundleName." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
@@ -3326,7 +3326,7 @@ Expected: `Executed 5 tests, with 0 failures`.
 - [ ] **Step 15: Commit.**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add WebShell/Tests/WebShellTests/BadgeControllerTests.swift WebShell/Sources/WebShell/BadgeController.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Merge title and page badge counts in WebShell" -m "The Dock badge follows whichever source wrote last: the page title through BadgeTitleParser, or madBadge messages. A count of zero clears the label. Each change is logged, an invalid custom pattern is logged once, and changes are published for the status item." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add WebShell/Tests/WebShellTests/BadgeControllerTests.swift WebShell/Sources/WebShell/BadgeController.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Merge title and page badge counts in WebShell" -m "The Dock badge follows whichever source wrote last: the page title through BadgeTitleParser, or madBadge messages. A count of zero clears the label. Each change is logged, an invalid custom pattern is logged once, and changes are published for the status item." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
@@ -3577,7 +3577,7 @@ Expected: `Executed 6 tests, with 0 failures`.
 - [ ] **Step 20: Commit.**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add WebShell/Tests/WebShellTests/NotificationRouterTests.swift WebShell/Sources/WebShell/NotificationRouter.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Route WebShell notifications and their clicks" -m "Validated madNotification messages are posted through an injectable poster and remembered against the frame that created them, newest 100 kept. A click brings the window forward first, then dispatches the click script built by WebShellScripts.notificationClickedScript. Close removes the delivered notification. Only titles are logged." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add WebShell/Tests/WebShellTests/NotificationRouterTests.swift WebShell/Sources/WebShell/NotificationRouter.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Route WebShell notifications and their clicks" -m "Validated madNotification messages are posted through an injectable poster and remembered against the frame that created them, newest 100 kept. A click brings the window forward first, then dispatches the click script built by WebShellScripts.notificationClickedScript. Close removes the delivered notification. Only titles are logged." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
@@ -3789,7 +3789,7 @@ Expected: `Executed 6 tests, with 0 failures`.
 - [ ] **Step 25: Commit.**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add WebShell/Tests/WebShellTests/DialogPresentationTests.swift "WebShell/Sources/WebShell/WebViewCoordinator+Dialogs.swift" && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Show JavaScript dialogs and file pickers in WebShell" -m "WebViewCoordinator now implements the four WKUIDelegate dialog methods. Alert, confirm and prompt appear as NSAlert sheets titled with the page host. Only the first button confirms. Prompt seeds a 240-point text field with the default text. File inputs open an NSOpenPanel that honours multiple selection and directories, and Cancel returns nil." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add WebShell/Tests/WebShellTests/DialogPresentationTests.swift "WebShell/Sources/WebShell/WebViewCoordinator+Dialogs.swift" && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Show JavaScript dialogs and file pickers in WebShell" -m "WebViewCoordinator now implements the four WKUIDelegate dialog methods. Alert, confirm and prompt appear as NSAlert sheets titled with the page host. Only the first button confirms. Prompt seeds a 240-point text field with the default text. File inputs open an NSOpenPanel that honours multiple selection and directories, and Cancel returns nil." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
@@ -4109,7 +4109,7 @@ Expected: the last `Executed` line ends `with 0 failures`. The gated integration
 - [ ] **Step 32: Commit.**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add WebShell/Sources/WebShell/NotificationBridge.swift WebShell/Sources/WebShell/WebShellFeatures.swift WebShell/Sources/WebShell/MainWindowController.swift WebShell/Sources/WebShell/WebShellAppDelegate.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Wire badge, notifications and background mode into WebShell" -m "WebShellFeatures installs the madBadge and madNotification handlers, follows title changes, requests notification authorization once at launch, and adds the status item when the menu bar icon is on. With background mode on, closing the window hides it and drops the Dock icon. Show, a Dock or Finder reopen, and a notification click bring the app back as a regular app with its window in front." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add WebShell/Sources/WebShell/NotificationBridge.swift WebShell/Sources/WebShell/WebShellFeatures.swift WebShell/Sources/WebShell/MainWindowController.swift WebShell/Sources/WebShell/WebShellAppDelegate.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Wire badge, notifications and background mode into WebShell" -m "WebShellFeatures installs the madBadge and madNotification handlers, follows title changes, requests notification authorization once at launch, and adds the status item when the menu bar icon is on. With background mode on, closing the window hides it and drops the Dock icon. Show, a Dock or Finder reopen, and a notification click bring the app back as a regular app with its window in front." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 - [ ] **Step 33: Live checks.**
@@ -4281,7 +4281,7 @@ Skeleton decisions 11 (presets), 12 (icon), 13 (builder part), 14 (running indic
 
 - [ ] **Step 5: Commit.**
 ```
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Packages/CompatProfiles/Resources/profiles.json Packages/CompatProfiles/Tests/CompatProfilesTests/SeedProfilesTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Seed WhatsApp, Teams and Outlook web app presets
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add Packages/CompatProfiles/Resources/profiles.json Packages/CompatProfiles/Tests/CompatProfilesTests/SeedProfilesTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Seed WhatsApp, Teams and Outlook web app presets
 
 The seed date moves to 2026-10-10 so a cached copy from before the presets cannot win over it.
 
@@ -4340,7 +4340,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 - [ ] **Step 10: Commit.**
 ```
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Model/ProfilesModel.swift App/Tests/Model/ProfilesModelTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Expose web app presets and the user agent mapping on ProfilesModel
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Model/ProfilesModel.swift App/Tests/Model/ProfilesModelTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Expose web app presets and the user agent mapping on ProfilesModel
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -4463,7 +4463,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 - [ ] **Step 15: Commit.**
 ```
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/IconRenderer.swift App/Tests/Services/IconRendererTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Write ICNS files from fetched image data and single-letter tiles
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/IconRenderer.swift App/Tests/Services/IconRendererTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Write ICNS files from fetched image data and single-letter tiles
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -4927,7 +4927,7 @@ struct URLSessionWebIconFetcher: WebIconFetching {
 
 - [ ] **Step 20: Commit.**
 ```
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/WebIconFetcher.swift App/Tests/Services/WebIconFetcherTests.swift App/Tests/Services/StubURLProtocol.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Fetch a site's touch icon or favicon for web app shortcuts
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/WebIconFetcher.swift App/Tests/Services/WebIconFetcherTests.swift App/Tests/Services/StubURLProtocol.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Fetch a site's touch icon or favicon for web app shortcuts
 
 The page's link tags are ranked (touch icon over plain icon, largest declared size first) with /favicon.ico as the fallback. Oversized responses are cut off and undecodable ones are skipped.
 
@@ -5063,7 +5063,7 @@ func makeWebConfig(name: String = "Chat Work", url: String = "https://chat.examp
 
 - [ ] **Step 26: Commit.**
 ```
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/IconResolver.swift App/Tests/Services/IconResolverTests.swift App/Tests/TestSupport/AppTestSupport.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Resolve web app icons from fetched bytes, a kept icon or a letter tile
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/IconResolver.swift App/Tests/Services/IconResolverTests.swift App/Tests/TestSupport/AppTestSupport.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Resolve web app icons from fetched bytes, a kept icon or a letter tile
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -5289,7 +5289,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 - [ ] **Step 31: Commit.**
 ```
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/ShortcutBuilder.swift App/Tests/Services/ShortcutBuilderTests.swift App/Tests/EndToEnd/ShortcutBuilderEndToEndTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Build, regenerate and duplicate web app shortcuts
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/ShortcutBuilder.swift App/Tests/Services/ShortcutBuilderTests.swift App/Tests/EndToEnd/ShortcutBuilderEndToEndTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Build, regenerate and duplicate web app shortcuts
 
 Web apps run the embedded web shell. Regenerate and duplicate reuse the icon already in the bundle unless new bytes are supplied, and a duplicate gets its own website data store.
 
@@ -5375,7 +5375,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 - [ ] **Step 36: Commit.**
 ```
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Model/RunningShortcutMonitor.swift App/Sources/Model/ShortcutLibrary.swift App/Tests/Model/RunningShortcutMonitorTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Detect running web apps by bundle identifier
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Model/RunningShortcutMonitor.swift App/Sources/Model/ShortcutLibrary.swift App/Tests/Model/RunningShortcutMonitorTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Detect running web apps by bundle identifier
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -5448,7 +5448,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 - [ ] **Step 41: Commit.**
 ```
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Model/ShortcutRecord.swift App/Sources/Model/LibraryScanner.swift App/Sources/Views/ShortcutRowView.swift App/Tests/Model/LibraryScannerTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "List web apps in the library without a target app
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Model/ShortcutRecord.swift App/Sources/Model/LibraryScanner.swift App/Sources/Views/ShortcutRowView.swift App/Tests/Model/LibraryScannerTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "List web apps in the library without a target app
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -5540,7 +5540,7 @@ final class AppStateWebShellTests: XCTestCase {
 
 - [ ] **Step 46: Commit.**
 ```
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/App/AppState.swift App/Sources/App/MacAppDuplicatorApp.swift App/Tests/App/AppStateWebShellTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Hand the embedded web shell to the shortcut builder
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/App/AppState.swift App/Sources/App/MacAppDuplicatorApp.swift App/Tests/App/AppStateWebShellTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Hand the embedded web shell to the shortcut builder
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -6511,7 +6511,7 @@ Expected: `Test Suite 'WebWizardModelTests' passed` (26 tests), `Test Suite 'Wiz
 - [ ] **Step 5: Commit the model**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Views/Wizard/WizardModel.swift App/Tests/Wizard/WebWizardModelTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Wizard model: web app state, presets, URL gating, icon fetch and config" -m "WizardModel learns the Web App kind: a web step list that swaps Data for Web App Options, preset application, https address validation, extra host parsing, a stable data store id, an injected icon fetcher with a generated-tile fallback, and makeConfig output of kind webApp. Tests cover the model only." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Views/Wizard/WizardModel.swift App/Tests/Wizard/WebWizardModelTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Wizard model: web app state, presets, URL gating, icon fetch and config" -m "WizardModel learns the Web App kind: a web step list that swaps Data for Web App Options, preset application, https address validation, extra host parsing, a stable data store id, an injected icon fetcher with a generated-tile fallback, and makeConfig output of kind webApp. Tests cover the model only." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 (If Step 4 required the Step 8 switch edit to compile, commit `NewShortcutWizard.swift` with this commit as well and say so in the message body.)
 
@@ -6817,7 +6817,7 @@ Expected: `** TEST SUCCEEDED **`. Then count: `cd /Users/cubbieblue16/Developer/
 - [ ] **Step 10: Commit the views and wiring**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Views/Wizard/WebAppPresetGrid.swift App/Sources/Views/Wizard/WebAppOptionsStep.swift App/Sources/Views/Wizard/WizardSteps.swift App/Sources/Views/Wizard/NewShortcutWizard.swift App/Sources/App/AppState.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Wizard: enable Web App with preset grid, URL step, options step and web review" -m "The Web App kind is now selectable (Any website as its own app). Its target step shows preset tiles and a Website URL field with inline validation, the Data step is replaced by Web App Options, identity offers Fetched from site with a generated-tile fallback, and Review lists URL, user agent, data store id and menu bar state. AppState.create forwards the fetched icon bytes to the builder." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Views/Wizard/WebAppPresetGrid.swift App/Sources/Views/Wizard/WebAppOptionsStep.swift App/Sources/Views/Wizard/WizardSteps.swift App/Sources/Views/Wizard/NewShortcutWizard.swift App/Sources/App/AppState.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Wizard: enable Web App with preset grid, URL step, options step and web review" -m "The Web App kind is now selectable (Any website as its own app). Its target step shows preset tiles and a Website URL field with inline validation, the Data step is replaced by Web App Options, identity offers Fetched from site with a generated-tile fallback, and Review lists URL, user agent, data store id and menu bar state. AppState.create forwards the fetched icon bytes to the builder." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ## Deviations
@@ -7164,7 +7164,7 @@ Expected: `Executed 6 tests, with 0 failures` and `** TEST SUCCEEDED **`.
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/WebDataRemover.swift App/Tests/TestSupport/WebTestSupport.swift App/Tests/Services/WebDataRemoverTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Add the web data remover that deletes a web app's WebKit store
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/WebDataRemover.swift App/Tests/TestSupport/WebTestSupport.swift App/Tests/Services/WebDataRemoverTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Add the web data remover that deletes a web app's WebKit store
 
 The shell keeps its identified data store under its own bundle identifier, so the remover takes that identifier and deletes the store directory after checking the identifier belongs to a shortcut.
 
@@ -7396,7 +7396,7 @@ Expected: `0 failures` for both classes (AppStateTests proves the existing `dele
 - [ ] **Step 11: Commit**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/App/AppState.swift App/Tests/App/AppStateWebTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Add AppState.removeWebData and optional web data removal on delete
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/App/AppState.swift App/Tests/App/AppStateWebTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Add AppState.removeWebData and optional web data removal on delete
 
 Removal is refused while the web app runs and aborts the delete when it fails, so the shortcut is never trashed without its web data when the user asked for both.
 
@@ -7589,7 +7589,7 @@ Expected: `0 failures`; the app target compiles with the new sheet (this is the 
 - [ ] **Step 16: Commit**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/DeleteConfirmation.swift App/Sources/Views/DeleteShortcutSheet.swift App/Sources/Views/ShortcutEditorView.swift App/Tests/Services/DeleteConfirmationTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Ask whether to remove web data when deleting a web app
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/DeleteConfirmation.swift App/Sources/Views/DeleteShortcutSheet.swift App/Sources/Views/ShortcutEditorView.swift App/Tests/Services/DeleteConfirmationTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Ask whether to remove web data when deleting a web app
 
 The delete sheet's second step defaults to keeping the web data, so a shortcut put back from the Trash still has its logins.
 
@@ -7834,7 +7834,7 @@ Expected: `Executed 13 tests, with 0 failures`. If `testValidatedURLRefusesAnyth
 - [ ] **Step 21: Commit**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/WebEditorPolicy.swift App/Tests/Services/WebEditorPolicyTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Add the web app editor rules
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/WebEditorPolicy.swift App/Tests/Services/WebEditorPolicyTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Add the web app editor rules
 
 Address and host parsing, the icon choices a web app offers, and the config Save writes (rename keeps the bundle identifier, the store id and zoom are pinned, background mode follows the menu bar icon).
 
@@ -8222,7 +8222,7 @@ Expected: `0 failures`; the app target compiles with `WebAppSection`, `HostsEdit
 - [ ] **Step 28: Commit**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Views/WebAppSection.swift App/Sources/Views/EditorSections.swift App/Sources/Views/ShortcutEditorView.swift App/Tests/App/AppStateWebTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Edit web apps in the shortcut editor
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Views/WebAppSection.swift App/Sources/Views/EditorSections.swift App/Sources/Views/ShortcutEditorView.swift App/Tests/App/AppStateWebTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Edit web apps in the shortcut editor
 
 A Web App section edits the address, user agent, badge pattern, extra hosts and menu bar options, shows the zoom and web data id read-only, and offers Remove Web Data. Save keeps the bundle identifier and the fetched icon.
 
@@ -8521,7 +8521,7 @@ Expected: `0 failures`, including every pre-existing `DiagnosticsModelTests` tes
 - [ ] **Step 33: Commit**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Views/DiagnosticsView.swift App/Tests/App/DiagnosticsModelTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Show web app facts in Diagnostics
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Views/DiagnosticsView.swift App/Tests/App/DiagnosticsModelTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Show web app facts in Diagnostics
 
 A web app has no target or launch plan, so Diagnostics lists its address (credentials, query and fragment removed), user agent, web data id, background and menu bar state, badge pattern, extra hosts and zoom, and the shell's log tail.
 
@@ -8644,7 +8644,7 @@ Expected: `0 failures` (24 entries; the Phase 2 and Phase 3 tests still pass).
 - [ ] **Step 38: Commit**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/App/KnownLimitations.swift App/Tests/App/KnownLimitationsTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Document the four web app limitations
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/App/KnownLimitations.swift App/Tests/App/KnownLimitationsTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Document the four web app limitations
 
 Adds no passkeys, zoom kept in the shell's preferences, notification permission decided by macOS, and the off-site link and pop-up policy to Help > Known Limitations (24 entries).
 
@@ -8867,7 +8867,7 @@ Expected: `0 failures`; the app target compiles with the three guards (the views
 - [ ] **Step 44: Commit**
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/TargetResolver+ResolvedPath.swift App/Sources/Services/CompatBadge.swift App/Sources/Views/EditorSections.swift App/Sources/Views/Wizard/WizardSteps.swift App/Tests/Services/ShortcutBuilderWebTests.swift App/Tests/Services/CompatBadgeTests.swift App/Tests/App/AppStateWebTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Skip the target lookup and the compatibility badge for web apps
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add App/Sources/Services/TargetResolver+ResolvedPath.swift App/Sources/Services/CompatBadge.swift App/Sources/Views/EditorSections.swift App/Sources/Views/Wizard/WizardSteps.swift App/Tests/Services/ShortcutBuilderWebTests.swift App/Tests/Services/CompatBadgeTests.swift App/Tests/App/AppStateWebTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Skip the target lookup and the compatibility badge for web apps
 
 Web apps have no target app, so the target resolver returns nothing for them and export and delete work from the bundle alone. The compatibility badge is hidden for web apps in the editor and the wizard.
 
@@ -9078,7 +9078,7 @@ cd /Users/cubbieblue16/Developer/MacAppDuplicator && swift test --filter Integra
 Expected: every run ends with `0 failures`. `Tools/test-app.sh` regenerates the Xcode project, so it picks up `0.4.0 (3)`; confirm with `cd /Users/cubbieblue16/Developer/MacAppDuplicator && grep -n "MARKETING_VERSION\|CURRENT_PROJECT_VERSION" App/project.yml`.
 
 ```bash
-cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add README.md App/project.yml docs/acceptance/phase4-webshell.md && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Document Phase 4 web apps and bump the version to 0.4.0
+cd /Users/cubbieblue16/Developer/MacAppDuplicator && git add README.md App/project.yml docs/acceptance/phase4-webshell.md && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Document Phase 4 web apps and bump the version to 0.4.0
 
 Adds the Phase 4 acceptance checklist, a README section for web apps, the new Known Limitations count, and version 0.4.0 (build 3).
 

@@ -23,7 +23,7 @@
 - UI copy is verbatim from spec §7 where the spec gives it: sidebar sections `Apps`, `Web Apps`, `Files & Folders`, `Commands`; icon modes `Copied from target`, `Custom file`, `Generated tile`; appearance options `Follow System`, `Light`, `Force dark (Chromium/Electron only, best effort)`; actions `Launch`, `Reveal in Finder`, `Regenerate`, `Duplicate`, `Export…`, `Delete`; toolbar `New`, `Rebuild All`; compat badges `Verified`, `Auto`, `HOME only`, `Unsupported`, `Unknown`; signing option `Ad-hoc`.
 - Phase 2 implements shortcut kind `.app` only. The wizard shows the other kinds disabled with the hint `Coming in a later phase`. `Check Profile Updates`, the profiles URL setting and `Verified`/`Unsupported` badges are Phase 3; the menu bar icon and new-window command fields are stored but inert until Phase 6 (the editor says so inline).
 - Tests never touch `/Applications`, `~/Applications`, the real output folder, the real `UserDefaults` suite or the two Claude shortcuts; every test writes under `makeTemporaryDirectory()` / `FileManager.default.temporaryDirectory` and uses `UserDefaults(suiteName:)` with a unique suite that it removes in `tearDown`. No test launches a shortcut or a target app.
-- Every commit message ends with the line `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Repository `/Users/cubbieblue16/Developer/MacAppDuplicator`, branch `main`. Commit identity `git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com"`.
+- Every commit message ends with the line `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Repository `/Users/cubbieblue16/Developer/MacAppDuplicator`, branch `main`. Commit identity `git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com"`.
 - Additive-only toward Phase 1: no existing public symbol, test or behaviour is removed or weakened. New Core API goes next to the existing files.
 - Build-system conventions: `App/MacAppDuplicator.xcodeproj` is generated and git-ignored; `Tools/build-app.sh` and `Tools/test-app.sh` are the only documented ways to build and test the app. All `xcodebuild` runs use `-derivedDataPath .build/DerivedData` and `-destination 'platform=macOS,arch=arm64'`.
 - `ShortcutConfig.currentEngineVersion` stays `1` in Phase 3: no Phase 3 change alters the written bundle layout, the shortcut `Info.plist` key set or the `MADConfig` keys, so Phase 3 marks no shortcut as needing a rebuild. The Launcher's masked argv logging reaches an existing shortcut only when that shortcut is Regenerated (Known Limitation `argument-logging`).
@@ -986,7 +986,7 @@ Expected: `Executed 111 tests, with 0 failures`.
 - [ ] **Step 12: Commit**
 
 ```bash
-cd "$REPO" && git add Package.swift Packages/CompatProfiles && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add Package.swift Packages/CompatProfiles && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat(profiles): add CompatProfiles schema, validation and catalog
 
 New SwiftPM library CompatProfiles (Foundation + DuplicatorCore only, linked by
@@ -1488,7 +1488,7 @@ Expected: `Executed 33 tests, with 0 failures` (28 + 5 updater).
 - [ ] **Step 9: Commit**
 
 ```bash
-cd "$REPO" && git add Packages/CompatProfiles && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add Packages/CompatProfiles && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat(profiles): add the fetch policy, URLSession fetcher and cache updater
 
 ProfilesFetchPolicy allows https://raw.githubusercontent.com only (port 443 or
@@ -2492,7 +2492,7 @@ Expected: `0`. The test bundle defines no global `CompatProfiles` symbol: the mo
 - [ ] **Step 18: Commit**
 
 ```bash
-cd "$REPO" && git add Packages/CompatProfiles/Resources/profiles.json Packages/CompatProfiles/Tests/CompatProfilesTests/SeedProfilesTests.swift App/project.yml App/Sources/Model/ProfilesModel.swift App/Sources/Model/AppSettings.swift App/Sources/App/LaunchEnvironment.swift App/Sources/App/AppState.swift App/Sources/App/MacAppDuplicatorApp.swift App/Sources/Views/ContentView.swift App/Sources/Views/SettingsView.swift App/Tests/TestSupport/AppTestSupport.swift App/Tests/SmokeTests.swift App/Tests/Model/ProfilesModelTests.swift App/Tests/Model/AppSettingsTests.swift App/Tests/App/LaunchEnvironmentTests.swift App/Tests/App/AppStateTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add Packages/CompatProfiles/Resources/profiles.json Packages/CompatProfiles/Tests/CompatProfilesTests/SeedProfilesTests.swift App/project.yml App/Sources/Model/ProfilesModel.swift App/Sources/Model/AppSettings.swift App/Sources/App/LaunchEnvironment.swift App/Sources/App/AppState.swift App/Sources/App/MacAppDuplicatorApp.swift App/Sources/Views/ContentView.swift App/Sources/Views/SettingsView.swift App/Tests/TestSupport/AppTestSupport.swift App/Tests/SmokeTests.swift App/Tests/Model/ProfilesModelTests.swift App/Tests/Model/AppSettingsTests.swift App/Tests/App/LaunchEnvironmentTests.swift App/Tests/App/AppStateTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat(app): bundle the profiles seed and add Check Profile Updates
 
 The seed lists the 18 apps of spec §8: Claude is verified, every other entry
@@ -2920,7 +2920,7 @@ Expected: exactly two lines, `1 ** TEST SUCCEEDED **` and `121 passed` (118 + 3;
 - [ ] **Step 14: Commit**
 
 ```bash
-cd "$REPO" && git add Packages/DuplicatorCore/Sources/DuplicatorCore/SecretMasking.swift Packages/DuplicatorCore/Sources/DuplicatorCore/LaunchLogger.swift Launcher/Sources/Launcher/main.swift App/Sources/Services/LaunchPlanPreview.swift App/Sources/Services/ExportInstructions.swift App/Sources/Views/ExportSheet.swift App/Sources/Views/ShortcutEditorView.swift App/Sources/Views/DiagnosticsView.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/SecretMaskingTests.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/LaunchLoggerTests.swift App/Tests/Services/LaunchPlanPreviewTests.swift App/Tests/Services/ExportInstructionsTests.swift App/Tests/App/DiagnosticsModelTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add Packages/DuplicatorCore/Sources/DuplicatorCore/SecretMasking.swift Packages/DuplicatorCore/Sources/DuplicatorCore/LaunchLogger.swift Launcher/Sources/Launcher/main.swift App/Sources/Services/LaunchPlanPreview.swift App/Sources/Services/ExportInstructions.swift App/Sources/Views/ExportSheet.swift App/Sources/Views/ShortcutEditorView.swift App/Sources/Views/DiagnosticsView.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/SecretMaskingTests.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/LaunchLoggerTests.swift App/Tests/Services/LaunchPlanPreviewTests.swift App/Tests/Services/ExportInstructionsTests.swift App/Tests/App/DiagnosticsModelTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat: mask secret argument values in the launcher log, Diagnostics and previews
 
 SecretMasking.maskArguments hides the value of every argument whose name
@@ -3772,7 +3772,7 @@ Expected: exactly two lines, `1 ** TEST SUCCEEDED **` and `130 passed` (121 + 9;
 - [ ] **Step 11: Commit**
 
 ```bash
-cd "$REPO" && git add App/Sources/Services/CompatBadge.swift App/Sources/Services/ProfileSummary.swift App/Sources/Services/LaunchPlanPreview.swift App/Sources/Views/ProfileSummaryView.swift App/Sources/Views/EditorSections.swift App/Sources/Views/ShortcutEditorView.swift App/Sources/Views/DiagnosticsView.swift App/Sources/Views/Wizard/WizardModel.swift App/Sources/Views/Wizard/NewShortcutWizard.swift App/Sources/Views/Wizard/WizardSteps.swift Packages/DuplicatorCore/Sources/DuplicatorCore/DataSeparationPlanner.swift App/Tests/Services/CompatBadgeTests.swift App/Tests/Services/ProfileSummaryTests.swift App/Tests/Services/LaunchPlanPreviewTests.swift App/Tests/Wizard/WizardModelTests.swift App/Tests/App/DiagnosticsModelTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/Sources/Services/CompatBadge.swift App/Sources/Services/ProfileSummary.swift App/Sources/Services/LaunchPlanPreview.swift App/Sources/Views/ProfileSummaryView.swift App/Sources/Views/EditorSections.swift App/Sources/Views/ShortcutEditorView.swift App/Sources/Views/DiagnosticsView.swift App/Sources/Views/Wizard/WizardModel.swift App/Sources/Views/Wizard/NewShortcutWizard.swift App/Sources/Views/Wizard/WizardSteps.swift Packages/DuplicatorCore/Sources/DuplicatorCore/DataSeparationPlanner.swift App/Tests/Services/CompatBadgeTests.swift App/Tests/Services/ProfileSummaryTests.swift App/Tests/Services/LaunchPlanPreviewTests.swift App/Tests/Wizard/WizardModelTests.swift App/Tests/App/DiagnosticsModelTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat: profile-driven compat badges, creation defaults and Diagnostics match
 
 CompatBadge.badge(for:profile:) checks the profile first: a profile marked
@@ -4121,7 +4121,7 @@ Expected: exactly two lines, `1 ** TEST SUCCEEDED **` and `133 passed` (130 + 3;
 - [ ] **Step 8: Commit**
 
 ```bash
-cd "$REPO" && git add App/Sources/Model/RebuildResult.swift App/Sources/Services/ShortcutBuilder.swift App/Sources/App/AppState.swift App/Sources/Views/RebuildAllSheet.swift App/Sources/Views/ContentView.swift App/Tests/App/AppStateTests.swift App/Tests/Model/RebuildSummaryTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/Sources/Model/RebuildResult.swift App/Sources/Services/ShortcutBuilder.swift App/Sources/App/AppState.swift App/Sources/Views/RebuildAllSheet.swift App/Sources/Views/ContentView.swift App/Tests/App/AppStateTests.swift App/Tests/Model/RebuildSummaryTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat(app): run Rebuild All off the main actor and report every shortcut
 
 Rebuild All rewrote each stale shortcut on the main actor and stopped at
@@ -5093,7 +5093,7 @@ Expected: exactly two lines, `1 ** TEST SUCCEEDED **` and `146 passed` (133 + 13
 - [ ] **Step 9: Commit**
 
 ```bash
-cd "$REPO" && git add App/Sources/Services/TargetResolver+ResolvedPath.swift App/Sources/Services/DeleteConfirmation.swift App/Sources/Services/CanonicalPath.swift App/Sources/Services/DataPathGuard.swift App/Sources/Services/ShortcutBuilder.swift App/Sources/App/AppState.swift App/Sources/Views/DeleteShortcutSheet.swift App/Sources/Views/ExportSheet.swift App/Sources/Views/ShortcutEditorView.swift App/Sources/Views/EditorSections.swift App/Sources/Views/Wizard/WizardSteps.swift App/Tests/Services/DataPathGuardTests.swift App/Tests/Services/ShortcutBuilderTests.swift App/Tests/App/AppStateTests.swift App/Tests/Services/DeleteConfirmationTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/Sources/Services/TargetResolver+ResolvedPath.swift App/Sources/Services/DeleteConfirmation.swift App/Sources/Services/CanonicalPath.swift App/Sources/Services/DataPathGuard.swift App/Sources/Services/ShortcutBuilder.swift App/Sources/App/AppState.swift App/Sources/Views/DeleteShortcutSheet.swift App/Sources/Views/ExportSheet.swift App/Sources/Views/ShortcutEditorView.swift App/Sources/Views/EditorSections.swift App/Sources/Views/Wizard/WizardSteps.swift App/Tests/Services/DataPathGuardTests.swift App/Tests/Services/ShortcutBuilderTests.swift App/Tests/App/AppStateTests.swift App/Tests/Services/DeleteConfirmationTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat(app): widen the data-path guard and harden export and delete
 
 The data-path guard now also refuses every direct child of home, anything

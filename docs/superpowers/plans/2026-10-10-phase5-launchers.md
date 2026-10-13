@@ -35,7 +35,7 @@ Phase 5 additions:
   - Launcher has no unit tests of its own; its logic lives in Core.
   - App: `Tools/test-app.sh` (prints `** TEST SUCCEEDED **`, ~1 min)
   - Gated: `MAD_INTEGRATION=1 swift test --filter IntegrationTests.<Class>` (dot form only; slash form runs 0 tests)
-- Commit identity: `git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit`, every message ending `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
+- Commit identity: `git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit`, every message ending `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
 - Existing patterns to mirror: `WebAppConfig` (sub-config with custom `init(from:)` and `decodeIfPresent` defaults), `WebEditorPolicy` (pure editor decisions), `WebShellLaunchTests` (gated launch test with redirected HOME and process reaping), `KindStep` options in `WizardSteps.swift`, `ReviewRow` in `WizardModel.swift`, `DiagnosticsModel.makeWeb` in `DiagnosticsView.swift`.
 
 ## File structure
@@ -590,7 +590,7 @@ Expected: `Executed 185 tests, with 0 failures` (172 at HEAD `8631c10` + 13 new)
 - [ ] **Step 13: Commit**
 
 ```bash
-cd ~/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/FileConfig.swift Packages/DuplicatorCore/Sources/DuplicatorCore/CLIConfig.swift Packages/DuplicatorCore/Sources/DuplicatorCore/Enums.swift Packages/DuplicatorCore/Sources/DuplicatorCore/ShortcutConfig.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/FileConfigTests.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/CLIConfigTests.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/ShortcutConfigTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Add FileConfig, CLIConfig and TerminalChoice to ShortcutConfig" -m "File, folder and command shortcuts get their own optional MADConfig sections. Both decode to nil when absent, so every Phase 1 to 4 shortcut still loads, and CLIConfig needs only executablePath on input." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd ~/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/FileConfig.swift Packages/DuplicatorCore/Sources/DuplicatorCore/CLIConfig.swift Packages/DuplicatorCore/Sources/DuplicatorCore/Enums.swift Packages/DuplicatorCore/Sources/DuplicatorCore/ShortcutConfig.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/FileConfigTests.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/CLIConfigTests.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/ShortcutConfigTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Add FileConfig, CLIConfig and TerminalChoice to ShortcutConfig" -m "File, folder and command shortcuts get their own optional MADConfig sections. Both decode to nil when absent, so every Phase 1 to 4 shortcut still loads, and CLIConfig needs only executablePath on input." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ### Task 2: Core launcher planning — `LauncherAction`, `TerminalCommandBuilder`, `LaunchPreparer` kind dispatch, new `LauncherError` cases
@@ -1809,7 +1809,7 @@ Expected: `Build complete!` (the Launcher still calls `prepare`, which is unchan
 - [ ] **Step 15: Commit**
 
 ```bash
-cd ~/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/LauncherAction.swift Packages/DuplicatorCore/Sources/DuplicatorCore/TerminalCommandBuilder.swift Packages/DuplicatorCore/Sources/DuplicatorCore/LaunchPreparer.swift Packages/DuplicatorCore/Sources/DuplicatorCore/LauncherError.swift Packages/DuplicatorCore/Sources/DuplicatorCore/LauncherError+ExitCode.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/TerminalCommandBuilderTests.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/LauncherActionPlannerTests.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/LauncherErrorTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Plan file, folder and command launches in Core" -m "LauncherActionPlanner turns a launcher-kind MADConfig into an open or spawn action: it validates paths, finds the terminal, quotes the argv for Terminal.app, iTerm2 or Ghostty, builds the environment and, for homeOverride, the shortcut's HOME tree. LaunchPreparer.prepareShortcut dispatches by kind and keeps the app path unchanged. LauncherError gains fileNotFound (2), terminalNotFound (5), spawnFailed (3) and launcherConfigMissing (1)." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd ~/Developer/MacAppDuplicator && git add Packages/DuplicatorCore/Sources/DuplicatorCore/LauncherAction.swift Packages/DuplicatorCore/Sources/DuplicatorCore/TerminalCommandBuilder.swift Packages/DuplicatorCore/Sources/DuplicatorCore/LaunchPreparer.swift Packages/DuplicatorCore/Sources/DuplicatorCore/LauncherError.swift Packages/DuplicatorCore/Sources/DuplicatorCore/LauncherError+ExitCode.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/TerminalCommandBuilderTests.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/LauncherActionPlannerTests.swift Packages/DuplicatorCore/Tests/DuplicatorCoreTests/LauncherErrorTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Plan file, folder and command launches in Core" -m "LauncherActionPlanner turns a launcher-kind MADConfig into an open or spawn action: it validates paths, finds the terminal, quotes the argv for Terminal.app, iTerm2 or Ghostty, builds the environment and, for homeOverride, the shortcut's HOME tree. LaunchPreparer.prepareShortcut dispatches by kind and keeps the app path unchanged. LauncherError gains fileNotFound (2), terminalNotFound (5), spawnFailed (3) and launcherConfigMissing (1)." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ### Task 3: Launcher — kind dispatch, `OpenItems`, `Spawn`
@@ -2283,7 +2283,7 @@ Expected: no output.
 - [ ] **Step 8: Commit**
 
 ```bash
-cd ~/Developer/MacAppDuplicator && git add Launcher/Sources/Launcher/OpenItems.swift Launcher/Sources/Launcher/Spawn.swift Launcher/Sources/Launcher/main.swift Tests/Integration/CLILaunchTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Run file, folder and command shortcuts from the Launcher" -m "main.swift now goes through prepareShortcut: app shortcuts keep the unchanged exec path, file and folder shortcuts open through NSWorkspace with a 10 s wait, and command shortcuts start with posix_spawn in their own session and the Launcher exits 0. A gated integration test runs a detached /bin/sh command and checks its environment and HOME tree." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd ~/Developer/MacAppDuplicator && git add Launcher/Sources/Launcher/OpenItems.swift Launcher/Sources/Launcher/Spawn.swift Launcher/Sources/Launcher/main.swift Tests/Integration/CLILaunchTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Run file, folder and command shortcuts from the Launcher" -m "main.swift now goes through prepareShortcut: app shortcuts keep the unchanged exec path, file and folder shortcuts open through NSWorkspace with a 10 s wait, and command shortcuts start with posix_spawn in their own session and the Launcher exits 0. A gated integration test runs a detached /bin/sh command and checks its environment and HOME tree." -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
@@ -2490,7 +2490,7 @@ final class IconResolverLauncherTests: XCTestCase {
 - [ ] **Step 5: Commit.**
 
 ```bash
-cd ~/Developer/MacAppDuplicator && git add App/Sources/Services/IconResolver.swift App/Tests/Services/IconResolverTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Icons for file, folder and command shortcuts
+cd ~/Developer/MacAppDuplicator && git add App/Sources/Services/IconResolver.swift App/Tests/Services/IconResolverTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Icons for file, folder and command shortcuts
 
 IconResolver.launcherIconFile renders the Finder icon of the item or the
 executable into item-icon.icns; custom and generated icons share one code
@@ -2988,7 +2988,7 @@ struct LaunchPlanPreview: Sendable {
 - [ ] **Step 12: Commit.**
 
 ```bash
-cd ~/Developer/MacAppDuplicator && git add App/Sources/Services/ShortcutBuilder.swift App/Sources/Services/TargetResolver+ResolvedPath.swift App/Sources/Services/CompatBadge.swift App/Sources/Services/LaunchPlanPreview.swift App/Tests/Services/ShortcutBuilderLauncherTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Build file, folder and command shortcuts
+cd ~/Developer/MacAppDuplicator && git add App/Sources/Services/ShortcutBuilder.swift App/Sources/Services/TargetResolver+ResolvedPath.swift App/Sources/Services/CompatBadge.swift App/Sources/Services/LaunchPlanPreview.swift App/Tests/Services/ShortcutBuilderLauncherTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Build file, folder and command shortcuts
 
 ShortcutBuilder writes launcher kinds with the Launcher binary, enforces
 their invariants and signs them; duplicate, regenerate and export work
@@ -3751,7 +3751,7 @@ struct CommandDataStep: View {
 - [ ] **Step 9: Commit.**
 
 ```bash
-cd ~/Developer/MacAppDuplicator && git add App/Sources/Views/Wizard/WizardModel.swift App/Sources/Views/Wizard/WizardSteps.swift App/Sources/Views/Wizard/NewShortcutWizard.swift App/Sources/Views/Wizard/FileTargetStep.swift App/Sources/Views/Wizard/CommandTargetStep.swift App/Tests/Wizard/WizardModelLauncherTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Wizard for file, folder and command shortcuts
+cd ~/Developer/MacAppDuplicator && git add App/Sources/Views/Wizard/WizardModel.swift App/Sources/Views/Wizard/WizardSteps.swift App/Sources/Views/Wizard/NewShortcutWizard.swift App/Sources/Views/Wizard/FileTargetStep.swift App/Sources/Views/Wizard/CommandTargetStep.swift App/Tests/Wizard/WizardModelLauncherTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Wizard for file, folder and command shortcuts
 
 The kind step offers File or Folder and Command. Choosing an item sets
 .file or .folder; an optional opener app is supported. A command takes an
@@ -3983,7 +3983,7 @@ nonisolated enum LauncherEditorPolicy {
 - [ ] **Step 5: Commit.**
 
 ```bash
-cd ~/Developer/MacAppDuplicator && git add App/Sources/Services/LauncherEditorPolicy.swift App/Tests/Services/LauncherEditorPolicyTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Add LauncherEditorPolicy for launcher shortcuts
+cd ~/Developer/MacAppDuplicator && git add App/Sources/Services/LauncherEditorPolicy.swift App/Tests/Services/LauncherEditorPolicyTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Add LauncherEditorPolicy for launcher shortcuts
 
 Save keeps the slug and bundle id, re-applies the launcher invariants and
 cleans the item, opener, executable, arguments and working directory.
@@ -4272,7 +4272,7 @@ New:
 - [ ] **Step 11: Commit.**
 
 ```bash
-cd ~/Developer/MacAppDuplicator && git add App/Sources/Model/LibraryScanner.swift App/Sources/Views/DiagnosticsView.swift App/Tests/Model/LibraryScannerLauncherTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Scan and diagnose launcher shortcuts
+cd ~/Developer/MacAppDuplicator && git add App/Sources/Model/LibraryScanner.swift App/Sources/Views/DiagnosticsView.swift App/Tests/Model/LibraryScannerLauncherTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Scan and diagnose launcher shortcuts
 
 A launcher's target exists when its item or executable does. Diagnostics
 shows the kind, item, opener, terminal, working directory, own HOME and the
@@ -4673,7 +4673,7 @@ New:
 - [ ] **Step 16: Commit.**
 
 ```bash
-cd ~/Developer/MacAppDuplicator && git add App/Sources/Views/EditorSections.swift App/Sources/Views/ShortcutEditorView.swift App/Sources/Views/ShortcutRowView.swift App/Sources/Views/DeleteShortcutSheet.swift App/Sources/App/AppState.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Edit, list and delete launcher shortcuts
+cd ~/Developer/MacAppDuplicator && git add App/Sources/Views/EditorSections.swift App/Sources/Views/ShortcutEditorView.swift App/Sources/Views/ShortcutRowView.swift App/Sources/Views/DeleteShortcutSheet.swift App/Sources/App/AppState.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Edit, list and delete launcher shortcuts
 
 The editor shows a File or Command section, the library row shows the item
 or executable (red Item missing when gone), and delete offers to trash a
@@ -4942,7 +4942,7 @@ Manual checks for file, folder and command shortcuts on a real Mac. Run them in 
 - [ ] **Step 19: Commit.**
 
 ```bash
-cd ~/Developer/MacAppDuplicator && git add App/Sources/App/KnownLimitations.swift App/Tests/App/KnownLimitationsTests.swift README.md App/project.yml docs/acceptance/phase5-launchers.md && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Document Phase 5 launchers and bump to 0.5.0 (4)
+cd ~/Developer/MacAppDuplicator && git add App/Sources/App/KnownLimitations.swift App/Tests/App/KnownLimitationsTests.swift README.md App/project.yml docs/acceptance/phase5-launchers.md && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Document Phase 5 launchers and bump to 0.5.0 (4)
 
 Known limitations for terminal AppleScript, running state and Ghostty, a
 README section and the Phase 5 acceptance checklist.

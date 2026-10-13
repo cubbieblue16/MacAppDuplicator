@@ -21,7 +21,7 @@
 - UI copy is verbatim from spec §7 where the spec gives it: sidebar sections `Apps`, `Web Apps`, `Files & Folders`, `Commands`; icon modes `Copied from target`, `Custom file`, `Generated tile`; appearance options `Follow System`, `Light`, `Force dark (Chromium/Electron only, best effort)`; actions `Launch`, `Reveal in Finder`, `Regenerate`, `Duplicate`, `Export…`, `Delete`; toolbar `New`, `Rebuild All`; compat badges `Verified`, `Auto`, `HOME only`, `Unsupported`, `Unknown`; signing option `Ad-hoc`.
 - Phase 2 implements shortcut kind `.app` only. The wizard shows the other kinds disabled with the hint `Coming in a later phase`. `Check Profile Updates`, the profiles URL setting and `Verified`/`Unsupported` badges are Phase 3; the menu bar icon and new-window command fields are stored but inert until Phase 6 (the editor says so inline).
 - Tests never touch `/Applications`, `~/Applications`, the real output folder, the real `UserDefaults` suite or the two Claude shortcuts; every test writes under `makeTemporaryDirectory()` / `FileManager.default.temporaryDirectory` and uses `UserDefaults(suiteName:)` with a unique suite that it removes in `tearDown`. No test launches a shortcut or a target app.
-- Every commit message ends with the line `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Repository `/Users/cubbieblue16/Developer/MacAppDuplicator`, branch `main`. Commit identity `git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com"`.
+- Every commit message ends with the line `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Repository `/Users/cubbieblue16/Developer/MacAppDuplicator`, branch `main`. Commit identity `git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com"`.
 - Additive-only toward Phase 1: no existing public symbol, test or behaviour is removed or weakened. New Core API goes next to the existing files.
 - Build-system conventions: `App/MacAppDuplicator.xcodeproj` is generated and git-ignored; `Tools/build-app.sh` and `Tools/test-app.sh` are the only documented ways to build and test the app. All `xcodebuild` runs use `-derivedDataPath .build/DerivedData` and `-destination 'platform=macOS,arch=arm64'`.
 
@@ -31,7 +31,7 @@
 - Phase 1 API consumed (all in `DuplicatorCore`, see README "Phase 2 consumes"): `ShortcutConfig` (statics `currentEngineVersion`, `infoPlistKey = "MADConfig"`, `engineVersionInfoPlistKey = "MADEngineVersion"`, `bundleIdentifierPrefix`, `slug(for:)`, `bundleIdentifier(forSlug:)`, `defaultDataPath(forSlug:home:)`, `fileSystemName(for:)`, `plistDictionary()`, `init(plistDictionary:)`), `AppInspector().inspect(appAt:) throws -> InspectedApp` (`bundleURL`, `bundleIdentifier`, `name`, `version`, `executableURL`, `family: AppFamily`, `isSandboxed`, `iconFileURL: URL?`, `isPlatformBinary`, `hasLaunchConstraints`, `lsEnvironment`, `warnings`), `BundleWriter(fileManager:).write(config:app:launcherBinary:to:) throws -> URL`, `Signer().sign(bundle:identity: String?) throws` (nil = ad hoc; non-nil adds `--options runtime --timestamp`), `DataSeparationPlanner().plan(app:config:baseEnvironment:shortcutBundleURL:) -> LaunchPlan` (`executableURL`, `arguments`, `environment`, `directoriesToCreate`, `homeOverridePath`, `warnings`, `launchMode`), `DataSeparationPlanner.shortcutBundleKey = "MAD_SHORTCUT_BUNDLE"`, `HomeTreeBuilder.defaultSymlinkEntries`, `SecretMasking.mask(_:)`, `SecretMasking.isSecretKey(_:)`, `SecretMasking.maskedValue`, `LaunchLogger(name:).fileURL`, `LauncherError` (`configMissing`, `configCorrupt(String)`, `targetNotFound(path:bundleID:)`, `dataPathNotWritable(String)`, `execFailed(errno:path:)`, `notAnAppBundle(String)`), enums `ShortcutKind {app, webApp, file, folder, cli}`, `LaunchMode {dockShortcut, systemLaunch}`, `DataMode {auto, homeOverride, disabled}`, `Appearance {system, light, dark}`, `AppFamily {todesktop, electron, chromium, firefox, eclipse, native}`.
 - Test helpers in `Packages/DuplicatorCore/Tests/DuplicatorCoreTests/TestSupport.swift`: `makeTemporaryDirectory() throws -> URL`, `runCommand(_ path: String, _ arguments: [String]) throws -> CommandResult` (`status`, `stdout`, `stderr`), `FixtureBundle(name:bundleIdentifier:info:files:directories:)` with `write(in:) throws -> URL` and `writeSigned(in:extraCodesignArguments:) throws -> URL`, `writePropertyList(_:named:in:)`.
 - The fixture app: `Tools/build-fixture.sh` builds `.build/fixtures/FixtureApp.app` (ad hoc signed, bundle id `com.mikekuta.appduplicator.fixture`). The app's end-to-end test (Task 9) uses it and skips with `XCTSkip` when it is absent.
-- Signing identities present on this Mac (names only): `Developer ID Application: Cubbieblue16 (4NQ2UVJ4EZ)`, `Apple Development: 152761714+cubbieblue16@users.noreply.github.com (GZHS2TWCRJ)`. `security find-identity -v -p codesigning` lists one revoked duplicate marked `(CSSMERR_TP_CERT_REVOKED)`; the parser drops such lines.
+- Signing identities present on this Mac (names only): `Developer ID Application: Cubbieblue16 (4NQ2UVJ4EZ)`, `Apple Development: 152761714+cubbieblue16.noreply.github.com (GZHS2TWCRJ)`. `security find-identity -v -p codesigning` lists one revoked duplicate marked `(CSSMERR_TP_CERT_REVOKED)`; the parser drops such lines.
 - `rsvg-convert` and ImageMagick are NOT installed; `/usr/bin/qlmanage -t -s 1024 -o <dir> <file>.svg` renders `<dir>/<file>.svg.png` (1024×1024, alpha preserved, linear gradients and opacity honoured). `/usr/bin/sips -z H W in.png --out out.png` downsamples. `/usr/bin/iconutil -c icns <X>.iconset -o <X>.icns` builds the icns.
 
 ## File map
@@ -473,7 +473,7 @@ Expected: one `Executed N tests, with 0 failures` line for DuplicatorCoreTests w
 - [ ] **Step 18: Commit**
 
 ```bash
-cd "$REPO" && git add Packages/DuplicatorCore && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add Packages/DuplicatorCore && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat(core): icon mode fields, explicit-icon write, symlink list wiring, ProcessEnvironment
 
 ShortcutConfig gains iconMode/customIconPath/homeSymlinkEntries with
@@ -636,7 +636,7 @@ The controller (not the implementer) views the PNG. Acceptance: dark indigo squi
 - [ ] **Step 5: Commit**
 
 ```bash
-cd "$REPO" && git add App/Icon App/Resources Tools/make-icons.sh && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/Icon App/Resources Tools/make-icons.sh && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat(app): Replicator app icon and make-icons.sh pipeline
 
 SVG source plus a script that renders it with rsvg-convert or the
@@ -958,7 +958,7 @@ Expected: unchanged Core result (the Xcode project does not alter the SwiftPM bu
 - [ ] **Step 7: Commit**
 
 ```bash
-cd "$REPO" && git add App/project.yml App/Sources App/Tests Tools/build-app.sh Tools/test-app.sh .gitignore && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/project.yml App/Sources App/Tests Tools/build-app.sh Tools/test-app.sh .gitignore && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat(app): Xcode project via xcodegen, Launcher embedding, build/test scripts
 
 project.yml defines the MacAppDuplicator app and unit-test targets on
@@ -1676,7 +1676,7 @@ Expected: `** TEST SUCCEEDED **`, 13 tests (2 smoke + 5 scanner + 4 settings + 2
 - [ ] **Step 13: Commit**
 
 ```bash
-cd "$REPO" && git add App/Sources/Model App/Tests && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/Sources/Model App/Tests && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat(app): library model — records, scanner, folder watcher, running monitor, settings
 
 LibraryScanner lists depth-1 shortcut bundles with their config, icon,
@@ -1721,16 +1721,16 @@ import XCTest
 final class SigningIdentitiesTests: XCTestCase {
     private let sample = """
       1) 0123456789ABCDEF0123456789ABCDEF01234567 "Developer ID Application: Cubbieblue16 (4NQ2UVJ4EZ)"
-      2) 89ABCDEF0123456789ABCDEF0123456789ABCDEF "Apple Development: 152761714+cubbieblue16@users.noreply.github.com (GZHS2TWCRJ)"
-      3) 89ABCDEF0123456789ABCDEF0123456789ABCDE0 "Apple Development: 152761714+cubbieblue16@users.noreply.github.com (GZHS2TWCRJ)" (CSSMERR_TP_CERT_REVOKED)
-      4) FEDCBA9876543210FEDCBA9876543210FEDCBA98 "Apple Development: 152761714+cubbieblue16@users.noreply.github.com (GZHS2TWCRJ)"
+      2) 89ABCDEF0123456789ABCDEF0123456789ABCDEF "Apple Development: 152761714+cubbieblue16.noreply.github.com (GZHS2TWCRJ)"
+      3) 89ABCDEF0123456789ABCDEF0123456789ABCDE0 "Apple Development: 152761714+cubbieblue16.noreply.github.com (GZHS2TWCRJ)" (CSSMERR_TP_CERT_REVOKED)
+      4) FEDCBA9876543210FEDCBA9876543210FEDCBA98 "Apple Development: 152761714+cubbieblue16.noreply.github.com (GZHS2TWCRJ)"
          3 valid identities found
     """
 
     func testParseKeepsValidUniqueNamesInOrder() {
         XCTAssertEqual(SigningIdentities.parse(sample), [
             "Developer ID Application: Cubbieblue16 (4NQ2UVJ4EZ)",
-            "Apple Development: 152761714+cubbieblue16@users.noreply.github.com (GZHS2TWCRJ)",
+            "Apple Development: 152761714+cubbieblue16.noreply.github.com (GZHS2TWCRJ)",
         ])
     }
 
@@ -2589,7 +2589,7 @@ Expected: `** TEST SUCCEEDED **`; 13 (Task 4) + 3 + 8 + 6 + 2 + 1 + 2 + 2 = 37 t
 - [ ] **Step 13: Commit**
 
 ```bash
-cd "$REPO" && git add App/Sources/Services App/Tests/Services && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/Sources/Services App/Tests/Services && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat(app): services — identities, icons, shortcut builder, installed apps, logs, badges, preview
 
 ShortcutBuilder wraps BundleWriter + Signer for create, regenerate,
@@ -3640,7 +3640,7 @@ Do not launch any shortcut from the UI during the smoke. Record what the sidebar
 - [ ] **Step 11: Commit**
 
 ```bash
-cd "$REPO" && git add App/Sources App/Tests && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/Sources App/Tests && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat(app): library window — sidebar, editor, sheets, actions
 
 AppState owns the selection and every mutating action (create, save,
@@ -4329,7 +4329,7 @@ Expected: `** BUILD SUCCEEDED **`, `** TEST SUCCEEDED **`, 43 + 8 = 51 tests.
 - [ ] **Step 8: Commit**
 
 ```bash
-cd "$REPO" && git add App/Sources/Views/Wizard App/Tests/Wizard && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/Sources/Views/Wizard App/Tests/Wizard && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat(app): New Shortcut wizard
 
 Five-step sheet (kind, target, identity, data, review) driven by a
@@ -4954,7 +4954,7 @@ Expected: `** BUILD SUCCEEDED **`, `** TEST SUCCEEDED **`, 51 + 4 = 55 tests.
 - [ ] **Step 7: Commit**
 
 ```bash
-cd "$REPO" && git add App/Sources App/Tests && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/Sources App/Tests && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 feat(app): Settings, Diagnostics sheet and Known Limitations
 
 Settings window with General (output and library folders, logs),
@@ -5210,7 +5210,7 @@ Acceptance checklist: `docs/acceptance/phase2-library-app.md`.
 - [ ] **Step 6: Commit**
 
 ```bash
-cd "$REPO" && git add App/Tests/EndToEnd docs/acceptance/phase2-library-app.md README.md && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/Tests/EndToEnd docs/acceptance/phase2-library-app.md README.md && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 test(app): FixtureApp end-to-end test, Phase 2 acceptance checklist, README
 
 Builds a real shortcut with the embedded Launcher against the FixtureApp,

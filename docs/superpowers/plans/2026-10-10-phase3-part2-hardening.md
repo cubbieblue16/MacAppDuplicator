@@ -23,7 +23,7 @@
 - UI copy is verbatim from spec §7 where the spec gives it: sidebar sections `Apps`, `Web Apps`, `Files & Folders`, `Commands`; icon modes `Copied from target`, `Custom file`, `Generated tile`; appearance options `Follow System`, `Light`, `Force dark (Chromium/Electron only, best effort)`; actions `Launch`, `Reveal in Finder`, `Regenerate`, `Duplicate`, `Export…`, `Delete`; toolbar `New`, `Rebuild All`; compat badges `Verified`, `Auto`, `HOME only`, `Unsupported`, `Unknown`; signing option `Ad-hoc`.
 - Phase 2 implements shortcut kind `.app` only. The wizard shows the other kinds disabled with the hint `Coming in a later phase`. `Check Profile Updates`, the profiles URL setting and `Verified`/`Unsupported` badges are Phase 3; the menu bar icon and new-window command fields are stored but inert until Phase 6 (the editor says so inline).
 - Tests never touch `/Applications`, `~/Applications`, the real output folder, the real `UserDefaults` suite or the two Claude shortcuts; every test writes under `makeTemporaryDirectory()` / `FileManager.default.temporaryDirectory` and uses `UserDefaults(suiteName:)` with a unique suite that it removes in `tearDown`. No test launches a shortcut or a target app.
-- Every commit message ends with the line `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Repository `/Users/cubbieblue16/Developer/MacAppDuplicator`, branch `main`. Commit identity `git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com"`.
+- Every commit message ends with the line `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Repository `/Users/cubbieblue16/Developer/MacAppDuplicator`, branch `main`. Commit identity `git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com"`.
 - Additive-only toward Phase 1: no existing public symbol, test or behaviour is removed or weakened. New Core API goes next to the existing files.
 - Build-system conventions: `App/MacAppDuplicator.xcodeproj` is generated and git-ignored; `Tools/build-app.sh` and `Tools/test-app.sh` are the only documented ways to build and test the app. All `xcodebuild` runs use `-derivedDataPath .build/DerivedData` and `-destination 'platform=macOS,arch=arm64'`.
 - `ShortcutConfig.currentEngineVersion` stays `1` in Phase 3: no Phase 3 change alters the written bundle layout, the shortcut `Info.plist` key set or the `MADConfig` keys, so Phase 3 marks no shortcut as needing a rebuild. The Launcher's masked argv logging reaches an existing shortcut only when that shortcut is Regenerated (Known Limitation `argument-logging`).
@@ -1077,7 +1077,7 @@ Expected: exactly the files in this task's **Files:** block (new files as `??`, 
 ```bash
 cd "$REPO" && git add App/Sources/Services/IconPreviewSource.swift App/Sources/Views/IconPreview.swift App/Sources/Services/TargetGuard.swift App/Sources/Services/SlugAllocator.swift App/Sources/Services/ShortcutBuilder.swift App/Sources/App/AppState.swift App/Sources/App/MacAppDuplicatorApp.swift App/Sources/Views/EditorSections.swift App/Sources/Views/ShortcutEditorView.swift App/Sources/Views/ContentView.swift App/Sources/Views/SettingsView.swift App/Sources/Views/Wizard/WizardModel.swift App/Sources/Views/Wizard/NewShortcutWizard.swift App/Sources/Views/Wizard/WizardSteps.swift App/Sources/Views/Wizard/InstalledAppsGrid.swift App/Tests/Services/SlugAllocatorTests.swift App/Tests/Services/TargetGuardTests.swift App/Tests/Services/IconPreviewSourceTests.swift App/Tests/Services/ShortcutBuilderTests.swift App/Tests/Wizard/WizardModelTests.swift \
   && ! git diff --cached -U0 | grep -nE '^\+.*(try\?|@unchecked Sendable|swiftlint:disable)' \
-  && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+  && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 Harden shortcuts: draft icon preview, shortcut-target refusal, unique slugs
 
 - The editor's icon preview renders from the draft (IconPreviewSource, IconPreview), not only the saved bundle icon.
@@ -1416,7 +1416,7 @@ Expected: `** TEST SUCCEEDED **`.
 - [ ] **Step 9: Commit**
 
 ```bash
-cd "$REPO" && git add App/Sources/Model/ShortcutLibrary.swift App/Sources/Model/RunningShortcutMonitor.swift App/Tests/Model/ShortcutLibraryTests+ScanGeneration.swift App/Tests/Model/RunningShortcutMonitorTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/Sources/Model/ShortcutLibrary.swift App/Sources/Model/RunningShortcutMonitor.swift App/Tests/Model/ShortcutLibraryTests+ScanGeneration.swift App/Tests/Model/RunningShortcutMonitorTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 fix(library): drop stale scan and monitor results by generation
 
 Overlapping rescans (FolderWatcher, Refresh, Settings changes) could finish
@@ -1606,7 +1606,7 @@ Expected: `** TEST SUCCEEDED **`.
 - [ ] **Step 14: Commit**
 
 ```bash
-cd "$REPO" && git add App/Sources/Model/FolderWatcher.swift App/Tests/Model/FolderWatcherTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/Sources/Model/FolderWatcher.swift App/Tests/Model/FolderWatcherTests.swift && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 fix(watcher): cancel dispatch sources in deinit
 
 A FolderWatcher released without stop() dropped its DispatchSources
@@ -1717,7 +1717,7 @@ Expected: `exit=0`, then `0`. This is a filtered run, which the trap also covers
 - [ ] **Step 21: Commit**
 
 ```bash
-cd "$REPO" && git add App/Sources/App/MacAppDuplicatorApp.swift App/Tests/App/LaunchEnvironmentTests+TestHost.swift Tools/test-app.sh && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -q -F - <<'MSG'
+cd "$REPO" && git add App/Sources/App/MacAppDuplicatorApp.swift App/Tests/App/LaunchEnvironmentTests+TestHost.swift Tools/test-app.sh && git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -q -F - <<'MSG'
 fix(test-host): open no windows and clear defaults residue
 
 Under the unit-test host the main window opened and autosaved its frame
@@ -1954,7 +1954,7 @@ Expected: `Test Suite 'KnownLimitationsTests' passed` and `** TEST SUCCEEDED **`
 
 ```bash
 cd "$REPO" && git add App/Sources/App/KnownLimitations.swift App/Tests/App/KnownLimitationsTests.swift
-git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Known limitations: Phase 3 profile entries
+git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Known limitations: Phase 3 profile entries
 
 Advisory and partial profiles, manual update fetch pinned to
 raw.githubusercontent.com, sandboxed-app badge, numbered slugs and
@@ -2181,7 +2181,7 @@ Expected: `7` then `2`.
 
 ```bash
 cd "$REPO" && git add docs/acceptance/phase3-profiles.md docs/acceptance/profile-promotion.md
-git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "Acceptance: Phase 3 profiles checklist and promotion procedure
+git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "Acceptance: Phase 3 profiles checklist and promotion procedure
 
 27-step manual gate (badges, prefill, Diagnostics, data-path guard,
 Check Profile Updates, export, Rebuild All, delete, Claude two-instance)
@@ -2308,7 +2308,7 @@ Expected: `** TEST SUCCEEDED **`.
 
 ```bash
 cd "$REPO" && git add README.md App/project.yml
-git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16@users.noreply.github.com" commit -m "README Profiles section; version 0.3.0 (2)
+git -c user.name="Cubbieblue16" -c user.email="152761714+cubbieblue16.noreply.github.com" commit -m "README Profiles section; version 0.3.0 (2)
 
 Badge meanings, manual Check Profile Updates, cache location and the
 main-branch default URL; profile limitations; Known Limitations count
