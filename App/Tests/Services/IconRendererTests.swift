@@ -1,4 +1,7 @@
 import AppKit
+import DuplicatorCore
+import ImageIO
+import UniformTypeIdentifiers
 import XCTest
 @testable import MacAppDuplicator
 
@@ -105,5 +108,87 @@ final class IconRendererTests: XCTestCase {
             guard case IconRenderer.RenderError.unreadableImage = error else { return XCTFail("\(error)") }
         }
         XCTAssertFalse(FileManager.default.fileExists(atPath: out.path))
+    }
+
+    // MARK: - R6: bounded images
+
+    /// A real PNG whose IHDR claims `width` x `height`, with a valid IHDR CRC so ImageIO accepts the header.
+    static func pngDeclaring(width: UInt32, height: UInt32, base: Data) -> Data {
+        var data = base
+        func put(_ value: UInt32, at offset: Int) {
+            for i in 0..<4 { data[offset + i] = UInt8((value >> UInt32(24 - 8 * i)) & 0xff) }
+        }
+        put(width, at: 16)
+        put(height, at: 20)
+        var crc: UInt32 = 0xffff_ffff
+        for byte in data[12..<29] {
+            crc ^= UInt32(byte)
+            for _ in 0..<8 { crc = crc & 1 != 0 ? (crc >> 1) ^ 0xedb8_8320 : crc >> 1 }
+        }
+        put(~crc, at: 29)
+        return data
+    }
+
+    func testPNGWiderThanTheLimitIsRefusedBeforeDecoding() throws {
+        let wide = try transparentPNG(width: 4097, height: 8)
+        // Precondition: ImageIO reports the real size from the header, so the refusal is the size limit.
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(wide as CFData, nil))
+        let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        XCTAssertEqual((properties[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue, 4097)
+
+        let out = dir.appending(path: "wide.icns")
+        XCTAssertThrowsError(try IconRenderer.writeICNS(fromImageData: wide, to: out)) { error in
+            guard case IconRenderer.RenderError.unreadableImage = error else { return XCTFail("\(error)") }
+        }
+        XCTAssertFalse(URLSessionWebIconFetcher.isDecodableImage(wide))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: out.path))
+    }
+
+    func testPNGAtTheLimitIsAccepted() throws {
+        let edge = try transparentPNG(width: 4096, height: 8)
+        XCTAssertTrue(URLSessionWebIconFetcher.isDecodableImage(edge))
+        let tall = try transparentPNG(width: 8, height: 4097)
+        XCTAssertFalse(URLSessionWebIconFetcher.isDecodableImage(tall))
+    }
+
+    func testPNGHeaderDeclaringAHugeCanvasIsRefused() throws {
+        // A header that claims 100000 x 100000 (a decompression bomb) never yields a verifiable size and is refused.
+        let bomb = Self.pngDeclaring(width: 100_000, height: 100_000, base: try transparentPNG(width: 8, height: 8))
+        let out = dir.appending(path: "bomb.icns")
+        XCTAssertThrowsError(try IconRenderer.writeICNS(fromImageData: bomb, to: out))
+        XCTAssertFalse(URLSessionWebIconFetcher.isDecodableImage(bomb))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: out.path))
+    }
+
+    func testUserPickedImageFileOverTheLimitIsRefused() throws {
+        let bomb = Self.pngDeclaring(width: 50_000, height: 50_000, base: try transparentPNG(width: 8, height: 8))
+        let file = dir.appending(path: "bomb.png")
+        try bomb.write(to: file)
+        XCTAssertThrowsError(try IconRenderer.writeICNS(fromImageFile: file, to: dir.appending(path: "o.icns")))
+    }
+
+    func testSourceWithMoreThan64FramesIsRefused() throws {
+        let destinationData = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(destinationData, UTType.gif.identifier as CFString, 65, nil))
+        let frame = IconRenderer.generatedTile(initials: "A", size: 8)
+        for _ in 0..<65 { CGImageDestinationAddImage(destination, frame, nil) }
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        let gif = destinationData as Data
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(gif as CFData, nil))
+        XCTAssertEqual(CGImageSourceGetCount(source), 65, "precondition: the GIF really has 65 frames")
+
+        XCTAssertFalse(URLSessionWebIconFetcher.isDecodableImage(gif))
+        XCTAssertThrowsError(try IconRenderer.writeICNS(fromImageData: gif, to: dir.appending(path: "gif.icns")))
+    }
+
+    func testOversizedICNSSourceFileIsNotReadWhole() throws {
+        let file = dir.appending(path: "huge.icns")
+        FileManager.default.createFile(atPath: file.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.truncate(atOffset: UInt64(BoundedFileReader.defaultMaxBytes) + 1)
+        try handle.close()
+        XCTAssertThrowsError(try IconRenderer.writeICNS(fromImageFile: file, to: dir.appending(path: "o.icns"))) { error in
+            XCTAssertTrue(error is BoundedFileReader.TooLarge, "\(error)")
+        }
     }
 }

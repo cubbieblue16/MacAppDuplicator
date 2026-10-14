@@ -11,10 +11,10 @@ enum WebShellMessages {
     static let maxTextLength = 1_024
     static let maxLoggedTitleLength = 120
 
-    /// True when a page-to-native message comes from a site the web app keeps in its window: an http(s) origin whose
+    /// True when a page-to-native message comes from a site the web app keeps in its window: an https origin whose
     /// host `policy` accepts (the app's host, its subdomains and the extra hosts).
     static func isTrustedOrigin(scheme: String?, host: String?, policy: WebHostPolicy) -> Bool {
-        guard let scheme = scheme?.lowercased(), scheme == "http" || scheme == "https",
+        guard let scheme = scheme?.lowercased(), scheme == "https",
               let host, !host.isEmpty else { return false }
         var components = URLComponents()
         components.scheme = scheme

@@ -58,8 +58,9 @@ public struct BundleWriter {
 
             var hasIcon = false
             if let icon = iconFile, fileManager.fileExists(atPath: icon.path) {
-                // Data(contentsOf:) follows symlinks, so the bundle always gets a regular-file copy.
-                try Data(contentsOf: icon).write(to: resources.appending(path: "AppIcon.icns", directoryHint: .notDirectory))
+                // The read follows symlinks, so the bundle always gets a regular-file copy; the cap keeps a huge file
+                // from being loaded whole.
+                try BoundedFileReader.read(icon).write(to: resources.appending(path: "AppIcon.icns", directoryHint: .notDirectory))
                 hasIcon = true
             }
 

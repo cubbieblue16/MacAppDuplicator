@@ -95,7 +95,8 @@ final class WebShellMessagesTests: XCTestCase {
     func testTrustedOriginAcceptsAppAndExtraHosts() {
         XCTAssertTrue(WebShellMessages.isTrustedOrigin(scheme: "https", host: "app.example", policy: originPolicy))
         XCTAssertTrue(WebShellMessages.isTrustedOrigin(scheme: "https", host: "Mail.APP.example", policy: originPolicy))
-        XCTAssertTrue(WebShellMessages.isTrustedOrigin(scheme: "http", host: "cdn.example", policy: originPolicy))
+        XCTAssertFalse(WebShellMessages.isTrustedOrigin(scheme: "http", host: "cdn.example", policy: originPolicy))
+        XCTAssertFalse(WebShellMessages.isTrustedOrigin(scheme: "HTTP", host: "app.example", policy: originPolicy))
     }
 
     func testTrustedOriginRejectsForeignHostsAndSchemes() {

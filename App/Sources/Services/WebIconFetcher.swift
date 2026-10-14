@@ -12,6 +12,53 @@ protocol WebIconFetching: Sendable {
     func fetchIcon(for pageURL: URL) async throws -> Data?
 }
 
+/// Resolves a host name to the raw addresses (4-byte IPv4 or 16-byte IPv6, network order) it points at. An empty
+/// result means the name did not resolve. Injected so tests never touch DNS.
+typealias IconHostResolver = @Sendable (_ host: String) async -> [[UInt8]]
+
+/// The resolver the app uses: `getaddrinfo` on a background queue, so a slow lookup never blocks the main actor.
+enum SystemIconHostResolver {
+    static let resolve: IconHostResolver = { host in
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(returning: addresses(of: host))
+            }
+        }
+    }
+
+    /// Every IPv4 and IPv6 address `getaddrinfo` returns for `host` (IP literals resolve to themselves).
+    static func addresses(of rawHost: String) -> [[UInt8]] {
+        var host = rawHost
+        if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC
+        hints.ai_socktype = SOCK_STREAM
+        var head: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host, nil, &hints, &head) == 0, let first = head else { return [] }
+        defer { freeaddrinfo(head) }
+        var result: [[UInt8]] = []
+        var node: UnsafeMutablePointer<addrinfo>? = first
+        while let current = node {
+            if let address = current.pointee.ai_addr {
+                switch Int32(address.pointee.sa_family) {
+                case AF_INET:
+                    address.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { pointer in
+                        result.append(withUnsafeBytes(of: pointer.pointee.sin_addr) { Array($0) })
+                    }
+                case AF_INET6:
+                    address.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { pointer in
+                        result.append(withUnsafeBytes(of: pointer.pointee.sin6_addr) { Array($0) })
+                    }
+                default:
+                    break
+                }
+            }
+            node = current.pointee.ai_next
+        }
+        return result
+    }
+}
+
 /// Picks the icon address out of a page's HTML. Pure and offline so the precedence rules are tested without a network.
 enum WebIconHTMLParser {
     /// `apple-touch-icon` links beat `icon` links; within a class the largest `sizes` wins and the first one in the
@@ -19,7 +66,7 @@ enum WebIconHTMLParser {
     /// Relative hrefs are resolved against `pageURL`. Nil when the page declares no usable icon.
     static func iconURL(inHTML html: String, pageURL: URL) -> URL? {
         var best: (rank: Int, area: Int, url: URL)?
-        for tag in linkTags(in: html) {
+        for tag in linkTags(in: headSection(of: html)) {
             let attributes = attributes(in: tag)
             guard let rel = attributes["rel"], let href = attributes["href"] else { continue }
             let tokens = Set(rel.lowercased().split(whereSeparator: \.isWhitespace).map(String.init))
@@ -40,8 +87,22 @@ enum WebIconHTMLParser {
         return best?.url
     }
 
-    private static let linkTagPattern = regex(#"<link\b[^>]*>"#, options: [.caseInsensitive])
-    private static let attributePattern = regex(#"([A-Za-z_:][-A-Za-z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))"#)
+    /// Most of a page that is scanned for icon links, in bytes.
+    static let maxHeadBytes = 256 * 1024
+
+    /// The part of `html` that can hold icon links: up to the first `</head` or `<body` (case-insensitive), and never
+    /// more than `maxHeadBytes`. Bounds the regex work on a hostile page of unterminated tags.
+    static func headSection(of html: String) -> String {
+        let capped = String(decoding: html.utf8.prefix(maxHeadBytes), as: UTF8.self)
+        let ends = ["</head", "<body"].compactMap { capped.range(of: $0, options: .caseInsensitive)?.lowerBound }
+        guard let end = ends.min() else { return capped }
+        return String(capped[..<end])
+    }
+
+    /// Longest `<link ...>` tag that is considered; a longer one is not a real icon link.
+    static let maxLinkTagLength = 4096
+    /// Attribute names are bounded to 64 characters so a tag of one endless word cannot make the match quadratic.
+    private static let attributePattern = regex(#"(?<![-A-Za-z0-9_:.])([A-Za-z_:][-A-Za-z0-9_:.]{0,63}+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))"#)
     private static let sizePattern = regex(#"(\d+)\s*[xX]\s*(\d+)"#)
 
     /// The patterns above are constants; a failure here is a programming error caught by the first test run.
@@ -53,9 +114,47 @@ enum WebIconHTMLParser {
         }
     }
 
+    /// Every `<link ...>` tag of up to `maxLinkTagLength` characters after `<link`, in document order. A plain byte
+    /// scan rather than a regex: an unterminated `<link` repeated for a megabyte stays linear, because the position of
+    /// the next `>` is found once and reused for every later start before it.
     private static func linkTags(in html: String) -> [String] {
-        let range = NSRange(html.startIndex..., in: html)
-        return linkTagPattern.matches(in: html, range: range).compactMap { Range($0.range, in: html).map { String(html[$0]) } }
+        let bytes = Array(html.utf8)
+        let open = Array("<link".utf8)
+        var tags: [String] = []
+        var nextClose = 0
+        var index = 0
+        while index + open.count < bytes.count {
+            guard bytes[index] == UInt8(ascii: "<"), matchesLink(bytes, at: index, open: open) else {
+                index += 1
+                continue
+            }
+            let afterName = index + open.count
+            // `\b`: the tag name must end here, so `<linkage>` is not a link.
+            if isWordByte(bytes[afterName]) {
+                index += 1
+                continue
+            }
+            if nextClose < afterName {
+                guard let found = bytes[afterName...].firstIndex(of: UInt8(ascii: ">")) else { break }
+                nextClose = found
+            }
+            if nextClose - afterName <= maxLinkTagLength {
+                tags.append(String(decoding: bytes[index...nextClose], as: UTF8.self))
+                index = nextClose + 1
+            } else {
+                index += 1
+            }
+        }
+        return tags
+    }
+
+    private static func matchesLink(_ bytes: [UInt8], at index: Int, open: [UInt8]) -> Bool {
+        for offset in 1..<open.count where bytes[index + offset] | 0x20 != open[offset] { return false }
+        return true
+    }
+
+    private static func isWordByte(_ byte: UInt8) -> Bool {
+        (byte >= 0x30 && byte <= 0x39) || (byte | 0x20 >= 0x61 && byte | 0x20 <= 0x7a) || byte == UInt8(ascii: "_")
     }
 
     /// Lower-cased attribute names mapped to their values; the first occurrence of a name wins.
@@ -92,6 +191,18 @@ enum WebIconHTMLParser {
         return !isLoopbackOrPrivate(host: host)
     }
 
+    /// `isFetchableIconURL(_:pageHost:)` plus name resolution: the host must resolve, and EVERY address it resolves to
+    /// must be public. A public-looking name that points at `10.x`, `127.0.0.1` or a link-local address (including the
+    /// page's own host: only the literal check has that exemption) is refused. This closes the "attacker.example has
+    /// an A record for 169.254.169.254" route that the literal check cannot see. A DNS answer that changes between
+    /// this check and the connection (rebinding) is not covered.
+    static func isFetchableIconURL(_ url: URL, pageHost: String?, resolver: IconHostResolver) async -> Bool {
+        guard isFetchableIconURL(url, pageHost: pageHost),
+              let host = url.host(percentEncoded: false), !host.isEmpty else { return false }
+        let addresses = await resolver(host)
+        return !addresses.isEmpty && addresses.allSatisfy { !isNonPublic($0) }
+    }
+
     /// True when `rawHost` names this machine or a non-public network: `localhost`, `.local`, and any IP literal in a
     /// loopback, private, link-local, carrier-grade NAT, unspecified or multicast range. IP literals are parsed the way
     /// the system resolver does, so legacy spellings (`127.1`, `0x7f000001`, `2130706433`) and IPv4-mapped IPv6
@@ -112,7 +223,7 @@ enum WebIconHTMLParser {
     }
 
     /// `bytes` is a 4-byte IPv4 or 16-byte IPv6 address in network order.
-    private static func isNonPublic(_ bytes: [UInt8]) -> Bool {
+    static func isNonPublic(_ bytes: [UInt8]) -> Bool {
         if bytes.count == 4 {
             switch (bytes[0], bytes[1]) {
             case (0, _), (10, _), (127, _), (169, 254), (192, 168): return true
@@ -154,6 +265,13 @@ final class RedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
     /// Attached per task (not per session): a session that owns a delegate stays alive until it is invalidated.
     static let shared = RedirectGuard()
 
+    private let resolver: IconHostResolver
+
+    init(resolver: @escaping IconHostResolver = SystemIconHostResolver.resolve) {
+        self.resolver = resolver
+    }
+
+    /// The literal check answers at once; a name that passes it is resolved first, so the answer is asynchronous.
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
@@ -161,11 +279,16 @@ final class RedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
         newRequest request: URLRequest,
         completionHandler: @escaping @Sendable (URLRequest?) -> Void
     ) {
+        let originalHost = task.originalRequest?.url?.host(percentEncoded: false)
         guard let target = request.url, WebIconHTMLParser.isRedirectAllowed(to: target, from: task.originalRequest?.url) else {
             completionHandler(nil)
             return
         }
-        completionHandler(request)
+        let resolver = resolver
+        Task {
+            let allowed = await WebIconHTMLParser.isFetchableIconURL(target, pageHost: originalHost, resolver: resolver)
+            completionHandler(allowed ? request : nil)
+        }
     }
 }
 
@@ -180,9 +303,12 @@ struct URLSessionWebIconFetcher: WebIconFetching {
     private static let logger = Logger(subsystem: "com.mikekuta.MacAppDuplicator", category: "WebIconFetcher")
 
     let session: URLSession
+    /// Resolves candidate icon hosts before they are requested; replaced in tests.
+    let resolver: IconHostResolver
 
-    init(session: URLSession = URLSessionWebIconFetcher.makeSession()) {
+    init(session: URLSession = URLSessionWebIconFetcher.makeSession(), resolver: @escaping IconHostResolver = SystemIconHostResolver.resolve) {
         self.session = session
+        self.resolver = resolver
     }
 
     /// An ephemeral session (no cookies, no cache) with the fetcher's timeouts.
@@ -202,9 +328,9 @@ struct URLSessionWebIconFetcher: WebIconFetching {
         if let page {
             // Redirects (for example web.whatsapp.com → another host) change what relative hrefs mean.
             let baseURL = page.finalURL
-            let html = String(decoding: page.data, as: UTF8.self)
+            let html = String(decoding: page.data.prefix(WebIconHTMLParser.maxHeadBytes), as: UTF8.self)
             if let declared = WebIconHTMLParser.iconURL(inHTML: html, pageURL: baseURL),
-               WebIconHTMLParser.isFetchableIconURL(declared, pageHost: baseURL.host(percentEncoded: false)) {
+               await WebIconHTMLParser.isFetchableIconURL(declared, pageHost: baseURL.host(percentEncoded: false), resolver: resolver) {
                 candidates.append(declared)
             }
             if let favicon = URL(string: "/favicon.ico", relativeTo: baseURL)?.absoluteURL, !candidates.contains(favicon) {
@@ -219,6 +345,11 @@ struct URLSessionWebIconFetcher: WebIconFetching {
             if let favicon = URL(string: "/favicon.ico", relativeTo: pageURL)?.absoluteURL { candidates.append(favicon) }
         }
         for candidate in candidates {
+            // The /favicon.ico candidates were not declared by the page, but they are on the page's host, which may
+            // itself resolve to a private address; every candidate is resolved before it is requested.
+            guard await WebIconHTMLParser.isFetchableIconURL(
+                candidate, pageHost: candidate.host(percentEncoded: false), resolver: resolver
+            ) else { continue }
             do {
                 if let icon = try await get(candidate, oversize: .reject), Self.isDecodableImage(icon.data) { return icon.data }
             } catch let error as URLError {
@@ -266,7 +397,8 @@ struct URLSessionWebIconFetcher: WebIconFetching {
     }
 
     static func isDecodableImage(_ data: Data) -> Bool {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return false }
-        return CGImageSourceGetCount(source) > 0
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let indexes = ImageSourceLimits.decodableFrameIndexes(in: source) else { return false }
+        return !indexes.isEmpty
     }
 }

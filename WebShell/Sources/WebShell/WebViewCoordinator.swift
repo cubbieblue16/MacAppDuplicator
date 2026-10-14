@@ -44,6 +44,8 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
         ))
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = controller
+        // Off explicitly: a page cannot open windows without a user gesture (popup spam, window.open from timers).
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         configuration.websiteDataStore = WKWebsiteDataStore(forIdentifier: shell.webApp.dataStoreID)
         userContentController = controller
         webView = WKWebView(frame: .zero, configuration: configuration)
@@ -82,7 +84,6 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
             scheme: url.scheme,
             targetFrameIsMain: navigationAction.targetFrame?.isMainFrame,
             navigationType: navigationAction.navigationType,
-            isPrimaryWebView: webView === self.webView,
             policy: shell.policy
         )
         switch decision {
@@ -92,11 +93,18 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
             return .cancel
         case .openExternally:
             openExternally(url)
+            closeIfEmptyPopup(webView)
             return .cancel
         case .blocked(let reason):
             logger.log(reason)
             return .cancel
         }
+    }
+
+    /// A popup whose first navigation went to the default browser has nothing to show; close it.
+    private func closeIfEmptyPopup(_ popup: WKWebView) {
+        guard popup !== webView, popup.url == nil || popup.url?.absoluteString == "about:blank" else { return }
+        popup.window?.close()
     }
 
     private func openExternally(_ url: URL) {
@@ -106,14 +114,41 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
         } else {
             logger.log("redirect scheme=\(scheme)")
         }
+        if scheme != "http", scheme != "https" {
+            guard confirmExternalOpen(url) else {
+                logger.log("external open declined scheme=\(scheme)")
+                return
+            }
+        }
         if !NSWorkspace.shared.open(url) {
             logger.log("error no application opens scheme=\(scheme)")
         }
     }
 
+    /// Asks before a non-web URL goes to the workspace; Cancel is the default button. `mailto:` is exempt.
+    private func confirmExternalOpen(_ url: URL) -> Bool {
+        let handlerName = NSWorkspace.shared.urlForApplication(toOpen: url).map { appURL in
+            let info = Bundle(url: appURL)?.infoDictionary
+            return (info?["CFBundleDisplayName"] as? String)
+                ?? (info?["CFBundleName"] as? String)
+                ?? FileManager.default.displayName(atPath: appURL.path)
+        }
+        guard let prompt = ExternalOpenPrompt.make(for: url, handlerName: handlerName) else { return true }
+        bringToFront?()
+        let alert = NSAlert()
+        alert.messageText = prompt.messageText
+        alert.informativeText = prompt.informativeText
+        alert.alertStyle = .warning
+        // The first button is the default (Return) button.
+        alert.addButton(withTitle: prompt.cancelButtonTitle)
+        alert.addButton(withTitle: prompt.openButtonTitle)
+        return alert.runModal() == .alertSecondButtonReturn
+    }
+
     // MARK: - Load results
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        webView.window?.subtitle = WindowSubtitle.text(for: webView.url)
         guard webView === self.webView else { return }
         navigationDidCommit?()
     }
@@ -199,9 +234,14 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
         for navigationAction: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
+        // `javaScriptCanOpenWindowsAutomatically` is off, so WebKit only asks for a script window after a user
+        // gesture; clicked links carry one by definition.
         switch NavigationPolicy.popupDecision(
             url: navigationAction.request.url,
             navigationType: navigationAction.navigationType,
+            sourceIsMainFrame: navigationAction.sourceFrame.isMainFrame,
+            sourceURL: navigationAction.sourceFrame.request.url,
+            userInitiated: true,
             policy: shell.policy
         ) {
         case .ignore:
@@ -231,6 +271,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
         window.isReleasedWhenClosed = false
         window.isRestorable = false
         window.title = shell.shortcut.name
+        window.subtitle = WindowSubtitle.text(for: navigationAction.request.url)
         window.contentView = popup
         window.delegate = self
         window.center()
