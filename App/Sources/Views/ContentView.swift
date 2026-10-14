@@ -40,7 +40,8 @@ struct ContentView: View {
         .sheet(isPresented: $isRebuildAllPresented) {
             RebuildAllSheet(
                 count: appState.library.recordsNeedingRebuild.filter { !$0.isForeign }.count,
-                skippedCount: appState.library.recordsNeedingRebuild.filter(\.isForeign).count
+                skippedCount: appState.library.recordsNeedingRebuild.filter { $0.isForeign && !$0.isLegacyCandidate }.count,
+                legacyCount: appState.library.recordsNeedingRebuild.filter(\.isLegacyCandidate).count
             ) {
                 await appState.rebuildAll()
             }

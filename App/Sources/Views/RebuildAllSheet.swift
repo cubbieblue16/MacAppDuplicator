@@ -8,6 +8,9 @@ struct RebuildAllSheet: View {
     let count: Int
     /// Stale shortcuts this App Duplicator did not create (C3); Rebuild All skips them.
     var skippedCount: Int = 0
+    /// Stale shortcuts that look like an earlier version's (tokenless, ad hoc); Rebuild All skips them and points at
+    /// Review Earlier Shortcuts…, which trusts them all at once after one review.
+    var legacyCount: Int = 0
     let onRebuild: () async -> [RebuildResult]
     @State private var isWorking = false
     @State private var results: [RebuildResult]?
@@ -40,6 +43,12 @@ struct RebuildAllSheet: View {
                     Text(skippedCount == 1
                         ? "1 shortcut not created by this App Duplicator will be skipped. Open it to review it."
                         : "\(skippedCount) shortcuts not created by this App Duplicator will be skipped. Open each to review it.")
+                        .foregroundStyle(.secondary)
+                }
+                if legacyCount > 0 {
+                    Text(legacyCount == 1
+                        ? "1 shortcut from an earlier version will be skipped. Use View > Review Earlier Shortcuts\u{2026} to trust and rebuild it."
+                        : "\(legacyCount) shortcuts from an earlier version will be skipped. Use View > Review Earlier Shortcuts\u{2026} to trust and rebuild them.")
                         .foregroundStyle(.secondary)
                 }
                 if let progress = appState.rebuildProgress {
