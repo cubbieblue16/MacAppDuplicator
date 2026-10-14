@@ -53,8 +53,8 @@ targets:
         INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Cubbieblue16"
         INFOPLIST_KEY_NSPrincipalClass: NSApplication
         INFOPLIST_KEY_NSMainStoryboardFile: ""
-        CURRENT_PROJECT_VERSION: "7"
-        MARKETING_VERSION: "0.7.1"
+        CURRENT_PROJECT_VERSION: "8"
+        MARKETING_VERSION: "0.8.0"
         SWIFT_EMIT_LOC_STRINGS: YES
     info:
       path: Resources/Info.plist
