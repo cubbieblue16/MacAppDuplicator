@@ -87,4 +87,7 @@ final class ShortcutLibrary {
         return records.first { $0.bundleURL.standardizedFileURL.path == path }
     }
     var recordsNeedingRebuild: [ShortcutRecord] { records.filter(\.needsRebuild) }
+    /// Foreign shortcuts built before install tokens existed (`ShortcutRecord.isLegacyCandidate`), offered one aggregate
+    /// review (`LegacyTrustReview`).
+    var legacyCandidates: [ShortcutRecord] { records.filter(\.isLegacyCandidate) }
 }

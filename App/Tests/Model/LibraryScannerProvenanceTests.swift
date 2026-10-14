@@ -158,4 +158,95 @@ final class LibraryScannerProvenanceTests: XCTestCase {
         XCTAssertFalse(try LibraryScanner.record(forBundleAt: mine, trust: trust).isForeign)
         XCTAssertTrue(try LibraryScanner.record(forBundleAt: planted, trust: trust).isForeign)
     }
+
+    // MARK: Legacy candidates: tokenless ad hoc bundles from before 0.8.0 get one aggregate review
+
+    /// Runs the candidate rule on the provenance this install would compute (`installToken` is `token`).
+    private func isLegacyCandidate(
+        _ bundle: URL, expected: CodeSignature? = .adHoc,
+        signature: ((URL) -> CodeSignature)? = nil, verify: ((URL, CodeSignature) -> Bool)? = nil
+    ) throws -> Bool {
+        let provenance = try provenance(bundle, installToken: token, expected: expected, signature: signature, verify: verify)
+        let read = signature ?? { CodeSignature.of(bundleAt: $0) }
+        return LibraryScanner.isLegacyCandidate(provenance: provenance, infoPlist: try info(bundle), bundleURL: bundle, signature: read)
+    }
+
+    func testTokenlessAdHocUnquarantinedBundleIsALegacyCandidate() throws {
+        let legacy = try bundle("Legacy")
+        try adHocSign(legacy)
+        XCTAssertTrue(try isLegacyCandidate(legacy))
+        XCTAssertTrue(try isLegacyCandidate(legacy, expected: nil), "with no expected signature it is still foreign")
+        XCTAssertTrue(try isLegacyCandidate(legacy, expected: developerID),
+                      "switching to a Developer ID leaves shortcuts built before 0.8.0 tokenless and ad hoc")
+
+        let record = try LibraryScanner.record(forBundleAt: legacy, trust: ScanTrust(installToken: token, expectedSignature: .adHoc))
+        XCTAssertTrue(record.isLegacyCandidate, "the scanner decides it")
+        XCTAssertTrue(record.isForeign, "a candidate stays foreign until the user trusts it")
+        XCTAssertEqual(record.foreignReason, "no install token; an ad hoc signature cannot show who built it")
+    }
+
+    func testQuarantinedBundleIsNotALegacyCandidate() throws {
+        let received = try bundle("Received")
+        try adHocSign(received)
+        try quarantine(received)
+        XCTAssertFalse(try isLegacyCandidate(received))
+
+        let partlyCleared = try bundle("Partly Cleared")
+        try adHocSign(partlyCleared)
+        try quarantine(partlyCleared.appending(path: "Contents/Info.plist"))
+        XCTAssertFalse(try isLegacyCandidate(partlyCleared), "a flag left on Info.plist still counts")
+    }
+
+    func testAnyInstallTokenKeyRulesOutALegacyCandidate() throws {
+        let other = try bundle("Other", stamped: String(repeating: "cd", count: 32))
+        try adHocSign(other)
+        XCTAssertEqual(try provenance(other, installToken: token, expected: .adHoc), .foreign(reason: "built by a different App Duplicator install"))
+        XCTAssertFalse(try isLegacyCandidate(other), "another install's token")
+
+        let empty = try bundle("Empty", stamped: "")
+        try adHocSign(empty)
+        XCTAssertFalse(try isLegacyCandidate(empty), "an empty token is still a key")
+
+        let changed = try bundle("Changed", stamped: token)
+        try adHocSign(changed)
+        XCTAssertEqual(
+            try provenance(changed, installToken: token, expected: .adHoc, verify: { _, _ in false }),
+            .foreign(reason: "changed since this App Duplicator built it (its signature does not verify)")
+        )
+        XCTAssertFalse(try isLegacyCandidate(changed, verify: { _, _ in false }), "this install's token on a bundle that does not verify")
+    }
+
+    func testTokenlessBundleNotSignedAdHocIsNotALegacyCandidate() throws {
+        // No test can sign with a Developer ID, so the signature reader and verifier are injected.
+        let certificate = try bundle("Certificate")
+        XCTAssertFalse(try isLegacyCandidate(certificate, expected: developerID, signature: { _ in self.developerID }, verify: { _, _ in false }),
+                       "a certificate signature that does not verify")
+        XCTAssertFalse(try isLegacyCandidate(certificate, expected: .adHoc, signature: { _ in .identity("Other") }), "signed by someone else")
+
+        let unsigned = try bundle("Unsigned")
+        XCTAssertEqual(CodeSignature.of(bundleAt: unsigned), .unknown)
+        XCTAssertFalse(try isLegacyCandidate(unsigned), "unsigned")
+        XCTAssertFalse(try isLegacyCandidate(unsigned, expected: developerID), "unsigned")
+    }
+
+    func testOwnBundleIsNeverALegacyCandidate() throws {
+        let mine = try bundle("Mine", stamped: token)
+        try adHocSign(mine)
+        XCTAssertEqual(try provenance(mine, installToken: token, expected: .adHoc), .own)
+        XCTAssertFalse(try isLegacyCandidate(mine))
+
+        let legacy = try bundle("Legacy Developer ID")
+        XCTAssertFalse(LibraryScanner.isLegacyCandidate(provenance: .own, infoPlist: try info(legacy), bundleURL: legacy, signature: { _ in .adHoc }),
+                       "own is never a candidate, even tokenless and ad hoc")
+    }
+
+    func testScanMarksOnlyLegacyCandidates() throws {
+        try adHocSign(try bundle("Legacy"))
+        try adHocSign(try bundle("Mine", stamped: token))
+        _ = try bundle("Unsigned")
+        let records = LibraryScanner().scan(folders: [dir], trust: ScanTrust(installToken: token, expectedSignature: .adHoc)).records
+        XCTAssertEqual(records.map(\.name), ["Legacy", "Mine", "Unsigned"])
+        XCTAssertEqual(records.map(\.isLegacyCandidate), [true, false, false])
+        XCTAssertEqual(records.map(\.isForeign), [true, false, true])
+    }
 }

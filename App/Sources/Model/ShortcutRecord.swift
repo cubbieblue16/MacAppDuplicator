@@ -16,6 +16,11 @@ struct ShortcutRecord: Identifiable, Hashable, Sendable {
     var modifiedDate: Date
     /// Whether this install wrote the bundle (security C3). Deliberately has no default: every construction decides.
     var provenance: Provenance
+    /// True for a foreign bundle an earlier App Duplicator (or madctl) built before install tokens existed: not
+    /// quarantined, no `MADInstallToken` key at all, signed ad hoc (`LibraryScanner.isLegacyCandidate`). These are
+    /// offered one aggregate review (`LegacyTrustReview`) instead of one approval each; the user still clicks to trust.
+    /// Decided at scan time; the default, false, keeps the per-shortcut review.
+    var isLegacyCandidate = false
 
     /// Where a bundle came from. A bundle carrying `MADConfig` is only data: anyone can write one, so the app must not
     /// regenerate and re-sign a bundle it did not write until the user has reviewed what it runs.

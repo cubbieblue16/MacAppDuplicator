@@ -102,7 +102,8 @@ struct LibraryScanner: Sendable {
         return ShortcutRecord(
             bundleURL: bundleURL, config: config, engineVersion: engineVersion,
             iconURL: hasIcon ? iconURL : nil, targetVersion: targetVersion, targetExists: targetExists, modifiedDate: modified,
-            provenance: provenance
+            provenance: provenance,
+            isLegacyCandidate: Self.isLegacyCandidate(provenance: provenance, infoPlist: info, bundleURL: bundleURL)
         )
     }
 
@@ -148,6 +149,25 @@ struct LibraryScanner: Sendable {
         case .adHoc: return .foreign(reason: "signed ad hoc, not by your signing identity")
         case .unknown: return .foreign(reason: "unsigned")
         }
+    }
+
+    /// Decides whether a foreign bundle is one an earlier App Duplicator (or madctl) built before install tokens existed,
+    /// so it can be offered one aggregate review instead of one approval each. All must hold:
+    /// 1. `provenance` is foreign;
+    /// 2. neither the bundle nor its Info.plist carries the quarantine flag;
+    /// 3. Info.plist has no `MADInstallToken` key at all (any value, even an empty or non-string one, rules it out);
+    /// 4. the bundle is signed ad hoc.
+    /// Everything else foreign (received, another install's token, this install's token on a bundle that no longer
+    /// verifies, a certificate signature that does not verify, unsigned) keeps the per-shortcut review. This decides only
+    /// which review the user sees, never trust. `signature` is injected by tests, as in `provenance(...)`.
+    static func isLegacyCandidate(
+        provenance: ShortcutRecord.Provenance, infoPlist: [String: Any], bundleURL: URL,
+        signature: (URL) -> CodeSignature = { CodeSignature.of(bundleAt: $0) }
+    ) -> Bool {
+        guard case .foreign = provenance, infoPlist[ShortcutConfig.installTokenInfoPlistKey] == nil, !isQuarantined(bundleURL) else {
+            return false
+        }
+        return signature(bundleURL) == .adHoc
     }
 
     /// True when the bundle, or its Info.plist, carries the quarantine flag. Both are checked because Finder copies and
