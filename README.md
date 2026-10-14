@@ -8,7 +8,7 @@ macOS App Duplicator creates launcher shortcut bundles that run a second copy of
 2. Open the DMG and drag `macOS App Duplicator.app` onto the `Applications` shortcut beside it.
 3. Eject the DMG and open macOS App Duplicator from Applications.
 
-Releases so far (0.3.0 to 0.8.0) are signed with a Developer ID certificate but not notarized by Apple, so Gatekeeper blocks the first launch. On macOS 26 right-click (Control-click) → Open no longer gets past that: open the app once, then choose Open Anyway in System Settings → Privacy & Security and confirm with your password or Touch ID. A notarized release only shows macOS's one-time question about an app downloaded from the Internet; choose Open.
+Releases so far (0.3.0 to 0.8.1) are signed with a Developer ID certificate but not notarized by Apple, so Gatekeeper blocks the first launch. On macOS 26 right-click (Control-click) → Open no longer gets past that: open the app once, then choose Open Anyway in System Settings → Privacy & Security and confirm with your password or Touch ID. A notarized release only shows macOS's one-time question about an app downloaded from the Internet; choose Open.
 
 Requirements: Apple silicon and macOS 26 or later.
 
