@@ -284,6 +284,9 @@ extension WebAppPreset {
         if let userAgent { try ProfilesDocument.checkString(userAgent, at: "\(path).userAgent") }
         if let badgeRegex {
             try ProfilesDocument.checkString(badgeRegex, at: "\(path).badgeRegex")
+            guard RegexSafety.unsafeReason(pattern: badgeRegex) == nil else {
+                throw ProfilesError.invalidField("\(path).badgeRegex")
+            }
             do {
                 _ = try NSRegularExpression(pattern: badgeRegex)
             } catch {

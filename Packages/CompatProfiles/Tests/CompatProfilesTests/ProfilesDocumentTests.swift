@@ -262,4 +262,15 @@ final class ProfilesDocumentTests: XCTestCase {
         ])])
         XCTAssertNoThrow(try ProfilesDocument.decodeValidated(from: data))
     }
+
+    func testRejectsUnsafeBadgeRegexAndAcceptsOrdinaryOnes() throws {
+        for pattern in ["^(.+)+X$", "(a*)*", "(a)\\1", "(?<=a)b", String(repeating: "a", count: 300)] {
+            assertRejects(try makeProfilesData(webApps: ["whatsapp": webAppEntry(extra: ["badgeRegex": pattern])]),
+                          with: .invalidField("webApps.whatsapp.badgeRegex"))
+        }
+        for pattern in [#"\((\d+)\)"#, "(\\d+)"] {
+            let data = try makeProfilesData(webApps: ["whatsapp": webAppEntry(extra: ["badgeRegex": pattern])])
+            XCTAssertEqual(try ProfilesDocument.decodeValidated(from: data).webApps["whatsapp"]?.badgeRegex, pattern)
+        }
+    }
 }
