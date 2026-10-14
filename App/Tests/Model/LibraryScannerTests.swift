@@ -86,6 +86,6 @@ final class LibraryScannerTests: XCTestCase {
         XCTAssertTrue(record.targetExists, "a web app has no target to be missing")
         XCTAssertNil(record.targetVersion)
         XCTAssertEqual(record.webAppHost, "chat.example.test")
-        XCTAssertNil(ShortcutRecord(bundleURL: root, config: makeConfig(), engineVersion: 1, iconURL: nil, targetVersion: nil, targetExists: true, modifiedDate: .distantPast).webAppHost)
+        XCTAssertNil(ShortcutRecord(bundleURL: root, config: makeConfig(), engineVersion: 1, iconURL: nil, targetVersion: nil, targetExists: true, modifiedDate: .distantPast, provenance: .own).webAppHost)
     }
 }

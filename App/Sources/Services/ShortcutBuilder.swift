@@ -53,14 +53,18 @@ struct ShortcutBuilder: Sendable {
     let webShellBinary: URL
     /// Codesign identity display name, or nil for ad hoc.
     let signingIdentity: String?
+    /// `AppSettings.installToken`, stamped into every bundle this builder writes so a later scan reads it as this
+    /// install's own (security C3); nil writes no token.
+    let installToken: String?
     // FileManager is not Sendable, so it is not a stored property of this Sendable struct (Rebuild All runs the
     // builder in a detached task). Nothing ever set it; every use reads the shared instance.
     var fileManager: FileManager { .default }
 
-    init(launcherBinary: URL, webShellBinary: URL, signingIdentity: String?) {
+    init(launcherBinary: URL, webShellBinary: URL, signingIdentity: String?, installToken: String? = nil) {
         self.launcherBinary = launcherBinary
         self.webShellBinary = webShellBinary
         self.signingIdentity = signingIdentity
+        self.installToken = installToken
     }
 
     /// Writes `<name>.app` into `directory`. Throws `alreadyExists` rather than replacing a bundle it did not make.
@@ -279,7 +283,7 @@ struct ShortcutBuilder: Sendable {
         let scratch = try makeScratch()
         defer { removeScratch(scratch) }
         let icon = try IconResolver.iconFile(for: config, app: app, scratchDirectory: scratch)
-        let bundle = try BundleWriter(fileManager: fileManager).write(config: config, app: app, launcherBinary: launcherBinary, iconFile: icon, to: directory)
+        let bundle = try BundleWriter(fileManager: fileManager, installToken: installToken).write(config: config, app: app, launcherBinary: launcherBinary, iconFile: icon, to: directory)
         try Signer().sign(bundle: bundle, identity: signingIdentity, needsAppleEvents: false)
         return bundle
     }
@@ -298,7 +302,7 @@ struct ShortcutBuilder: Sendable {
         let scratch = try makeScratch()
         defer { removeScratch(scratch) }
         let icon = try IconResolver.webAppIconFile(for: config, webIconData: webIconData, existingIcon: existingIcon, scratchDirectory: scratch)
-        let bundle = try BundleWriter(fileManager: fileManager).write(config: config, executable: webShellBinary, iconFile: icon, to: directory)
+        let bundle = try BundleWriter(fileManager: fileManager, installToken: installToken).write(config: config, executable: webShellBinary, iconFile: icon, to: directory)
         try Signer().sign(bundle: bundle, identity: signingIdentity, needsAppleEvents: false)
         return bundle
     }
@@ -339,7 +343,7 @@ struct ShortcutBuilder: Sendable {
             try fileManager.copyItem(at: existingIcon, to: kept)
             icon = kept
         }
-        let bundle = try BundleWriter(fileManager: fileManager).write(config: config, executable: launcherBinary, iconFile: icon, to: directory)
+        let bundle = try BundleWriter(fileManager: fileManager, installToken: installToken).write(config: config, executable: launcherBinary, iconFile: icon, to: directory)
         // Terminal.app and iTerm2 are driven through `osascript` (Apple Events), which the hardened runtime of a
         // Developer ID signature refuses without the Apple Events entitlement.
         let drivesTerminal = config.kind == .cli && (config.cli?.terminal == .terminal || config.cli?.terminal == .iterm2)

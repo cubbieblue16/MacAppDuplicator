@@ -5,7 +5,8 @@ import os
 
 /// What `ShortcutLibrary` needs from a scanner. `LibraryScanner` is the real one; tests inject a gated stub (final review M7).
 protocol ShortcutScanning: Sendable {
-    func scan(folders: [URL]) -> ScanResult
+    /// `trust` decides each record's provenance (security C3).
+    func scan(folders: [URL], trust: ScanTrust) -> ScanResult
 }
 
 extension LibraryScanner: ShortcutScanning {}
@@ -67,8 +68,9 @@ final class ShortcutLibrary {
         let generation = scanGeneration
         isScanning = true
         let folders = settings.allLibraryFolders
+        let trust = settings.scanTrust
         let scanner = scanner
-        let result = await Task.detached(priority: .userInitiated) { scanner.scan(folders: folders) }.value
+        let result = await Task.detached(priority: .userInitiated) { scanner.scan(folders: folders, trust: trust) }.value
         guard generation == scanGeneration else { return }
         records = result.records
         warnings = result.warnings

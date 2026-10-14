@@ -15,12 +15,12 @@ final class GatedScanner: ShortcutScanning {
         gates = Dictionary(uniqueKeysWithValues: gatedCalls.map { ($0, DispatchSemaphore(value: 0)) })
     }
 
-    func scan(folders: [URL]) -> ScanResult {
+    func scan(folders: [URL], trust: ScanTrust) -> ScanResult {
         let call = callCount.withLock { count in
             count += 1
             return count
         }
-        let result = LibraryScanner().scan(folders: folders)
+        let result = LibraryScanner().scan(folders: folders, trust: trust)
         finishedCalls.withLock { _ = $0.insert(call) }
         gates[call]?.wait()
         return result

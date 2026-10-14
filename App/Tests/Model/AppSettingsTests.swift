@@ -28,6 +28,32 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(settings.allLibraryFolders, [settings.outputFolder])
     }
 
+    /// Security C3: one token per install, generated once, kept under `MADInstallToken`, never shared between installs.
+    func testInstallTokenIsGeneratedOnceAndPersisted() {
+        let first = AppSettings(defaults: defaults, defaultSigningIdentity: "Ad-hoc")
+        XCTAssertTrue(AppSettings.isWellFormedInstallToken(first.installToken), first.installToken)
+        XCTAssertEqual(defaults.string(forKey: "MADInstallToken"), first.installToken)
+        XCTAssertEqual(AppSettings(defaults: defaults, defaultSigningIdentity: "Ad-hoc").installToken, first.installToken)
+
+        let (otherDefaults, otherSuite) = makeTestDefaults()
+        defer { otherDefaults.removePersistentDomain(forName: otherSuite) }
+        XCTAssertNotEqual(AppSettings(defaults: otherDefaults, defaultSigningIdentity: "Ad-hoc").installToken, first.installToken)
+
+        defaults.set("", forKey: "MADInstallToken")
+        let replaced = AppSettings(defaults: defaults, defaultSigningIdentity: "Ad-hoc").installToken
+        XCTAssertTrue(AppSettings.isWellFormedInstallToken(replaced), "a malformed stored token is replaced")
+        XCTAssertEqual(defaults.string(forKey: "MADInstallToken"), replaced)
+        XCTAssertFalse(AppSettings.isWellFormedInstallToken(String(repeating: "AB", count: 32)))
+    }
+
+    func testExpectedSignatureAndScanTrustFollowTheSigningIdentity() {
+        let settings = AppSettings(defaults: defaults, defaultSigningIdentity: AppSettings.adHocIdentityName)
+        XCTAssertEqual(settings.expectedSignature, .adHoc)
+        settings.signingIdentity = "Developer ID Application: Test (TEAMID)"
+        XCTAssertEqual(settings.expectedSignature, .identity("Developer ID Application: Test (TEAMID)"))
+        XCTAssertEqual(settings.scanTrust, ScanTrust(installToken: settings.installToken, expectedSignature: settings.expectedSignature))
+    }
+
     func testAdHocMapsToNilSignerIdentity() {
         let settings = AppSettings(defaults: defaults, defaultSigningIdentity: AppSettings.adHocIdentityName)
         XCTAssertEqual(settings.signingIdentity, "Ad-hoc")
