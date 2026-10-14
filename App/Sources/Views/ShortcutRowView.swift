@@ -17,6 +17,14 @@ struct ShortcutRowView: View {
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(.orange.opacity(0.2), in: Capsule())
                     }
+                    if let reason = record.foreignReason {
+                        // C3: a received or planted bundle; Save and Regenerate ask for a review first.
+                        Text("Not created here")
+                            .font(.caption2)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(.red.opacity(0.2), in: Capsule())
+                            .help(Text(verbatim: reason))
+                    }
                 }
                 subtitle
                     .font(.caption)

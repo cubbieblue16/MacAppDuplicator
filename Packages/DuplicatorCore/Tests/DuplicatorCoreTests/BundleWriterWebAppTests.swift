@@ -125,6 +125,19 @@ final class BundleWriterWebAppTests: XCTestCase {
         XCTAssertEqual(cliPlist["NSAppleEventsUsageDescription"] as? String, "Projects opens your terminal to run its command.")
     }
 
+    /// The library app stamps its per-install token so a later scan can tell bundles it wrote from bundles that merely
+    /// carry a `MADConfig` (security C3). A writer without a token (madctl) writes no key at all.
+    func testInstallTokenIsStampedOnlyWhenGiven() throws {
+        let fixture = try makeFixture()
+        XCTAssertEqual(ShortcutConfig.installTokenInfoPlistKey, "MADInstallToken")
+
+        let stamped = try readPlist(BundleWriter(installToken: "abc123").write(config: webConfig(), executable: fixture.executable, iconFile: nil, to: fixture.output))
+        XCTAssertEqual(stamped[ShortcutConfig.installTokenInfoPlistKey] as? String, "abc123")
+
+        let plain = try readPlist(BundleWriter().write(config: webConfig(name: "Plain"), executable: fixture.executable, iconFile: nil, to: fixture.output))
+        XCTAssertNil(plain[ShortcutConfig.installTokenInfoPlistKey])
+    }
+
     func testLSEnvironmentIsExactlyTheConfigEnvironment() throws {
         let fixture = try makeFixture()
         let config = webConfig(environment: ["LANG": "de_DE.UTF-8", "API_TOKEN": "not-a-real-token"])

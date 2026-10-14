@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 struct ExportSheet: View {
@@ -13,19 +12,14 @@ struct ExportSheet: View {
     /// Read from the exported copy (final review M10), so the copy never claims an identity the bundle does not carry.
     @State private var signature: CodeSignature = .unknown
 
-    private var command: String { ExportInstructions.quarantineCommand(for: exportedURL) }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Export Shortcut").font(.headline)
             Text(ExportInstructions.signingSentence(for: signature))
                 .fixedSize(horizontal: false, vertical: true)
-            Text(command)
-                .font(.body.monospaced())
-                .textSelection(.enabled)
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+            // C3: the recipient reviews and rebuilds the copy in App Duplicator instead of stripping its quarantine flag.
+            Text(ExportInstructions.recipientSteps)
+                .fixedSize(horizontal: false, vertical: true)
             if let notice = ExportInstructions.secretNotice(for: environment, arguments: arguments) {
                 Label(notice, systemImage: "exclamationmark.triangle")
                     .font(.caption)
@@ -43,10 +37,6 @@ struct ExportSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
             HStack {
-                Button("Copy Command") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(command, forType: .string)
-                }
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             }

@@ -108,7 +108,7 @@ final class AppStateLauncherTests: XCTestCase {
         try FileManager.default.createDirectory(at: escaped, withIntermediateDirectories: true)
         let record = ShortcutRecord(
             bundleURL: bundle, config: config, engineVersion: ShortcutConfig.currentEngineVersion, iconURL: nil,
-            targetVersion: nil, targetExists: true, modifiedDate: .distantPast
+            targetVersion: nil, targetExists: true, modifiedDate: .distantPast, provenance: .own
         )
 
         guard case .unavailable = state.dataFolderDeletionOption(for: record) else {

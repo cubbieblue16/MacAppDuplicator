@@ -8,6 +8,10 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
     public static let infoPlistKey = "MADConfig"
     /// Info.plist key that mirrors `engineVersion` at top level.
     public static let engineVersionInfoPlistKey = "MADEngineVersion"
+    /// Info.plist key holding the per-install token of the App Duplicator install that wrote the bundle. A bundle
+    /// carrying `MADConfig` is only data; this key lets the library app tell its own bundles from received or planted
+    /// ones before it regenerates and signs anything (security C3).
+    public static let installTokenInfoPlistKey = "MADInstallToken"
     /// Prefix of every shortcut bundle identifier (spec §3.2).
     public static let bundleIdentifierPrefix = "com.mikekuta.appduplicator."
 

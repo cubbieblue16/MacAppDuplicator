@@ -250,7 +250,7 @@ final class DiagnosticsModelTests: XCTestCase {
         config.webApp = nil
         let record = ShortcutRecord(
             bundleURL: dir.appending(path: "Chat Broken.app"), config: config, engineVersion: ShortcutConfig.currentEngineVersion,
-            iconURL: nil, targetVersion: nil, targetExists: true, modifiedDate: Date())
+            iconURL: nil, targetVersion: nil, targetExists: true, modifiedDate: Date(), provenance: .own)
         let model = DiagnosticsModel.make(record: record, logReader: LogReader(folder: dir))
         XCTAssertEqual(model.web?.url, "Not available (configuration missing)")
         XCTAssertEqual(model.web?.dataStoreID, "Not available (configuration missing)")

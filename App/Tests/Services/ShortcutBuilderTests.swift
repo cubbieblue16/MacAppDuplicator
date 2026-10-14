@@ -176,6 +176,49 @@ final class ShortcutBuilderTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: bundle.path))
     }
 
+    private func infoDictionary(of bundle: URL) throws -> [String: Any] {
+        let data = try Data(contentsOf: bundle.appending(path: "Contents/Info.plist"))
+        return try XCTUnwrap(PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+    }
+
+    /// C3: an export that kept the install token could be edited elsewhere and carried back over USB, scp or rsync
+    /// (no quarantine flag), still reading as this install's own.
+    func testExportStripsTheInstallTokenAndSignsTheCopyAgain() throws {
+        let token = String(repeating: "aa", count: 32)
+        let stamping = ShortcutBuilder(launcherBinary: launcher, webShellBinary: webShell, signingIdentity: nil, installToken: token)
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try stamping.create(config: config(), in: out)
+        XCTAssertEqual(try infoDictionary(of: bundle)[ShortcutConfig.installTokenInfoPlistKey] as? String, token, "precondition: the source is stamped")
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+
+        let exported = try stamping.export(record: record, to: dir.appending(path: "exported.app"))
+
+        let info = try infoDictionary(of: exported)
+        XCTAssertNil(info[ShortcutConfig.installTokenInfoPlistKey], "the exported copy carries no install token")
+        XCTAssertNotNil(info[ShortcutConfig.infoPlistKey], "the config travels with the copy")
+        XCTAssertTrue(CodeSignature.verify(bundleAt: exported, expecting: .adHoc), "the stripped copy is signed again and verifies")
+        XCTAssertEqual(try infoDictionary(of: bundle)[ShortcutConfig.installTokenInfoPlistKey] as? String, token, "the source keeps its token")
+        XCTAssertTrue(CodeSignature.verify(bundleAt: bundle, expecting: .adHoc), "the source's signature is untouched")
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: dir.path).filter { ShortcutBuilder.isStagingName($0) }
+        XCTAssertEqual(leftovers, [], "no staging copy is left behind")
+    }
+
+    func testExportOfATokenlessBundleLeavesTheCopyUntouched() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: config(), in: out)
+        XCTAssertNil(try infoDictionary(of: bundle)[ShortcutConfig.installTokenInfoPlistKey])
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+
+        let exported = try builder.export(record: record, to: dir.appending(path: "exported.app"))
+
+        XCTAssertEqual(
+            try Data(contentsOf: exported.appending(path: "Contents/Info.plist")),
+            try Data(contentsOf: bundle.appending(path: "Contents/Info.plist")),
+            "no token to strip, so Info.plist is byte-identical"
+        )
+        XCTAssertTrue(CodeSignature.verify(bundleAt: exported, expecting: .adHoc), "the copy keeps its original signature")
+    }
+
     func testExportRefusesTheShortcutItselfAndPathsInsideOrAroundIt() throws {
         let out = dir.appending(path: "out", directoryHint: .isDirectory)
         let bundle = try builder.create(config: config(), in: out)

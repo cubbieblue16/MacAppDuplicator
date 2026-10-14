@@ -76,12 +76,23 @@ struct ShortcutEditorView: View {
         .navigationTitle(record.name)
         .safeAreaInset(edge: .bottom) {
             HStack {
-                if record.needsRebuild {
-                    Label(
-                        "Built by an older engine version (\(record.engineVersion), current \(ShortcutConfig.currentEngineVersion)). Regenerate to update.",
-                        systemImage: "exclamationmark.triangle"
-                    )
+                VStack(alignment: .leading, spacing: 4) {
+                    if let reason = record.foreignReason {
+                        // C3: Save and Regenerate open the review sheet instead of rewriting this bundle.
+                        Label {
+                            Text(verbatim: "Not created here (\(reason)). Save or Regenerate asks you to review it first.")
+                        } icon: {
+                            Image(systemName: "hand.raised")
+                        }
                         .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if record.needsRebuild {
+                        Label(
+                            "Built by an older engine version (\(record.engineVersion), current \(ShortcutConfig.currentEngineVersion)). Regenerate to update.",
+                            systemImage: "exclamationmark.triangle"
+                        )
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 Button("Revert") {

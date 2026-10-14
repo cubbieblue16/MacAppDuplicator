@@ -53,14 +53,18 @@ struct ShortcutBuilder: Sendable {
     let webShellBinary: URL
     /// Codesign identity display name, or nil for ad hoc.
     let signingIdentity: String?
+    /// `AppSettings.installToken`, stamped into every bundle this builder writes so a later scan reads it as this
+    /// install's own (security C3); nil writes no token.
+    let installToken: String?
     // FileManager is not Sendable, so it is not a stored property of this Sendable struct (Rebuild All runs the
     // builder in a detached task). Nothing ever set it; every use reads the shared instance.
     var fileManager: FileManager { .default }
 
-    init(launcherBinary: URL, webShellBinary: URL, signingIdentity: String?) {
+    init(launcherBinary: URL, webShellBinary: URL, signingIdentity: String?, installToken: String? = nil) {
         self.launcherBinary = launcherBinary
         self.webShellBinary = webShellBinary
         self.signingIdentity = signingIdentity
+        self.installToken = installToken
     }
 
     /// Writes `<name>.app` into `directory`. Throws `alreadyExists` rather than replacing a bundle it did not make.
@@ -113,7 +117,9 @@ struct ShortcutBuilder: Sendable {
         return try createBundle(config: config, in: directory, webIconData: nil, existingIcon: Self.bundledIcon(of: record.bundleURL))
     }
 
-    /// Copies the bundle to `destination` (an `.app` path chosen by the user). The copy keeps its signature.
+    /// Copies the bundle to `destination` (an `.app` path chosen by the user). The copy keeps its signature unless the
+    /// bundle carries this install's `MADInstallToken`: the copy drops the token and is signed again (see
+    /// `stripInstallToken`), so it never reads as this install's own when it comes back without a quarantine flag.
     /// A destination that is, contains or is inside the shortcut, the stored target or `resolvedTargetPath` (where
     /// `TargetResolver` finds the target now) is refused before any write (re-review Minor 4). Staging copies a
     /// crashed export left in the destination folder (`isStagingName`) are removed first. The copy is staged next to
@@ -138,6 +144,7 @@ struct ShortcutBuilder: Sendable {
         let staging = folder.appending(path: ".\(destination.lastPathComponent).mad-export-\(UUID().uuidString)", directoryHint: .isDirectory)
         do {
             try fileManager.copyItem(at: record.bundleURL, to: staging)
+            try stripInstallToken(from: staging, config: record.config)
         } catch {
             removeStagingCopy(staging)
             throw error
@@ -279,7 +286,7 @@ struct ShortcutBuilder: Sendable {
         let scratch = try makeScratch()
         defer { removeScratch(scratch) }
         let icon = try IconResolver.iconFile(for: config, app: app, scratchDirectory: scratch)
-        let bundle = try BundleWriter(fileManager: fileManager).write(config: config, app: app, launcherBinary: launcherBinary, iconFile: icon, to: directory)
+        let bundle = try BundleWriter(fileManager: fileManager, installToken: installToken).write(config: config, app: app, launcherBinary: launcherBinary, iconFile: icon, to: directory)
         try Signer().sign(bundle: bundle, identity: signingIdentity, needsAppleEvents: false)
         return bundle
     }
@@ -298,7 +305,7 @@ struct ShortcutBuilder: Sendable {
         let scratch = try makeScratch()
         defer { removeScratch(scratch) }
         let icon = try IconResolver.webAppIconFile(for: config, webIconData: webIconData, existingIcon: existingIcon, scratchDirectory: scratch)
-        let bundle = try BundleWriter(fileManager: fileManager).write(config: config, executable: webShellBinary, iconFile: icon, to: directory)
+        let bundle = try BundleWriter(fileManager: fileManager, installToken: installToken).write(config: config, executable: webShellBinary, iconFile: icon, to: directory)
         try Signer().sign(bundle: bundle, identity: signingIdentity, needsAppleEvents: false)
         return bundle
     }
@@ -339,12 +346,30 @@ struct ShortcutBuilder: Sendable {
             try fileManager.copyItem(at: existingIcon, to: kept)
             icon = kept
         }
-        let bundle = try BundleWriter(fileManager: fileManager).write(config: config, executable: launcherBinary, iconFile: icon, to: directory)
+        let bundle = try BundleWriter(fileManager: fileManager, installToken: installToken).write(config: config, executable: launcherBinary, iconFile: icon, to: directory)
         // Terminal.app and iTerm2 are driven through `osascript` (Apple Events), which the hardened runtime of a
         // Developer ID signature refuses without the Apple Events entitlement.
-        let drivesTerminal = config.kind == .cli && (config.cli?.terminal == .terminal || config.cli?.terminal == .iterm2)
-        try Signer().sign(bundle: bundle, identity: signingIdentity, needsAppleEvents: drivesTerminal)
+        try Signer().sign(bundle: bundle, identity: signingIdentity, needsAppleEvents: Self.drivesTerminal(config))
         return bundle
+    }
+
+    /// True when the shortcut runs its command through Terminal.app or iTerm2, which need the Apple Events entitlement.
+    private static func drivesTerminal(_ config: ShortcutConfig) -> Bool {
+        config.kind == .cli && (config.cli?.terminal == .terminal || config.cli?.terminal == .iterm2)
+    }
+
+    /// Removes `MADInstallToken` from a staged export copy and signs it again, because editing Info.plist breaks the
+    /// signature. The token is what marks a bundle as written by this install; an export that kept it could be edited
+    /// elsewhere and carried back (USB, scp, rsync: no quarantine flag) still reading as this install's own. A copy
+    /// without a token is left alone and keeps its signature.
+    private func stripInstallToken(from staging: URL, config: ShortcutConfig) throws {
+        let infoURL = staging.appending(path: "Contents/Info.plist", directoryHint: .notDirectory)
+        let data = try Data(contentsOf: infoURL)
+        guard var info = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              info[ShortcutConfig.installTokenInfoPlistKey] != nil else { return }
+        info.removeValue(forKey: ShortcutConfig.installTokenInfoPlistKey)
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: infoURL, options: .atomic)
+        try Signer().sign(bundle: staging, identity: signingIdentity, needsAppleEvents: Self.drivesTerminal(config))
     }
 
     private func makeScratch() throws -> URL {

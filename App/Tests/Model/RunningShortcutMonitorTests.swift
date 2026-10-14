@@ -70,7 +70,7 @@ final class RunningShortcutMonitorTests: XCTestCase {
 
         func record(_ config: ShortcutConfig) -> ShortcutRecord {
             ShortcutRecord(bundleURL: URL(fileURLWithPath: "/x/\(config.name).app"), config: config, engineVersion: ShortcutConfig.currentEngineVersion,
-                           iconURL: nil, targetVersion: nil, targetExists: true, modifiedDate: .distantPast)
+                           iconURL: nil, targetVersion: nil, targetExists: true, modifiedDate: .distantPast, provenance: .own)
         }
         var native = makeConfig(name: "Native Work")
         native.bundleIdentifier = web.bundleIdentifier

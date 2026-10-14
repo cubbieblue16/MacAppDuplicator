@@ -32,4 +32,36 @@ enum CodeSignature: Equatable, Sendable {
         }
         return .unknown
     }
+
+    /// True when the bundle's signature verifies (Security.framework, `SecStaticCodeCheckValidityWithErrors`) and was made
+    /// by `expected`. Ad hoc: the signature is internally valid and the bundle is flagged ad hoc (anyone can ad hoc sign,
+    /// so this proves only that nothing changed after signing). Identity: valid against the requirement
+    /// `anchor apple generic and certificate leaf[subject.CN] = "<name>"`, so a self-made certificate with the same name
+    /// fails, and so does a self-signed keychain identity (not issued by Apple); its shortcuts read as foreign without the
+    /// install token (README, Known limitations). `.unknown` never verifies.
+    static func verify(bundleAt url: URL, expecting expected: CodeSignature) -> Bool {
+        let requirementText: String?
+        switch expected {
+        case .unknown:
+            return false
+        case .adHoc:
+            requirementText = nil
+        case .identity(let name):
+            let escaped = name.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+            requirementText = "anchor apple generic and certificate leaf[subject.CN] = \"\(escaped)\""
+        }
+        var staticCode: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(url as CFURL, [], &staticCode) == errSecSuccess, let code = staticCode else {
+            return false
+        }
+        var requirement: SecRequirement?
+        if let requirementText {
+            guard SecRequirementCreateWithString(requirementText as CFString, [], &requirement) == errSecSuccess,
+                  requirement != nil else { return false }
+        }
+        let flags = SecCSFlags(rawValue: kSecCSCheckAllArchitectures)
+        guard SecStaticCodeCheckValidityWithErrors(code, flags, requirement, nil) == errSecSuccess else { return false }
+        if case .adHoc = expected { return of(bundleAt: url) == .adHoc }
+        return true
+    }
 }

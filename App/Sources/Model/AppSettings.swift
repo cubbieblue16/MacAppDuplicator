@@ -18,6 +18,7 @@ final class AppSettings {
         static let signingIdentity = "signingIdentity"
         static let homeSymlinkEntries = "homeSymlinkEntries"
         static let profilesURL = "profilesURLString"
+        static let installToken = ShortcutConfig.installTokenInfoPlistKey
     }
 
     static func defaultOutputFolder(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
@@ -25,6 +26,11 @@ final class AppSettings {
     }
 
     private let defaults: UserDefaults
+
+    /// Stamped into every bundle this install writes (`MADInstallToken`) so the library can tell its own bundles from
+    /// received or planted ones before it regenerates and signs anything (security C3). Not a secret: it only
+    /// distinguishes this install's bundles. 32 random bytes as hex, generated once and kept for the install's life.
+    let installToken: String
 
     var outputFolder: URL {
         didSet { defaults.set(outputFolder.path, forKey: Key.outputFolder) }
@@ -62,6 +68,17 @@ final class AppSettings {
         signingIdentity == Self.adHocIdentityName ? nil : signingIdentity
     }
 
+    /// The signature a bundle signed with the configured identity reads back as (`CodeSignature.of`): the identity's
+    /// display name, or ad hoc. A bundle without an install token is only trusted when that identity signature verifies; ad hoc never vouches for a tokenless bundle (security C3).
+    var expectedSignature: CodeSignature {
+        signerIdentity.map(CodeSignature.identity) ?? .adHoc
+    }
+
+    /// What the library scanner trusts as this install's own bundles (security C3).
+    var scanTrust: ScanTrust {
+        ScanTrust(installToken: installToken, expectedSignature: expectedSignature)
+    }
+
     /// `profilesURLString` without surrounding whitespace, when it is an allowed profiles address; nil otherwise.
     var profilesURL: URL? {
         let trimmed = profilesURLString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -77,11 +94,28 @@ final class AppSettings {
 
     init(defaults: UserDefaults = .standard, defaultSigningIdentity: String) {
         self.defaults = defaults
+        if let stored = defaults.string(forKey: Key.installToken), Self.isWellFormedInstallToken(stored) {
+            installToken = stored
+        } else {
+            installToken = Self.makeInstallToken()
+            defaults.set(installToken, forKey: Key.installToken)
+        }
         outputFolder = defaults.string(forKey: Key.outputFolder).map { URL(fileURLWithPath: $0, isDirectory: true) } ?? Self.defaultOutputFolder()
         libraryFolders = (defaults.stringArray(forKey: Key.libraryFolders) ?? []).map { URL(fileURLWithPath: $0, isDirectory: true) }
         signingIdentity = defaults.string(forKey: Key.signingIdentity) ?? defaultSigningIdentity
         homeSymlinkEntries = defaults.stringArray(forKey: Key.homeSymlinkEntries) ?? HomeTreeBuilder.defaultSymlinkEntries
         profilesURLString = defaults.string(forKey: Key.profilesURL) ?? ProfilesConstants.defaultURLString
+    }
+
+    /// 32 bytes from the system's cryptographically secure generator, as 64 lowercase hex digits.
+    nonisolated static func makeInstallToken() -> String {
+        var generator = SystemRandomNumberGenerator()
+        return (0..<32).map { _ in String(format: "%02x", UInt8.random(in: .min ... .max, using: &generator)) }.joined()
+    }
+
+    /// A stored token is reused only when it looks like one `makeInstallToken` made; anything else is replaced.
+    nonisolated static func isWellFormedInstallToken(_ token: String) -> Bool {
+        token.count == 64 && token.allSatisfy { $0.isHexDigit && !$0.isUppercase }
     }
 
     /// Replaces the launch-time default (`init`'s `defaultSigningIdentity`) once the identities have loaded, unless the

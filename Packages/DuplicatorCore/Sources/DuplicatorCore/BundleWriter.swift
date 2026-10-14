@@ -10,9 +10,16 @@ public struct BundleWriter {
     ]
 
     let fileManager: FileManager
+    /// Stamped as `MADInstallToken` so the library app can recognise bundles it wrote itself (security C3). Nil writes
+    /// no key: madctl has no access to the app's defaults, so its bundles are tokenless. The library app treats a tokenless
+    /// bundle as its own only under a verified identity signature; under ad hoc signing the user reviews it once, and
+    /// Trust and Rebuild stamps the token.
+    let installToken: String?
 
-    public init(fileManager: FileManager = .default) {
+    /// `installToken` is the library app's per-install token, or nil for writers that have none (madctl, tests).
+    public init(fileManager: FileManager = .default, installToken: String? = nil) {
         self.fileManager = fileManager
+        self.installToken = installToken
     }
 
     /// Writes `<directory>/<Name>.app`, replacing an existing bundle of that name, and returns its URL.
@@ -65,7 +72,9 @@ public struct BundleWriter {
             }
 
             try Data("APPL????".utf8).write(to: contents.appending(path: "PkgInfo", directoryHint: .notDirectory))
-            let info = Self.infoDictionary(config: config, lsEnvironment: lsEnvironment, executableName: bundleName, hasIcon: hasIcon)
+            let info = Self.infoDictionary(
+                config: config, lsEnvironment: lsEnvironment, executableName: bundleName, hasIcon: hasIcon, installToken: installToken
+            )
             let plistData = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
             try plistData.write(to: contents.appending(path: "Info.plist", directoryHint: .notDirectory))
 
@@ -78,8 +87,11 @@ public struct BundleWriter {
     }
 
     /// The complete shortcut Info.plist (spec §3.2), shared by every shortcut kind. Only these keys are ever written;
-    /// command shortcuts (`.cli`) also get `NSAppleEventsUsageDescription`.
-    private static func infoDictionary(config: ShortcutConfig, lsEnvironment: [String: String], executableName: String, hasIcon: Bool) -> [String: Any] {
+    /// command shortcuts (`.cli`) also get `NSAppleEventsUsageDescription`, and bundles written with an install token
+    /// get `MADInstallToken`.
+    private static func infoDictionary(
+        config: ShortcutConfig, lsEnvironment: [String: String], executableName: String, hasIcon: Bool, installToken: String?
+    ) -> [String: Any] {
         var info: [String: Any] = [
             "CFBundleName": config.name,
             "CFBundleDisplayName": config.name,
@@ -100,6 +112,9 @@ public struct BundleWriter {
         if config.kind == .cli {
             // The Automation prompt's text when the command opens Terminal.app or iTerm2 through `osascript` (spec §6).
             info["NSAppleEventsUsageDescription"] = "\(config.name) opens your terminal to run its command."
+        }
+        if let installToken {
+            info[ShortcutConfig.installTokenInfoPlistKey] = installToken
         }
         return info
     }

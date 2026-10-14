@@ -38,9 +38,15 @@ struct ContentView: View {
             NewShortcutWizard()
         }
         .sheet(isPresented: $isRebuildAllPresented) {
-            RebuildAllSheet(count: appState.library.recordsNeedingRebuild.count) {
+            RebuildAllSheet(
+                count: appState.library.recordsNeedingRebuild.filter { !$0.isForeign }.count,
+                skippedCount: appState.library.recordsNeedingRebuild.filter(\.isForeign).count
+            ) {
                 await appState.rebuildAll()
             }
+        }
+        .sheet(item: $appState.pendingForeignApproval) { approval in
+            ForeignShortcutApprovalSheet(approval: approval)
         }
         .alert(item: $appState.pendingError) { error in
             Alert(title: Text(error.context), message: Text(error.message), dismissButton: .default(Text("OK")))

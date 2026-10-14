@@ -1,8 +1,8 @@
 import DuplicatorCore
 import Foundation
 
-/// Copy for the export sheet (spec §7): how the exported copy is signed, the quarantine-removal command for the other
-/// Mac, and a warning when environment values or arguments that look secret travel with it.
+/// Copy for the export sheet (spec §7): how the exported copy is signed, what the recipient does with it, and a warning
+/// when environment values or arguments that look secret travel with it.
 enum ExportInstructions {
     /// POSIX single quoting: the whole path inside `'…'`, each embedded `'` written as `'\''`. sh, bash and zsh expand
     /// nothing inside single quotes, so spaces, `"`, `$` and backticks stay literal.
@@ -10,19 +10,21 @@ enum ExportInstructions {
         "'" + path.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
     }
 
-    static func quarantineCommand(for bundleURL: URL) -> String {
-        "xattr -dr com.apple.quarantine \(shellQuoted(bundleURL.path))"
-    }
+    /// What the recipient does with the copy (security review C3). A received shortcut is never run by stripping its
+    /// quarantine flag: the recipient's own App Duplicator lists it as Not created here, shows everything it would run,
+    /// and rebuilds it under the recipient's identity only after Trust and Rebuild.
+    static let recipientSteps = "On the other Mac, move the shortcut into an App Duplicator shortcuts folder and open App Duplicator. "
+        + "It lists the shortcut as Not created here: select it, choose Regenerate, review every value and choose Trust and Rebuild. "
+        + "Gatekeeper blocks the shortcut until then by design, so do not remove its quarantine flag."
 
     static func signingSentence(for signature: CodeSignature) -> String {
-        let gatekeeper = "On another Mac, Gatekeeper may block it until you remove the quarantine flag:"
         switch signature {
         case .adHoc:
-            return "The exported shortcut is ad-hoc signed, so it carries no developer identity. \(gatekeeper)"
+            return "The exported shortcut is ad-hoc signed, so it carries no developer identity."
         case .identity(let name):
-            return "The exported shortcut is signed with \(name). \(gatekeeper)"
+            return "The exported shortcut is signed with \(name)."
         case .unknown:
-            return "On another Mac, Gatekeeper may block the exported shortcut until you remove the quarantine flag:"
+            return "The exported shortcut's signature could not be read."
         }
     }
 

@@ -21,4 +21,22 @@ final class RebuildSummaryTests: XCTestCase {
         XCTAssertEqual(RebuildSummary.text(for: results), "Rebuilt 1 of 3 shortcuts; 2 failed.")
         XCTAssertEqual(RebuildSummary.text(for: [result("One", .failed("codesign failed"))]), "Rebuilt 0 of 1 shortcut; 1 failed.")
     }
+
+    /// C3: shortcuts not created by this App Duplicator are skipped, counted apart from the rebuilt and failed ones.
+    func testReportsSkippedShortcutsApartFromTheRebuildCount() {
+        let mixed = [
+            result("One", .rebuilt),
+            result("Two", .skipped("unsigned")),
+            result("Three", .failed("codesign failed")),
+            result("Four", .skipped("built by a different App Duplicator install")),
+        ]
+        XCTAssertEqual(
+            RebuildSummary.text(for: mixed),
+            "Rebuilt 1 of 2 shortcuts; 1 failed. 2 shortcuts skipped: not created by this App Duplicator \u{2014} open each to review."
+        )
+        XCTAssertEqual(
+            RebuildSummary.text(for: [result("Two", .skipped("unsigned"))]),
+            "1 shortcut skipped: not created by this App Duplicator \u{2014} open each to review."
+        )
+    }
 }

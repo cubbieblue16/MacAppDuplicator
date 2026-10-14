@@ -38,6 +38,16 @@ func writeShortcutBundle(named name: String, in directory: URL, config: Shortcut
     return bundle
 }
 
+/// Ad hoc signs a fixture bundle in place. The provenance rules verify the signature before trusting a stamped bundle
+/// (C3), so a fixture meant to read as "written by this install" must be validly signed. The empty fixture executable
+/// cannot be signed, so `/bin/echo` stands in for it.
+func adHocSignFixture(_ bundle: URL) throws {
+    let executable = bundle.appending(path: "Contents/MacOS/\(bundle.deletingPathExtension().lastPathComponent)")
+    try FileManager.default.removeItem(at: executable)
+    try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/echo"), to: executable)
+    try Signer().sign(bundle: bundle, identity: nil)
+}
+
 /// A fake target app bundle with a version, so scanner tests can resolve `targetVersion` without a real app.
 @discardableResult
 func writeFakeTarget(named name: String, bundleIdentifier: String, version: String, in directory: URL) throws -> URL {
