@@ -62,6 +62,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         window.isRestorable = false
         window.minSize = NSSize(width: 480, height: 320)
         window.title = shell.shortcut.name
+        window.subtitle = WindowSubtitle.text(for: shell.baseURL)
         window.contentView = container
         window.delegate = self
         window.center()

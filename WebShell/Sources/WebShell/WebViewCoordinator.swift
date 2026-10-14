@@ -148,6 +148,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
     // MARK: - Load results
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        webView.window?.subtitle = WindowSubtitle.text(for: webView.url)
         guard webView === self.webView else { return }
         navigationDidCommit?()
     }
@@ -270,6 +271,7 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
         window.isReleasedWhenClosed = false
         window.isRestorable = false
         window.title = shell.shortcut.name
+        window.subtitle = WindowSubtitle.text(for: navigationAction.request.url)
         window.contentView = popup
         window.delegate = self
         window.center()
