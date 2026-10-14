@@ -203,6 +203,16 @@ extension ProfilesDocument {
         }
     }
 
+    /// The host each bundled web-app preset id is allowed to use. A remote document may add new preset ids, but it may
+    /// not repoint `whatsapp`, `teams` or `outlook` at another site: the wizard shows the preset name, so a swapped
+    /// URL would be a phishing page under a trusted label. Keep in sync with `Resources/profiles.json`
+    /// (`SeedProfilesTests` checks it).
+    static let pinnedWebAppHosts: [String: String] = [
+        "whatsapp": "web.whatsapp.com",
+        "teams": "teams.microsoft.com",
+        "outlook": "outlook.office.com",
+    ]
+
     /// Applies every rule from the Global Constraints. Keys are visited in sorted order so errors are reproducible.
     func validate() throws {
         guard Self.isValidDate(updated) else { throw ProfilesError.invalidUpdatedDate(String(updated.prefix(100))) }
@@ -221,6 +231,10 @@ extension ProfilesDocument {
             let path = "webApps." + String(key.prefix(100))
             guard Self.matches(key, Self.webAppKeyPattern) else { throw ProfilesError.invalidField(path) }
             try preset.validate(at: path)
+            if let pinned = Self.pinnedWebAppHosts[key],
+               URLComponents(string: preset.url)?.host?.lowercased() != pinned {
+                throw ProfilesError.invalidField("\(path).url")
+            }
         }
     }
 

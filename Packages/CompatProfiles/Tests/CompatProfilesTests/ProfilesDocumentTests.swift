@@ -283,4 +283,25 @@ final class ProfilesDocumentTests: XCTestCase {
         let data = try makeProfilesData(webApps: ["whatsapp": webAppEntry(extra: ["extraHosts": ["foo.github.io", "example.co.uk"]])])
         XCTAssertNoThrow(try ProfilesDocument.decodeValidated(from: data))
     }
+
+    func testRejectsBundledPresetIdsPointedAtAnotherHost() throws {
+        // Security audit C9: a remote document must not repoint whatsapp/teams/outlook at an attacker's site.
+        for (key, url) in [("whatsapp", "https://evil.example/"), ("whatsapp", "https://web.whatsapp.com.evil.example/"),
+                           ("teams", "https://teams.evil.example/"), ("outlook", "https://outlook.office.com.evil.example/mail/")] {
+            assertRejects(try makeProfilesData(webApps: [key: webAppEntry(extra: ["url": url])]),
+                          with: .invalidField("webApps.\(key).url"))
+        }
+        // The bundled hosts themselves, including a different path, still validate.
+        let data = try makeProfilesData(webApps: [
+            "whatsapp": webAppEntry(),
+            "teams": webAppEntry(extra: ["url": "https://TEAMS.microsoft.com/v2/"]),
+            "outlook": webAppEntry(extra: ["url": "https://outlook.office.com/mail/"]),
+        ])
+        XCTAssertNoThrow(try ProfilesDocument.decodeValidated(from: data))
+    }
+
+    func testAcceptsNewPresetIdsOnAnyHttpsHost() throws {
+        let data = try makeProfilesData(webApps: ["signal": webAppEntry(extra: ["name": "Signal", "url": "https://app.example.org/"])])
+        XCTAssertEqual(try ProfilesDocument.decodeValidated(from: data).webApps["signal"]?.url, "https://app.example.org/")
+    }
 }

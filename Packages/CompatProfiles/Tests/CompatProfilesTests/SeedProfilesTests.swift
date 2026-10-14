@@ -101,4 +101,13 @@ final class SeedProfilesTests: XCTestCase {
         XCTAssertFalse(parser.usedFallbackPattern)
         XCTAssertEqual(parser.count(in: "(3) WhatsApp"), 3)
     }
+
+    func testSeedPresetHostsMatchThePinTable() throws {
+        // The pin table in ProfilesDocument must track the bundled seed, or the seed would fail its own validation.
+        let seeded = try seed().webApps
+        for (id, host) in ProfilesDocument.pinnedWebAppHosts {
+            let seededHost = seeded[id].flatMap { URLComponents(string: $0.url)?.host?.lowercased() }
+            XCTAssertEqual(seededHost, host, id)
+        }
+    }
 }
