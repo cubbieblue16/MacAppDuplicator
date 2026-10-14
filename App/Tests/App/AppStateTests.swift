@@ -127,6 +127,33 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(library.record(for: bundle)?.config.arguments, ["--again"])
     }
 
+    /// The recipient flow the export sheet describes (C3): a received copy carries another install's token and the
+    /// download's quarantine flag on every file. Trust and Rebuild assembles a fresh bundle, so it carries neither and
+    /// is this install's shortcut from then on.
+    func testTrustAndRebuildMakesAReceivedQuarantinedShortcutOwn() async throws {
+        let otherInstall = [ShortcutConfig.installTokenInfoPlistKey: String(repeating: "ab", count: 32)]
+        let bundle = try writeShortcutBundle(named: "Received", in: out, config: config(name: "Received"), extraInfo: otherInstall)
+        let items = [bundle] + (FileManager.default.enumerator(at: bundle, includingPropertiesForKeys: nil)?.allObjects as? [URL] ?? [])
+        let flag = Array("0083;00000000;Safari;".utf8)
+        for item in items {
+            let result = item.withUnsafeFileSystemRepresentation {
+                setxattr($0!, LibraryScanner.quarantineAttribute, flag, flag.count, 0, XATTR_NOFOLLOW)
+            }
+            XCTAssertEqual(result, 0, "setxattr failed on \(item.path)")
+        }
+        await library.rescan()
+        let record = try XCTUnwrap(library.record(for: bundle))
+        XCTAssertEqual(record.foreignReason, "downloaded or received (quarantined)")
+
+        _ = await state.save(record: record, config: record.config)
+        let approval = try XCTUnwrap(state.pendingForeignApproval)
+        let approved = await state.approveForeignShortcut(approval)
+
+        XCTAssertTrue(approved, state.pendingError?.message ?? "")
+        XCTAssertFalse(LibraryScanner.isQuarantined(bundle), "the rebuilt bundle is a fresh write, not the received files")
+        XCTAssertEqual(library.record(for: bundle)?.provenance, .own)
+    }
+
     func testRebuildAllSkipsShortcutsNotCreatedHereAndReportsThem() async throws {
         var mine = config(name: "A Mine")
         mine.engineVersion = 0

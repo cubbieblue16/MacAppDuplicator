@@ -23,9 +23,14 @@ final class ExportInstructionsTests: XCTestCase {
         XCTAssertEqual(String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self), path)
     }
 
-    func testQuarantineCommandSingleQuotesThePath() {
-        let url = URL(fileURLWithPath: "/Users/me/Desktop/Bob's Work.app")
-        XCTAssertEqual(ExportInstructions.quarantineCommand(for: url), #"xattr -dr com.apple.quarantine '/Users/me/Desktop/Bob'\''s Work.app'"#)
+    /// C3: a received shortcut goes through the recipient's review, never through `xattr -dr com.apple.quarantine`.
+    func testRecipientStepsSendAReceivedShortcutThroughReviewNotQuarantineRemoval() {
+        let steps = ExportInstructions.recipientSteps
+        for phrase in ["open App Duplicator", "Not created here", "review every value", "Trust and Rebuild", "Gatekeeper blocks", "by design"] {
+            XCTAssertTrue(steps.contains(phrase), phrase)
+        }
+        XCTAssertFalse(steps.contains("xattr"), steps)
+        XCTAssertTrue(steps.contains("do not remove its quarantine flag"), steps)
     }
 
     func testSigningSentenceFollowsTheSignature() {
@@ -40,7 +45,7 @@ final class ExportInstructionsTests: XCTestCase {
         let unknown = ExportInstructions.signingSentence(for: .unknown)
         XCTAssertFalse(unknown.contains("signed with"), unknown)
         for sentence in [adHoc, named, unknown] {
-            XCTAssertTrue(sentence.contains("quarantine"), sentence)
+            XCTAssertFalse(sentence.contains("quarantine"), "C3: no sentence tells the recipient to strip the quarantine flag: \(sentence)")
         }
     }
 
