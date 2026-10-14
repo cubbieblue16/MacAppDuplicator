@@ -46,10 +46,10 @@ final class LauncherActionPlannerTests: XCTestCase {
         return LauncherActionPlanner(realHome: realHome, terminalLocator: locator, terminalCommands: TerminalCommandBuilder(scriptRoot: scriptRoot))
     }
 
-    /// The run script a Terminal or iTerm2 plan typed `exec /bin/sh '<path>'` for: its path and contents.
+    /// The run script a Terminal or iTerm2 plan typed `/bin/sh '<path>'` for: its path and contents.
     private func runScript(typedIn arguments: [String], file: StaticString = #filePath, line: UInt = #line) throws -> (path: String, body: String) {
         let osascript = try XCTUnwrap(arguments.last, file: file, line: line)
-        let prefix = "exec /bin/sh '"
+        let prefix = "/bin/sh '"
         let start = try XCTUnwrap(osascript.range(of: prefix), osascript, file: file, line: line)
         let end = try XCTUnwrap(osascript[start.upperBound...].firstIndex(of: "'"), osascript, file: file, line: line)
         let path = String(osascript[start.upperBound..<end])

@@ -173,7 +173,7 @@ final class TerminalCommandBuilderTests: XCTestCase {
     private static let fishPayload = #"\';open -a Calculator;#"#
 
     private func scriptPath(typedIn osascript: String) throws -> String {
-        let start = try XCTUnwrap(osascript.range(of: "exec /bin/sh '"), osascript)
+        let start = try XCTUnwrap(osascript.range(of: "/bin/sh '"), osascript)
         let end = try XCTUnwrap(osascript[start.upperBound...].firstIndex(of: "'"), osascript)
         return String(osascript[start.upperBound..<end])
     }
@@ -190,7 +190,7 @@ final class TerminalCommandBuilderTests: XCTestCase {
             XCTAssertTrue(path.hasSuffix("/run.sh"), path)
             // Typed text: our fixed prefix and our path, nothing from the config.
             let typed = TerminalCommandBuilder.typedCommand(scriptPath: path)
-            XCTAssertEqual(typed, "exec /bin/sh '\(path)'")
+            XCTAssertEqual(typed, "/bin/sh '\(path)'")
             let expected = choice == .terminal ? TerminalCommandBuilder.terminalScript(typed: typed) : TerminalCommandBuilder.iTermScript(typed: typed)
             XCTAssertEqual(argv, ["/usr/bin/osascript", "-e", expected], "\(choice)")
             for fragment in ["Calculator", "/bin/echo", "cd ", "/tmp", "it", "K="] {

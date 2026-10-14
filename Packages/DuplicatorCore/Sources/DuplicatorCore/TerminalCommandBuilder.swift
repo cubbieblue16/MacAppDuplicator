@@ -5,7 +5,8 @@ import Foundation
 ///
 /// Terminal.app and iTerm2 deliver text as keystrokes to the user's login shell, which may be fish, where `\'` inside
 /// single quotes is an escape and the POSIX quoting below breaks out (C5). So by default the command is written to a
-/// private POSIX `sh` script and only `exec /bin/sh '<script path>'`, which holds no user data, is typed.
+/// private POSIX `sh` script and only `/bin/sh '<script path>'`, which holds no user data, is typed. The typed line
+/// does not `exec`, so the user's login shell stays open after the command exits, as it did before.
 public struct TerminalCommandBuilder: Sendable {
     /// The AppleScript runner for Terminal.app and iTerm2.
     public static let osascriptPath = "/usr/bin/osascript"
@@ -45,7 +46,7 @@ public struct TerminalCommandBuilder: Sendable {
 
     /// The only text typed into the terminal: no user data, just our own path.
     static func typedCommand(scriptPath: String) -> String {
-        "exec /bin/sh " + shellQuoted([scriptPath])
+        "/bin/sh " + shellQuoted([scriptPath])
     }
 
     /// Writes `body` to `<root>/mad-<uuid>/run.sh`, the file 0600 in a 0700 folder, and returns the file's path.
@@ -68,7 +69,7 @@ public struct TerminalCommandBuilder: Sendable {
         return file.path
     }
 
-    /// The shell command for a Terminal or iTerm2 window: `exec /bin/sh '<script>'` after writing the script, or the
+    /// The shell command for a Terminal or iTerm2 window: `/bin/sh '<script>'` after writing the script, or the
     /// readable quoted command for the preview.
     private func windowCommand(_ command: String, workingDirectory: String?) throws -> String {
         switch delivery {
