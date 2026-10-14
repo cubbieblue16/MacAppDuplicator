@@ -114,9 +114,35 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
         } else {
             logger.log("redirect scheme=\(scheme)")
         }
+        if scheme != "http", scheme != "https" {
+            guard confirmExternalOpen(url) else {
+                logger.log("external open declined scheme=\(scheme)")
+                return
+            }
+        }
         if !NSWorkspace.shared.open(url) {
             logger.log("error no application opens scheme=\(scheme)")
         }
+    }
+
+    /// Asks before a non-web URL goes to the workspace; Cancel is the default button. `mailto:` is exempt.
+    private func confirmExternalOpen(_ url: URL) -> Bool {
+        let handlerName = NSWorkspace.shared.urlForApplication(toOpen: url).map { appURL in
+            let info = Bundle(url: appURL)?.infoDictionary
+            return (info?["CFBundleDisplayName"] as? String)
+                ?? (info?["CFBundleName"] as? String)
+                ?? FileManager.default.displayName(atPath: appURL.path)
+        }
+        guard let prompt = ExternalOpenPrompt.make(for: url, handlerName: handlerName) else { return true }
+        bringToFront?()
+        let alert = NSAlert()
+        alert.messageText = prompt.messageText
+        alert.informativeText = prompt.informativeText
+        alert.alertStyle = .warning
+        // The first button is the default (Return) button.
+        alert.addButton(withTitle: prompt.cancelButtonTitle)
+        alert.addButton(withTitle: prompt.openButtonTitle)
+        return alert.runModal() == .alertSecondButtonReturn
     }
 
     // MARK: - Load results
