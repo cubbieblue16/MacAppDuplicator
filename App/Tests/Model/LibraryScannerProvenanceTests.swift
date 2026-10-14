@@ -25,13 +25,15 @@ final class LibraryScannerProvenanceTests: XCTestCase {
     }
 
     private func provenance(
-        _ bundle: URL, installToken: String?, expected: CodeSignature?, signature: ((URL) -> CodeSignature)? = nil
+        _ bundle: URL, installToken: String?, expected: CodeSignature?,
+        signature: ((URL) -> CodeSignature)? = nil, verify: ((URL, CodeSignature) -> Bool)? = nil
     ) throws -> ShortcutRecord.Provenance {
         let info = try info(bundle)
-        if let signature {
-            return LibraryScanner.provenance(infoPlist: info, bundleURL: bundle, installToken: installToken, expectedSignature: expected, signature: signature)
-        }
-        return LibraryScanner.provenance(infoPlist: info, bundleURL: bundle, installToken: installToken, expectedSignature: expected)
+        let read = signature ?? { CodeSignature.of(bundleAt: $0) }
+        let check = verify ?? { CodeSignature.verify(bundleAt: $0, expecting: $1) }
+        return LibraryScanner.provenance(
+            infoPlist: info, bundleURL: bundle, installToken: installToken, expectedSignature: expected, signature: read, verify: check
+        )
     }
 
     /// A real ad hoc signature, as `CodeSignatureTests` makes one: the empty fixture executable cannot be signed.
@@ -53,9 +55,29 @@ final class LibraryScannerProvenanceTests: XCTestCase {
         XCTAssertTrue(LibraryScanner.isQuarantined(url.pathExtension == "app" ? url : url.deletingLastPathComponent().deletingLastPathComponent()))
     }
 
-    func testThisInstallsTokenIsOwn() throws {
+    func testThisInstallsTokenIsOwnOnlyWhenTheSignatureVerifies() throws {
         let mine = try bundle("Mine", stamped: token)
-        XCTAssertEqual(try provenance(mine, installToken: token, expected: developerID), .own, "the token alone vouches, whatever the signature")
+        XCTAssertEqual(try provenance(mine, installToken: token, expected: .adHoc, verify: { _, _ in true }), .own)
+
+        let changed = "changed since this App Duplicator built it (its signature does not verify)"
+        XCTAssertEqual(try provenance(mine, installToken: token, expected: .adHoc, verify: { _, _ in false }), .foreign(reason: changed))
+        XCTAssertEqual(try provenance(mine, installToken: token, expected: nil, verify: { _, _ in true }), .foreign(reason: changed),
+                       "with no expected signature there is nothing to verify against")
+        XCTAssertEqual(try provenance(mine, installToken: token, expected: developerID, verify: { _, expected in expected == self.developerID }), .own,
+                       "verify receives the expected signature")
+    }
+
+    func testStolenTokenOnAnEditedBundleIsForeign() throws {
+        let edited = try bundle("Edited", stamped: token)
+        try adHocSign(edited)
+        let infoURL = edited.appending(path: "Contents/Info.plist")
+        var plist = try info(edited)
+        plist["CFBundleVersion"] = "999"
+        try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0).write(to: infoURL)
+        guard case .foreign(let reason) = try provenance(edited, installToken: token, expected: .adHoc) else {
+            return XCTFail("an edited bundle must not read as own")
+        }
+        XCTAssertTrue(reason.contains("does not verify"), reason)
     }
 
     func testQuarantinedBundleIsForeignEvenWithThisInstallsToken() throws {
@@ -87,38 +109,49 @@ final class LibraryScannerProvenanceTests: XCTestCase {
                        "an empty token never matches")
     }
 
-    func testTokenlessBundleIsOwnOnlyWhenSignedLikeTheConfiguredIdentity() throws {
+    func testTokenlessBundleIsNeverOwnUnderAdHocSigning() throws {
         let adHoc = try bundle("Legacy Ad Hoc")
         try adHocSign(adHoc)
-        XCTAssertEqual(try provenance(adHoc, installToken: token, expected: .adHoc), .own)
+        let reason = "no install token; an ad hoc signature cannot show who built it"
+        XCTAssertEqual(try provenance(adHoc, installToken: token, expected: .adHoc), .foreign(reason: reason),
+                       "anyone can ad hoc sign, so a valid ad hoc signature does not vouch for a tokenless bundle")
+        XCTAssertEqual(try provenance(adHoc, installToken: token, expected: .adHoc, verify: { _, _ in true }), .foreign(reason: reason))
+        XCTAssertEqual(try provenance(adHoc, installToken: token, expected: nil, verify: { _, _ in true }), .foreign(reason: reason))
         XCTAssertEqual(try provenance(adHoc, installToken: token, expected: developerID), .foreign(reason: "signed ad hoc, not by your signing identity"))
-        XCTAssertEqual(try provenance(adHoc, installToken: token, expected: nil), .foreign(reason: "signed ad hoc, not by your signing identity"))
 
         let unsigned = try bundle("Unsigned")
-        XCTAssertEqual(try provenance(unsigned, installToken: token, expected: .adHoc), .foreign(reason: "unsigned"))
+        XCTAssertEqual(try provenance(unsigned, installToken: token, expected: developerID), .foreign(reason: "unsigned"))
         XCTAssertEqual(try provenance(unsigned, installToken: token, expected: .unknown), .foreign(reason: "unsigned"), "unsigned is never own")
+    }
 
-        // No test can sign with a Developer ID, so the signature reader is injected for the certificate cases.
+    func testTokenlessBundleIsOwnOnlyUnderAVerifiedIdentitySignature() throws {
+        // No test can sign with a Developer ID, so the signature reader and verifier are injected.
         let legacy = try bundle("Legacy Developer ID")
-        XCTAssertEqual(try provenance(legacy, installToken: token, expected: developerID, signature: { _ in self.developerID }), .own)
+        XCTAssertEqual(try provenance(legacy, installToken: token, expected: developerID, signature: { _ in self.developerID }, verify: { _, _ in true }), .own)
         XCTAssertEqual(
-            try provenance(legacy, installToken: token, expected: developerID, signature: { _ in .identity("Developer ID Application: Mallory (EVIL)") }),
-            .foreign(reason: "signed by Developer ID Application: Mallory (EVIL)")
+            try provenance(legacy, installToken: token, expected: developerID, signature: { _ in .identity("Other") }, verify: { _, _ in false }),
+            .foreign(reason: "signed by Other")
         )
-        XCTAssertEqual(try provenance(legacy, installToken: token, expected: .adHoc, signature: { _ in self.developerID }),
-                       .foreign(reason: "signed by Developer ID Application: Test (TEAMID)"))
+        XCTAssertEqual(
+            try provenance(legacy, installToken: token, expected: developerID, signature: { _ in self.developerID }, verify: { _, _ in false }),
+            .foreign(reason: "signed as Developer ID Application: Test (TEAMID) but the signature does not verify"),
+            "a matching name that does not verify (a self-made certificate, or an edited bundle) is not own"
+        )
+        XCTAssertEqual(try provenance(legacy, installToken: token, expected: developerID, signature: { _ in .unknown }, verify: { _, _ in false }), .foreign(reason: "unsigned"))
     }
 
     func testScanAndRecordCarryProvenanceAndTheDefaultTrustsNothing() throws {
         let mine = try bundle("Mine", stamped: token)
+        try adHocSign(mine)
         let planted = try bundle("Planted")
+        let plantedReason = "no install token; an ad hoc signature cannot show who built it"
         let trust = ScanTrust(installToken: token, expectedSignature: .adHoc)
 
         let records = LibraryScanner().scan(folders: [dir], trust: trust).records
         XCTAssertEqual(records.map(\.name), ["Mine", "Planted"])
-        XCTAssertEqual(records.map(\.provenance), [.own, .foreign(reason: "unsigned")])
+        XCTAssertEqual(records.map(\.provenance), [.own, .foreign(reason: plantedReason)])
         XCTAssertEqual(records.map(\.isForeign), [false, true])
-        XCTAssertEqual(records.map(\.foreignReason), [nil, "unsigned"])
+        XCTAssertEqual(records.map(\.foreignReason), [nil, plantedReason])
 
         XCTAssertTrue(LibraryScanner().scan(folders: [dir]).records.allSatisfy(\.isForeign), "without trust every bundle is foreign")
         XCTAssertTrue(try LibraryScanner.record(forBundleAt: mine).isForeign)

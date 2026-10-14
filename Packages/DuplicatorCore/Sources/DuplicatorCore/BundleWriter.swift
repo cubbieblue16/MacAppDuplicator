@@ -11,7 +11,9 @@ public struct BundleWriter {
 
     let fileManager: FileManager
     /// Stamped as `MADInstallToken` so the library app can recognise bundles it wrote itself (security C3). Nil writes
-    /// no key: madctl has no access to the app's defaults, so its bundles are judged by their signature instead.
+    /// no key: madctl has no access to the app's defaults, so its bundles are tokenless. The library app treats a tokenless
+    /// bundle as its own only under a verified identity signature; under ad hoc signing the user reviews it once, and
+    /// Trust and Rebuild stamps the token.
     let installToken: String?
 
     /// `installToken` is the library app's per-install token, or nil for writers that have none (madctl, tests).

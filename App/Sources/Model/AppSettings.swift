@@ -69,7 +69,7 @@ final class AppSettings {
     }
 
     /// The signature a bundle signed with the configured identity reads back as (`CodeSignature.of`): the identity's
-    /// display name, or ad hoc. A bundle without an install token is only trusted when it matches (security C3).
+    /// display name, or ad hoc. A bundle without an install token is only trusted when that identity signature verifies; ad hoc never vouches for a tokenless bundle (security C3).
     var expectedSignature: CodeSignature {
         signerIdentity.map(CodeSignature.identity) ?? .adHoc
     }

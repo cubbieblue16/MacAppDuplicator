@@ -110,28 +110,41 @@ struct LibraryScanner: Sendable {
     static let quarantineAttribute = "com.apple.quarantine"
 
     /// Decides whether this install wrote the bundle (security C3). A bundle carrying `MADConfig` is only data, so the
-    /// app must not regenerate and sign one it did not write. In order:
+    /// app must not regenerate and sign one it did not write. A stamp or a signer name is only a claim until the
+    /// signature verifies, so no rule returns `.own` without `verify`. In order:
     /// 1. a quarantine flag means downloaded or received, whatever the bundle claims: foreign;
-    /// 2. this install's token: own;
+    /// 2. this install's token: own only when the bundle's signature verifies against `expectedSignature` (an edit made
+    ///    after signing, or a stolen token on a re-signed copy, fails here); otherwise foreign;
     /// 3. any other token: written by a different App Duplicator install, foreign;
-    /// 4. no token (bundles written before the token existed, and madctl's): own only when it is signed the way the
-    ///    configured identity signs (`expectedSignature`); an unsigned bundle never is.
-    /// `signature` reads the bundle's signature; tests inject it to cover a Developer ID signer they cannot sign with.
+    /// 4. no token (bundles written before the token existed, and madctl's): own only under an `.identity` signature
+    ///    that verifies. Ad hoc signing proves nothing about who signed, so under it (or with no expectation) a tokenless
+    ///    bundle is foreign: the user reviews it once, and Trust and Rebuild stamps the token.
+    /// `signature` reads the bundle's signature for the reason text; `verify` checks it against `expectedSignature`.
+    /// Tests inject both to cover a Developer ID signer they cannot sign with.
     static func provenance(
         infoPlist: [String: Any], bundleURL: URL, installToken: String?, expectedSignature: CodeSignature?,
-        signature: (URL) -> CodeSignature = { CodeSignature.of(bundleAt: $0) }
+        signature: (URL) -> CodeSignature = { CodeSignature.of(bundleAt: $0) },
+        verify: (URL, CodeSignature) -> Bool = { CodeSignature.verify(bundleAt: $0, expecting: $1) }
     ) -> ShortcutRecord.Provenance {
         if isQuarantined(bundleURL) {
             return .foreign(reason: "downloaded or received (quarantined)")
         }
         if let stamped = infoPlist[ShortcutConfig.installTokenInfoPlistKey] {
-            if let installToken, !installToken.isEmpty, stamped as? String == installToken { return .own }
+            if let installToken, !installToken.isEmpty, stamped as? String == installToken {
+                if let expectedSignature, verify(bundleURL, expectedSignature) { return .own }
+                return .foreign(reason: "changed since this App Duplicator built it (its signature does not verify)")
+            }
             return .foreign(reason: "built by a different App Duplicator install")
         }
+        guard let expectedSignature, expectedSignature != .adHoc else {
+            return .foreign(reason: "no install token; an ad hoc signature cannot show who built it")
+        }
+        if case .identity = expectedSignature, verify(bundleURL, expectedSignature) { return .own }
         let actual = signature(bundleURL)
-        if actual != .unknown, actual == expectedSignature { return .own }
         switch actual {
-        case .identity(let name): return .foreign(reason: "signed by \(name)")
+        case .identity(let name):
+            if expectedSignature == .identity(name) { return .foreign(reason: "signed as \(name) but the signature does not verify") }
+            return .foreign(reason: "signed by \(name)")
         case .adHoc: return .foreign(reason: "signed ad hoc, not by your signing identity")
         case .unknown: return .foreign(reason: "unsigned")
         }

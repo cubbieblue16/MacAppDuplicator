@@ -45,10 +45,11 @@ final class AppStateWebTests: XCTestCase {
 
     /// Writes a web-app bundle into the output folder, rescans and returns its record.
     private func makeWebRecord(name: String = "Chat", dataStoreID: UUID = UUID()) async throws -> ShortcutRecord {
-        // The install token marks the fixture as a bundle this install wrote (C3), so Save rewrites it without a review.
+        // The install token marks the fixture as a bundle this install wrote (C3), (stamped and validly signed), so Save rewrites it without a review.
         let bundle = try writeShortcutBundle(
             named: name, in: out, config: makeWebShortcutConfig(name: name, dataStoreID: dataStoreID),
             extraInfo: [ShortcutConfig.installTokenInfoPlistKey: settings.installToken])
+        try adHocSignFixture(bundle)
         await library.rescan()
         return try XCTUnwrap(library.record(for: bundle))
     }

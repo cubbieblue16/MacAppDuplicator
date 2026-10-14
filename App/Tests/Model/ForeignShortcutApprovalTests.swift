@@ -15,7 +15,7 @@ final class ForeignShortcutApprovalTests: XCTestCase {
         try FileManager.default.removeItem(at: dir)
     }
 
-    /// An unsigned, tokenless bundle scanned with the default trust: foreign, reason "unsigned".
+    /// An unsigned, tokenless bundle scanned with the default trust: foreign, reason "no install token; ..." (nothing to verify against).
     private func approval(_ config: ShortcutConfig, signature: CodeSignature = .unknown) throws -> ForeignShortcutApproval {
         let bundle = try writeShortcutBundle(named: "Planted", in: dir, config: makeConfig(name: "Planted"))
         let record = try LibraryScanner.record(forBundleAt: bundle)
@@ -31,7 +31,7 @@ final class ForeignShortcutApprovalTests: XCTestCase {
 
         let shown = try approval(config)
 
-        XCTAssertEqual(shown.reason, "unsigned")
+        XCTAssertEqual(shown.reason, "no install token; an ad hoc signature cannot show who built it")
         XCTAssertEqual(shown.kindDescription, "App")
         XCTAssertEqual(shown.targetDescription, "/Applications/Target.app")
         XCTAssertEqual(shown.argumentLines, ["--load-extension=/tmp/evil", "--remote-debugging-port=9222"])

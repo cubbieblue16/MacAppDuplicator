@@ -20,8 +20,9 @@ struct ShortcutRecord: Identifiable, Hashable, Sendable {
     /// Where a bundle came from. A bundle carrying `MADConfig` is only data: anyone can write one, so the app must not
     /// regenerate and re-sign a bundle it did not write until the user has reviewed what it runs.
     enum Provenance: Hashable, Sendable {
-        /// Written by this install: its Info.plist carries this install's token, or (legacy and madctl bundles, which
-        /// carry no token) it is signed the way the configured signing identity signs.
+        /// Written by this install: its Info.plist carries this install's token and its signature verifies, or (legacy
+        /// and madctl bundles, which carry no token) it verifies under the configured signing identity. Tokenless
+        /// bundles are never own under ad hoc signing: they are reviewed once, and Trust and Rebuild stamps the token.
         case own
         /// Received, downloaded or planted; `reason` is shown to the user (for example "signed by Developer ID ...").
         case foreign(reason: String)

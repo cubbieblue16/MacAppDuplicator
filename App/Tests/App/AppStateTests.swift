@@ -41,7 +41,8 @@ final class AppStateTests: XCTestCase {
         return c
     }
 
-    /// Marks a fixture bundle as written by this install (C3); without it an unsigned fixture reads as foreign.
+    /// Marks a fixture bundle as written by this install (C3); pair it with `adHocSignFixture`, because a stamped bundle
+    /// that does not verify reads as foreign.
     private var ownToken: [String: Any] { [ShortcutConfig.installTokenInfoPlistKey: settings.installToken] }
 
     /// A shortcut this App Duplicator did not write (C3): unsigned and without this install's token, as a received or
@@ -68,7 +69,7 @@ final class AppStateTests: XCTestCase {
         let bundle = try writeForeignShortcut(named: "Planted")
         await library.rescan()
         let record = try XCTUnwrap(library.record(for: bundle))
-        XCTAssertEqual(record.provenance, .foreign(reason: "unsigned"), "precondition: unsigned and tokenless")
+        XCTAssertEqual(record.provenance, .foreign(reason: "no install token; an ad hoc signature cannot show who built it"), "precondition: unsigned and tokenless")
         let before = try infoPlist(of: bundle)
         var edited = record.config
         edited.arguments = ["--edited"]
@@ -157,7 +158,7 @@ final class AppStateTests: XCTestCase {
     func testRebuildAllSkipsShortcutsNotCreatedHereAndReportsThem() async throws {
         var mine = config(name: "A Mine")
         mine.engineVersion = 0
-        try writeShortcutBundle(named: "A Mine", in: out, config: mine, engineVersion: 0, extraInfo: ownToken)
+        try adHocSignFixture(try writeShortcutBundle(named: "A Mine", in: out, config: mine, engineVersion: 0, extraInfo: ownToken))
         let planted = try writeForeignShortcut(named: "B Planted", engineVersion: 0)
         let plantedInfo = try infoPlist(of: planted)
         await library.rescan()
@@ -166,7 +167,7 @@ final class AppStateTests: XCTestCase {
         let results = await state.rebuildAll()
 
         XCTAssertEqual(results.map(\.name), ["A Mine", "B Planted"])
-        XCTAssertEqual(results.map(\.outcome), [.rebuilt, .skipped("unsigned")])
+        XCTAssertEqual(results.map(\.outcome), [.rebuilt, .skipped("no install token; an ad hoc signature cannot show who built it")])
         XCTAssertEqual(try infoPlist(of: planted), plantedInfo, "a skipped shortcut is not rewritten or re-signed")
         XCTAssertEqual(library.recordsNeedingRebuild.map(\.name), ["B Planted"])
         XCTAssertEqual(library.record(for: planted)?.isForeign, true)
@@ -313,7 +314,7 @@ final class AppStateTests: XCTestCase {
         // A real stale shortcut carries the old engine version in its MADConfig as well as in MADEngineVersion.
         var old = config(name: "Old One")
         old.engineVersion = 0
-        try writeShortcutBundle(named: "Old One", in: out, config: old, engineVersion: 0, extraInfo: ownToken)
+        try adHocSignFixture(try writeShortcutBundle(named: "Old One", in: out, config: old, engineVersion: 0, extraInfo: ownToken))
         await library.rescan()
         XCTAssertEqual(library.recordsNeedingRebuild.map(\.name), ["Old One"])
         let results = await state.rebuildAll()
@@ -343,10 +344,10 @@ final class AppStateTests: XCTestCase {
         var broken = config(name: "A Broken")
         broken.targetPath = dir.appending(path: "Missing.app").path
         broken.engineVersion = 0
-        try writeShortcutBundle(named: "A Broken", in: out, config: broken, engineVersion: 0, extraInfo: ownToken)
+        try adHocSignFixture(try writeShortcutBundle(named: "A Broken", in: out, config: broken, engineVersion: 0, extraInfo: ownToken))
         var stale = config(name: "B Stale")
         stale.engineVersion = 0
-        try writeShortcutBundle(named: "B Stale", in: out, config: stale, engineVersion: 0, extraInfo: ownToken)
+        try adHocSignFixture(try writeShortcutBundle(named: "B Stale", in: out, config: stale, engineVersion: 0, extraInfo: ownToken))
         await library.rescan()
         XCTAssertEqual(library.recordsNeedingRebuild.map(\.name), ["A Broken", "B Stale"])
 
