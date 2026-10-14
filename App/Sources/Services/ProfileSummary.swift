@@ -2,8 +2,10 @@ import CompatProfiles
 import DuplicatorCore
 
 /// Read-only text for a compatibility profile (spec §8), shared by the wizard Review step, the editor's Profile
-/// section and Diagnostics. Argument and environment values pass through `SecretMasking`, so a profile's secrets are
-/// never shown.
+/// section and Diagnostics. Argument and environment values pass through `SecretMasking` by default, so a profile's
+/// secrets never reach a copied Diagnostics report. The wizard Review step passes `maskProfileValues: false` and shows
+/// `profileValuesCaption`: a profile is a remote document, and masking a key that merely looks secret
+/// (`GIT_CONFIG_KEY_0`) would hide what a malicious profile does.
 enum ProfileSummary {
     /// One label/value line of a profile summary.
     struct Row: Equatable, Identifiable, Sendable {
@@ -14,6 +16,9 @@ enum ProfileSummary {
 
     /// Shown in place of a remote profile's New Window command that fails `NewWindowCommandBuilder.profileValidationMessage`.
     static let ignoredNewWindowNote = "Profile New Window command ignored (not allowed)"
+
+    /// One-line caption shown next to profile-sourced values that are not masked.
+    static let profileValuesCaption = "Values from the compatibility profile are shown in full."
 
     static func statusLabel(_ status: ProfileStatus) -> String {
         switch status {
@@ -34,18 +39,18 @@ enum ProfileSummary {
         }
     }
 
-    /// `Name`, `Status`, `Family` (when the profile names one), `Arguments` and `Environment` (masked, `None` when
-    /// empty), `New Window` (the masked template, when the profile has one), `Notes` (when the profile has any) and
+    /// `Name`, `Status`, `Family` (when the profile names one), `Arguments` and `Environment` (masked unless `maskProfileValues` is false, `None`
+    /// when empty), `New Window` (the template, masked the same way, when the profile has one), `Notes` (when the profile has any) and
     /// `Family note` (see `familyNote`). Empty without a profile.
-    static func rows(for profile: AppProfile?, detectedFamily: AppFamily?) -> [Row] {
+    static func rows(for profile: AppProfile?, detectedFamily: AppFamily?, maskProfileValues: Bool = true) -> [Row] {
         guard let profile else { return [] }
         var rows = [Row(label: "Name", value: profile.name), Row(label: "Status", value: statusLabel(profile.status))]
         if let family = profile.family {
             rows.append(Row(label: "Family", value: familyName(family)))
         }
-        let arguments = SecretMasking.maskArguments(profile.args)
+        let arguments = maskProfileValues ? SecretMasking.maskArguments(profile.args) : profile.args
         rows.append(Row(label: "Arguments", value: arguments.isEmpty ? "None" : arguments.joined(separator: " ")))
-        let environment = SecretMasking.mask(profile.env)
+        let environment = maskProfileValues ? SecretMasking.mask(profile.env) : profile.env
         rows.append(Row(label: "Environment",
                         value: environment.isEmpty ? "None" : environment.keys.sorted().map { "\($0)=\(environment[$0] ?? "")" }.joined(separator: " ")))
         if let template = profile.newWindowCommand?.trimmingCharacters(in: .whitespacesAndNewlines), !template.isEmpty {
@@ -54,7 +59,7 @@ enum ProfileSummary {
                 rows.append(Row(label: "New Window", value: ignoredNewWindowNote))
             } else {
                 let tokens = template.split(whereSeparator: \.isWhitespace).map(String.init)
-                rows.append(Row(label: "New Window", value: SecretMasking.maskArguments(tokens).joined(separator: " ")))
+                rows.append(Row(label: "New Window", value: (maskProfileValues ? SecretMasking.maskArguments(tokens) : tokens).joined(separator: " ")))
             }
         }
         if let notes = profile.notes, !notes.isEmpty {

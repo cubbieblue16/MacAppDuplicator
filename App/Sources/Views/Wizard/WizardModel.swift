@@ -299,7 +299,7 @@ final class WizardModel {
         }
         let config = makeConfig().resolvingDefaultDataPath(home: FileManager.default.homeDirectoryForCurrentUser)
         do {
-            preview = try LaunchPlanPreview.make(config: config, bundleURL: nil)
+            preview = try LaunchPlanPreview.make(config: config, bundleURL: nil, profileValuesVerbatim: kind == .app)
             previewError = nil
         } catch {
             preview = nil

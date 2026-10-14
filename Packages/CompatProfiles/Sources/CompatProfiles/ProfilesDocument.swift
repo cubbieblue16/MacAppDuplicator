@@ -173,11 +173,8 @@ extension ProfilesDocument {
     static let hostnamePattern =
         #"\A(?=.{1,253}\z)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\z"#
     static let datePattern = #"\A[0-9]{4}-[0-9]{2}-[0-9]{2}\z"#
-    /// Environment keys a profile may not set: dynamic-loader, Node, Electron and JVM hooks that load code into the
-    /// target, the launcher's own `MAD_` variables, and the variables data separation owns (`HOME`,
-    /// `CFFIXED_USER_HOME`, Firefox's `XRE_` overrides).
-    static let refusedEnvironmentKeyPattern =
-        #"\A(?:DYLD_|LD_|MAD_|XRE_)|\A(?:NODE_OPTIONS|ELECTRON_RUN_AS_NODE|JAVA_TOOL_OPTIONS|_JAVA_OPTIONS|JDK_JAVA_OPTIONS|HOME|CFFIXED_USER_HOME)\z"#
+    /// Environment keys a profile may not set; defined once in DuplicatorCore (see `ProfileTrustRules`).
+    static let refusedEnvironmentKeyPattern = ProfileTrustRules.refusedEnvironmentKeyPattern
     /// Argument prefixes a profile may not use; defined once in DuplicatorCore so the wizard shares it.
     static let refusedArgumentPattern = ProfileTrustRules.refusedArgumentPattern
 
@@ -251,7 +248,8 @@ extension AppProfile {
         for (index, argument) in args.enumerated() {
             let argumentPath = "\(path).args[\(index)]"
             try ProfilesDocument.checkString(argument, at: argumentPath)
-            guard !ProfilesDocument.matches(argument, ProfilesDocument.refusedArgumentPattern) else {
+            guard !ProfilesDocument.matches(argument, ProfilesDocument.refusedArgumentPattern),
+                  !ProfileTrustRules.containsControlCharacter(argument) else {
                 throw ProfilesError.invalidField(argumentPath)
             }
         }

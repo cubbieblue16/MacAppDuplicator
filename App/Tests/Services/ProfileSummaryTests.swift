@@ -4,25 +4,37 @@ import XCTest
 @testable import MacAppDuplicator
 
 final class ProfileSummaryTests: XCTestCase {
-    func testRowsShowEveryFieldWithSecretsMasked() {
+    func testRowsShowEveryFieldWithProfileValuesInFull() {
         let profile = AppProfile(name: "Target", status: .partial, family: .electron,
                                  args: ["--api-key", "hunter2", "--plain"], env: ["PLAIN": "ok", "API_TOKEN": "leaked"],
                                  notes: "Opens one window per data folder.")
-        let rows = ProfileSummary.rows(for: profile, detectedFamily: .native)
+        let rows = ProfileSummary.rows(for: profile, detectedFamily: .native, maskProfileValues: false)
         XCTAssertEqual(rows.map(\.label), ["Name", "Status", "Family", "Arguments", "Environment", "Notes", "Family note"])
         XCTAssertEqual(rows.map(\.value), [
             "Target",
             "Partial",
             "Electron",
-            "--api-key •••••• --plain",
-            "API_TOKEN=•••••• PLAIN=ok",
+            "--api-key hunter2 --plain",
+            "API_TOKEN=leaked PLAIN=ok",
             "Opens one window per data folder.",
             "The profile lists family Electron but App Duplicator detected Native; launch settings follow the detected family.",
         ])
+        XCTAssertEqual(ProfileSummary.profileValuesCaption, "Values from the compatibility profile are shown in full.")
+    }
+
+    func testRowsMaskProfileValuesByDefault() {
+        let profile = AppProfile(name: "Target", status: .partial, args: ["--api-key", "hunter2"], env: ["API_TOKEN": "leaked"])
+        let rows = ProfileSummary.rows(for: profile, detectedFamily: nil)
         for row in rows {
             XCTAssertFalse(row.value.contains("hunter2"), row.label)
             XCTAssertFalse(row.value.contains("leaked"), row.label)
         }
+    }
+
+    func testRowsShowAttackerChosenKeyNamesThatSecretMaskingWouldHide() {
+        let profile = AppProfile(name: "Target", status: .partial, env: ["GIT_CONFIG_KEY_0": "core.fsmonitor"])
+        XCTAssertEqual(ProfileSummary.rows(for: profile, detectedFamily: nil, maskProfileValues: false).first { $0.label == "Environment" }?.value,
+                       "GIT_CONFIG_KEY_0=core.fsmonitor")
     }
 
     func testRowsWithoutAProfileOrWithOnlyTheRequiredFields() {
@@ -66,14 +78,16 @@ final class ProfileSummaryTests: XCTestCase {
                        ["ToDesktop", "Electron", "Chromium", "Firefox", "Eclipse", "Native"])
     }
 
-    func testNewWindowRowIsMaskedAndOnlyShownWhenPresent() throws {
+    func testNewWindowRowIsShownInFullAndOnlyWhenPresent() throws {
         let profile = AppProfile(
             name: "Target", status: .verified, family: .native, args: [], env: [:],
             newWindowCommand: "/usr/bin/open -na {target} --args --api-key=hunter2", notes: "Sign in once."
         )
-        let rows = ProfileSummary.rows(for: profile, detectedFamily: .native)
+        let rows = ProfileSummary.rows(for: profile, detectedFamily: .native, maskProfileValues: false)
         let newWindow = try XCTUnwrap(rows.first { $0.label == "New Window" })
-        XCTAssertEqual(newWindow.value, "/usr/bin/open -na {target} --args --api-key=\(SecretMasking.maskedValue)")
+        XCTAssertEqual(newWindow.value, "/usr/bin/open -na {target} --args --api-key=hunter2")
+        XCTAssertEqual(ProfileSummary.rows(for: profile, detectedFamily: .native).first { $0.label == "New Window" }?.value,
+                       "/usr/bin/open -na {target} --args --api-key=\(SecretMasking.maskedValue)")
         let labels = rows.map(\.label)
         let environmentIndex = try XCTUnwrap(labels.firstIndex(of: "Environment"))
         let newWindowIndex = try XCTUnwrap(labels.firstIndex(of: "New Window"))

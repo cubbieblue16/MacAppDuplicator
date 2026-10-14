@@ -164,7 +164,7 @@ final class WizardModelTests: XCTestCase {
         XCTAssertEqual(model.step, .kind)
     }
 
-    func testProfileDefaultsArePrefilledAndShownMaskedInThePreview() throws {
+    func testProfileDefaultsArePrefilledAndShownInFullInThePreview() throws {
         let profile = AppProfile(name: "Target", status: .verified, family: .native,
                                  args: ["--api-key", "hunter2", "--plain"], env: ["API_TOKEN": "leaked", "TARGET_MODE": "work"],
                                  notes: "Profile notes.")
@@ -179,8 +179,9 @@ final class WizardModelTests: XCTestCase {
         model.next() // data
         model.next() // review
         let preview = try XCTUnwrap(model.preview)
-        XCTAssertEqual(preview.arguments, ["--api-key", "••••••", "--plain"])
-        XCTAssertEqual(preview.environmentAdditions["API_TOKEN"], SecretMasking.maskedValue)
+        // Security audit C2: profile-sourced values are never masked, so a reviewer sees what the profile sets.
+        XCTAssertEqual(preview.arguments.suffix(3), ["--api-key", "hunter2", "--plain"])
+        XCTAssertEqual(preview.environmentAdditions["API_TOKEN"], "leaked")
         XCTAssertEqual(preview.environmentAdditions["TARGET_MODE"], "work")
     }
 
