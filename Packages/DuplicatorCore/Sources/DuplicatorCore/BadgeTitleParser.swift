@@ -7,7 +7,8 @@ public struct BadgeTitleParser: Sendable {
     /// Titles are cut to this many characters before matching, which bounds the work of a slow pattern.
     public static let maxTitleLength = 1_024
 
-    /// The pattern in use: the supplied one when it compiles and has a capture group, otherwise `defaultPattern`.
+    /// The pattern in use: the supplied one when it passes `RegexSafety`, compiles and has a capture group, otherwise
+    /// `defaultPattern`.
     public let pattern: String
     /// True when a non-empty supplied pattern was refused; the shell logs it.
     public let usedFallbackPattern: Bool
@@ -31,6 +32,7 @@ public struct BadgeTitleParser: Sendable {
     /// number or the number does not fit an Int. A nil result means "clear the badge".
     public func count(in title: String) -> Int? {
         let bounded = String(title.prefix(Self.maxTitleLength))
+        guard RegexSafety.unsafeReason(pattern: pattern) == nil else { return nil }
         let regex: NSRegularExpression
         do {
             regex = try NSRegularExpression(pattern: pattern)
@@ -45,6 +47,7 @@ public struct BadgeTitleParser: Sendable {
     }
 
     private static func isUsable(_ candidate: String) -> Bool {
+        guard RegexSafety.unsafeReason(pattern: candidate) == nil else { return false }
         do {
             return try NSRegularExpression(pattern: candidate).numberOfCaptureGroups >= 1
         } catch {

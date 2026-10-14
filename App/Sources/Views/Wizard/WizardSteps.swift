@@ -289,8 +289,8 @@ struct ReviewStep: View {
                 if model.kind == .app, let profile = model.profile {
                     DisclosureGroup("Profile defaults", isExpanded: $showProfile) {
                         VStack(alignment: .leading, spacing: 6) {
-                            ProfileSummaryView(rows: ProfileSummary.rows(for: profile, detectedFamily: model.inspected?.family))
-                            Text("The profile's arguments, environment and New Window command are copied into the new shortcut; change them in its Advanced section after it is created.")
+                            ProfileSummaryView(rows: ProfileSummary.rows(for: profile, detectedFamily: model.inspected?.family, maskProfileValues: false))
+                            Text("The profile's arguments, environment and New Window command are copied into the new shortcut; change them in its Advanced section after it is created. \(ProfileSummary.profileValuesCaption)")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         .padding(.top, 4)
@@ -302,6 +302,9 @@ struct ReviewStep: View {
                             planRow("Executable", preview.executablePath)
                             planRow("Arguments", preview.arguments.joined(separator: "\n"))
                             planRow("Environment additions", preview.environmentAdditions.keys.sorted().map { "\($0)=\(preview.environmentAdditions[$0] ?? "")" }.joined(separator: "\n"))
+                            if model.kind == .app, model.profile != nil, !(model.arguments.isEmpty && model.environment.isEmpty) {
+                                Text(ProfileSummary.profileValuesCaption).font(.caption).foregroundStyle(.secondary)
+                            }
                             if let helper = preview.helper {
                                 planRow("Helper", helper)
                             }

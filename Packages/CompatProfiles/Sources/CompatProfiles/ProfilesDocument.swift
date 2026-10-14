@@ -173,17 +173,10 @@ extension ProfilesDocument {
     static let hostnamePattern =
         #"\A(?=.{1,253}\z)[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\z"#
     static let datePattern = #"\A[0-9]{4}-[0-9]{2}-[0-9]{2}\z"#
-    /// Environment keys a profile may not set: dynamic-loader, Node, Electron and JVM hooks that load code into the
-    /// target, the launcher's own `MAD_` variables, and the variables data separation owns (`HOME`,
-    /// `CFFIXED_USER_HOME`, Firefox's `XRE_` overrides).
-    static let refusedEnvironmentKeyPattern =
-        #"\A(?:DYLD_|LD_|MAD_|XRE_)|\A(?:NODE_OPTIONS|ELECTRON_RUN_AS_NODE|JAVA_TOOL_OPTIONS|_JAVA_OPTIONS|JDK_JAVA_OPTIONS|HOME|CFFIXED_USER_HOME)\z"#
-    /// Argument prefixes a profile may not use, with one or two leading dashes in any case (Chromium accepts both):
-    /// debugger and remote-control switches, code loaders (`--load-extension`, `--renderer-cmd-prefix`, `-vmargs`,
-    /// `-javaagent`), sandbox and web-security switches, and the profile and data-folder switches the planner owns
-    /// (`--user-data-dir`, `--profile-directory`, Firefox `-profile` and `-P`, Eclipse `-data` and `-configuration`).
-    static let refusedArgumentPattern =
-        #"(?i)\A--?(?:inspect|remote-debugging|remote-allow-origins|load-extension|disable-extensions-except|disable-web-security|no-sandbox|renderer-cmd-prefix|utility-cmd-prefix|gpu-launcher|browser-subprocess-path|user-data-dir|profile|configuration|data\z|p\z|vm|javaagent)"#
+    /// Environment keys a profile may not set; defined once in DuplicatorCore (see `ProfileTrustRules`).
+    static let refusedEnvironmentKeyPattern = ProfileTrustRules.refusedEnvironmentKeyPattern
+    /// Argument prefixes a profile may not use; defined once in DuplicatorCore so the wizard shares it.
+    static let refusedArgumentPattern = ProfileTrustRules.refusedArgumentPattern
 
     static func matches(_ value: String, _ pattern: String) -> Bool {
         value.range(of: pattern, options: .regularExpression) != nil
@@ -210,6 +203,16 @@ extension ProfilesDocument {
         }
     }
 
+    /// The host each bundled web-app preset id is allowed to use. A remote document may add new preset ids, but it may
+    /// not repoint `whatsapp`, `teams` or `outlook` at another site: the wizard shows the preset name, so a swapped
+    /// URL would be a phishing page under a trusted label. Keep in sync with `Resources/profiles.json`
+    /// (`SeedProfilesTests` checks it).
+    static let pinnedWebAppHosts: [String: String] = [
+        "whatsapp": "web.whatsapp.com",
+        "teams": "teams.microsoft.com",
+        "outlook": "outlook.office.com",
+    ]
+
     /// Applies every rule from the Global Constraints. Keys are visited in sorted order so errors are reproducible.
     func validate() throws {
         guard Self.isValidDate(updated) else { throw ProfilesError.invalidUpdatedDate(String(updated.prefix(100))) }
@@ -228,6 +231,10 @@ extension ProfilesDocument {
             let path = "webApps." + String(key.prefix(100))
             guard Self.matches(key, Self.webAppKeyPattern) else { throw ProfilesError.invalidField(path) }
             try preset.validate(at: path)
+            if let pinned = Self.pinnedWebAppHosts[key],
+               URLComponents(string: preset.url)?.host?.lowercased() != pinned {
+                throw ProfilesError.invalidField("\(path).url")
+            }
         }
     }
 
@@ -255,7 +262,8 @@ extension AppProfile {
         for (index, argument) in args.enumerated() {
             let argumentPath = "\(path).args[\(index)]"
             try ProfilesDocument.checkString(argument, at: argumentPath)
-            guard !ProfilesDocument.matches(argument, ProfilesDocument.refusedArgumentPattern) else {
+            guard !ProfilesDocument.matches(argument, ProfilesDocument.refusedArgumentPattern),
+                  !ProfileTrustRules.containsControlCharacter(argument) else {
                 throw ProfilesError.invalidField(argumentPath)
             }
         }
@@ -268,7 +276,13 @@ extension AppProfile {
             }
             try ProfilesDocument.checkString(value, at: entryPath)
         }
-        if let newWindowCommand { try ProfilesDocument.checkString(newWindowCommand, at: "\(path).newWindowCommand") }
+        if let newWindowCommand {
+            try ProfilesDocument.checkString(newWindowCommand, at: "\(path).newWindowCommand")
+            // Remote documents may only plant a restricted template; users may still type anything in the editor.
+            guard NewWindowCommandBuilder.profileValidationMessage(for: newWindowCommand) == nil else {
+                throw ProfilesError.invalidField("\(path).newWindowCommand")
+            }
+        }
         if let notes { try ProfilesDocument.checkString(notes, at: "\(path).notes") }
     }
 }
@@ -284,6 +298,9 @@ extension WebAppPreset {
         if let userAgent { try ProfilesDocument.checkString(userAgent, at: "\(path).userAgent") }
         if let badgeRegex {
             try ProfilesDocument.checkString(badgeRegex, at: "\(path).badgeRegex")
+            guard RegexSafety.unsafeReason(pattern: badgeRegex) == nil else {
+                throw ProfilesError.invalidField("\(path).badgeRegex")
+            }
             do {
                 _ = try NSRegularExpression(pattern: badgeRegex)
             } catch {
@@ -292,7 +309,8 @@ extension WebAppPreset {
         }
         guard extraHosts.count <= ProfilesDocument.maxListEntries else { throw ProfilesError.tooMany("\(path).extraHosts") }
         for (index, extraHost) in extraHosts.enumerated()
-        where !ProfilesDocument.matches(extraHost, ProfilesDocument.hostnamePattern) {
+        where !ProfilesDocument.matches(extraHost, ProfilesDocument.hostnamePattern)
+            || !PublicSuffixes.isAcceptableExtraHost(extraHost) {
             throw ProfilesError.invalidField("\(path).extraHosts[\(index)]")
         }
         if let iconURL { try ProfilesDocument.checkString(iconURL, at: "\(path).iconURL") }
