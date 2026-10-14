@@ -63,6 +63,10 @@ final class AppState {
     var rebuildProgress: RebuildProgress?
     /// A save of a shortcut this App Duplicator did not create (C3), held for `ForeignShortcutApprovalSheet`.
     var pendingForeignApproval: ForeignShortcutApproval?
+    /// The review of shortcuts built before install tokens existed, held for `LegacyTrustReviewSheet`.
+    var pendingLegacyTrustReview: LegacyTrustReview?
+    /// Set once the launch-time review has been considered, so it is offered automatically at most once per launch.
+    @ObservationIgnored private var hasOfferedLegacyTrustReview = false
 
     /// Removes a web app's WebKit store (Task 6). A property rather than an initializer argument so tests swap in a
     /// fake without a second initializer; the default deletes real files under `~/Library/WebKit`.
@@ -193,7 +197,9 @@ final class AppState {
         rebuildProgress = RebuildProgress(done: 0, total: records.count)
         for record in records {
             let outcome: RebuildResult.Outcome
-            if let reason = record.foreignReason {
+            if record.isLegacyCandidate {
+                outcome = .skipped(LegacyTrustReview.rebuildAllSkipReason)
+            } else if let reason = record.foreignReason {
                 outcome = .skipped(reason)
             } else {
                 outcome = await Task.detached(priority: .userInitiated) { () -> RebuildResult.Outcome in
@@ -207,6 +213,82 @@ final class AppState {
             }
             results.append(RebuildResult(id: record.bundleURL, name: record.name, outcome: outcome))
             rebuildProgress = RebuildProgress(done: results.count, total: records.count)
+        }
+        await library.rescan()
+        rebuildProgress = nil
+        return results
+    }
+
+    /// Offers the review of shortcuts built before install tokens existed (`library.legacyCandidates`) once per launch:
+    /// after the first scan, when there are any and the user has not chosen Not now (`legacyTrustPromptSuppressed`).
+    /// The scene calls it whenever a scan finishes; a call before the first scan has published does nothing.
+    func offerLegacyTrustReviewIfNeeded() async {
+        guard library.hasScanned, !hasOfferedLegacyTrustReview else { return }
+        hasOfferedLegacyTrustReview = true
+        guard !settings.legacyTrustPromptSuppressed else { return }
+        await reviewLegacyShortcuts()
+    }
+
+    /// Review Earlier Shortcuts… (sidebar banner and menu): holds a review of every legacy candidate for
+    /// `LegacyTrustReviewSheet`, whatever `legacyTrustPromptSuppressed` says. Each approval carries the bundle's own
+    /// on-disk config and its signature, read off the main actor as `save` does. Does nothing when there are none.
+    func reviewLegacyShortcuts() async {
+        let candidates = library.legacyCandidates
+        guard !candidates.isEmpty else { return }
+        let bundleURLs = candidates.map(\.bundleURL)
+        let signatures = await Task.detached(priority: .userInitiated) { bundleURLs.map { CodeSignature.of(bundleAt: $0) } }.value
+        pendingLegacyTrustReview = LegacyTrustReview(
+            approvals: zip(candidates, signatures).map { ForeignShortcutApproval(record: $0, config: $0.config, signature: $1) }
+        )
+    }
+
+    /// Not now: closes the review without writing anything and stops offering it at launch. The sidebar banner and
+    /// Review Earlier Shortcuts… still open it.
+    func postponeLegacyTrustReview() {
+        settings.legacyTrustPromptSuppressed = true
+        pendingLegacyTrustReview = nil
+    }
+
+    /// Done, once Trust All and Rebuild has reported its results.
+    func closeLegacyTrustReview() {
+        pendingLegacyTrustReview = nil
+    }
+
+    /// Trust All and Rebuild (C3): rewrites every reviewed shortcut with its reviewed config, this install's token and
+    /// signing identity, one at a time in a detached task like Rebuild All, and carries on past a failure. Right before
+    /// each write the bundle's provenance is read again: one that is no longer a legacy candidate (received, stamped or
+    /// re-signed since the review) is skipped and keeps its own review. A failed write, a refused erase-on-quit data
+    /// folder included, is reported as `.failed`. `rebuildProgress` counts finished shortcuts. Returns one result per
+    /// approval, in review order; the library is rescanned at the end. Called only from the review sheet's button.
+    func trustLegacyShortcuts(_ review: LegacyTrustReview) async -> [RebuildResult] {
+        let builder = self.builder
+        let trust = settings.scanTrust
+        let approvals = review.approvals
+        var results: [RebuildResult] = []
+        rebuildProgress = RebuildProgress(done: 0, total: approvals.count)
+        for approval in approvals {
+            let record = approval.record
+            let config = approval.config
+            let outcome = await Task.detached(priority: .userInitiated) { () -> RebuildResult.Outcome in
+                let current: ShortcutRecord
+                do {
+                    current = try LibraryScanner.record(forBundleAt: record.bundleURL, trust: trust)
+                } catch {
+                    return .skipped("could not be read again before the rebuild: \(error.localizedDescription)")
+                }
+                guard current.isLegacyCandidate else {
+                    guard let reason = current.foreignReason else { return .skipped("already created by this App Duplicator") }
+                    return .skipped("changed since the review (\(reason)); open it to review")
+                }
+                do {
+                    _ = try builder.regenerate(record: record, config: config)
+                    return .rebuilt
+                } catch {
+                    return .failed(error.localizedDescription)
+                }
+            }.value
+            results.append(RebuildResult(id: record.bundleURL, name: record.name, outcome: outcome))
+            rebuildProgress = RebuildProgress(done: results.count, total: approvals.count)
         }
         await library.rescan()
         rebuildProgress = nil

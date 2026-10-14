@@ -19,6 +19,7 @@ final class AppSettings {
         static let homeSymlinkEntries = "homeSymlinkEntries"
         static let profilesURL = "profilesURLString"
         static let installToken = ShortcutConfig.installTokenInfoPlistKey
+        static let legacyTrustPromptSuppressed = "legacyTrustPromptSuppressed"
     }
 
     static func defaultOutputFolder(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
@@ -63,6 +64,12 @@ final class AppSettings {
         }
     }
 
+    /// Set by Not now in the review of shortcuts built before install tokens existed (`LegacyTrustReview`): the review
+    /// is no longer offered at launch. The sidebar banner and Review Earlier Shortcuts… still open it.
+    var legacyTrustPromptSuppressed: Bool {
+        didSet { defaults.set(legacyTrustPromptSuppressed, forKey: Key.legacyTrustPromptSuppressed) }
+    }
+
     /// `Signer` argument: nil for ad hoc.
     var signerIdentity: String? {
         signingIdentity == Self.adHocIdentityName ? nil : signingIdentity
@@ -105,6 +112,7 @@ final class AppSettings {
         signingIdentity = defaults.string(forKey: Key.signingIdentity) ?? defaultSigningIdentity
         homeSymlinkEntries = defaults.stringArray(forKey: Key.homeSymlinkEntries) ?? HomeTreeBuilder.defaultSymlinkEntries
         profilesURLString = defaults.string(forKey: Key.profilesURL) ?? ProfilesConstants.defaultURLString
+        legacyTrustPromptSuppressed = defaults.bool(forKey: Key.legacyTrustPromptSuppressed)
     }
 
     /// 32 bytes from the system's cryptographically secure generator, as 64 lowercase hex digits.

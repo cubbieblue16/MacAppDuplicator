@@ -18,6 +18,8 @@ final class ShortcutLibrary {
     private(set) var records: [ShortcutRecord] = []
     private(set) var warnings: [String] = []
     private(set) var isScanning = false
+    /// False until a scan has published its records; the review of earlier shortcuts is offered only after that.
+    private(set) var hasScanned = false
     /// Bumped by every `rescan()`; only the scan holding the current value may publish (final review M7).
     @ObservationIgnored private var scanGeneration: UInt64 = 0
 
@@ -74,6 +76,7 @@ final class ShortcutLibrary {
         guard generation == scanGeneration else { return }
         records = result.records
         warnings = result.warnings
+        hasScanned = true
         await monitor.refresh()
         if generation == scanGeneration { isScanning = false }
     }
