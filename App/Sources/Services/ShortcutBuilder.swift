@@ -20,6 +20,8 @@ struct ShortcutBuilder: Sendable {
         case launcherConfigMissing(ShortcutKind)
         /// Phase 5: the file, folder or command executable a launcher shortcut opens does not exist; carries the path.
         case itemMissing(String)
+        /// An erase-on-quit build whose data folder fails the `DataPathRules` shape rules; carries the folder and the reason.
+        case eraseOnQuitFolderRefused(path: String, reason: String)
 
         var errorDescription: String? {
             switch self {
@@ -33,6 +35,8 @@ struct ShortcutBuilder: Sendable {
             case .webAppConfigMissing: "The shortcut has no web app settings."
             case .launcherConfigMissing: "The shortcut has no file, folder or command settings."
             case .itemMissing(let path): "Nothing exists at \(path)."
+            case .eraseOnQuitFolderRefused(let path, let reason):
+                "Erase on quit would empty \(path), which is not a shortcut data folder (\(reason)). Turn Erase on quit off or pick a folder inside your data root."
             }
         }
     }
@@ -85,6 +89,7 @@ struct ShortcutBuilder: Sendable {
 
     /// Rewrites an existing shortcut in place with `config` (same folder; the name may change the bundle file name).
     /// A web app without new `webIconData` keeps the icon already in its bundle.
+    /// The data folder of an erase-on-quit shortcut must pass `DataPathRules`, or the rewrite throws and the bundle stays as it was.
     func regenerate(record: ShortcutRecord, config: ShortcutConfig, webIconData: Data? = nil) throws -> URL {
         let directory = record.bundleURL.deletingLastPathComponent()
         let newURL = directory.appending(path: "\(ShortcutConfig.fileSystemName(for: config.name)).app", directoryHint: .isDirectory)
@@ -269,7 +274,14 @@ struct ShortcutBuilder: Sendable {
         case .app:
             break
         }
-        var config = config.resolvingDefaultDataPath(home: fileManager.homeDirectoryForCurrentUser)
+        let home = fileManager.homeDirectoryForCurrentUser
+        var config = config.resolvingDefaultDataPath(home: home)
+        // Defense in depth for configs that skipped the editor's pick-time check (Trust and Rebuild, a hand-edited
+        // MADConfig). Shape rules only: the folder may not exist yet and the owner marker is written at first launch.
+        if config.eraseOnQuit, config.dataMode != .disabled, let path = config.effectiveDataPath(home: home),
+           let refusal = DataPathRules.refusal(forPath: path, home: home, allowOutsideHome: false) {
+            throw BuilderError.eraseOnQuitFolderRefused(path: path, reason: refusal.logReason)
+        }
         config.engineVersion = ShortcutConfig.currentEngineVersion
         let targetURL = URL(fileURLWithPath: config.targetPath)
         guard fileManager.fileExists(atPath: targetURL.path) else { throw BuilderError.targetMissing(config.targetPath) }
