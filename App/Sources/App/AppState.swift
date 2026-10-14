@@ -233,6 +233,8 @@ final class AppState {
     /// `LegacyTrustReviewSheet`, whatever `legacyTrustPromptSuppressed` says. Each approval carries the bundle's own
     /// on-disk config and its signature, read off the main actor as `save` does. Does nothing when there are none.
     func reviewLegacyShortcuts() async {
+        // One review at a time: a second request while the sheet is up (the menu stays live) is ignored.
+        guard pendingLegacyTrustReview == nil else { return }
         let candidates = library.legacyCandidates
         guard !candidates.isEmpty else { return }
         let bundleURLs = candidates.map(\.bundleURL)
@@ -274,12 +276,10 @@ final class AppState {
                 do {
                     current = try LibraryScanner.record(forBundleAt: record.bundleURL, trust: trust)
                 } catch {
-                    return .skipped("could not be read again before the rebuild: \(error.localizedDescription)")
+                    return .failed("could not be read again: \(error.localizedDescription)")
                 }
-                guard current.isLegacyCandidate else {
-                    guard let reason = current.foreignReason else { return .skipped("already created by this App Duplicator") }
-                    return .skipped("changed since the review (\(reason)); open it to review")
-                }
+                // Skipped with the reason it reads as foreign now, as Rebuild All reports it.
+                guard current.isLegacyCandidate else { return .skipped(current.foreignReason ?? "trusted since the review") }
                 do {
                     _ = try builder.regenerate(record: record, config: config)
                     return .rebuilt

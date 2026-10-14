@@ -88,6 +88,9 @@ struct MacAppDuplicatorApp: App {
                 // The watcher sees bundles added, removed or renamed, not edits inside a bundle (final review M8).
                 Button("Refresh") { Task { await appState.library.rescan() } }
                     .keyboardShortcut("r", modifiers: .command)
+                // Rebuild All has no menu item (toolbar only), so the review sits here, by Refresh.
+                Button("Review Earlier Shortcuts…") { Task { await appState.reviewLegacyShortcuts() } }
+                    .disabled(appState.library.legacyCandidates.isEmpty || appState.pendingLegacyTrustReview != nil)
             }
             CommandGroup(after: .help) {
                 KnownLimitationsMenuItem()

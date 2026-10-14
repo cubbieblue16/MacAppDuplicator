@@ -48,6 +48,13 @@ struct ContentView: View {
         .sheet(item: $appState.pendingForeignApproval) { approval in
             ForeignShortcutApprovalSheet(approval: approval)
         }
+        .sheet(item: $appState.pendingLegacyTrustReview) { review in
+            LegacyTrustReviewSheet(review: review)
+        }
+        .onChange(of: appState.library.hasScanned, initial: true) { _, scanned in
+            // Shortcuts built before install tokens are offered one review after the first scan, once per launch.
+            if scanned { Task { await appState.offerLegacyTrustReviewIfNeeded() } }
+        }
         .alert(item: $appState.pendingError) { error in
             Alert(title: Text(error.context), message: Text(error.message), dismissButton: .default(Text("OK")))
         }

@@ -32,6 +32,28 @@ struct SidebarView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            // Shortcuts built before install tokens stay reviewable after Not now (`LegacyTrustReviewSheet`).
+            let count = appState.library.legacyCandidates.count
+            if count > 0 {
+                HStack(spacing: 8) {
+                    Label(Self.legacyBannerText(count: count), systemImage: "hand.raised")
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button("Review…") { Task { await appState.reviewLegacyShortcuts() } }
+                        .controlSize(.small)
+                }
+                .padding(8)
+                .background(.bar)
+            }
+        }
+    }
+
+    static func legacyBannerText(count: Int) -> String {
+        count == 1
+            ? "1 shortcut from an earlier version needs review"
+            : "\(count) shortcuts from an earlier version need review"
     }
 
     @ViewBuilder

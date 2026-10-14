@@ -69,7 +69,7 @@ struct RebuildAllSheet: View {
 }
 
 /// One shortcut's line in the results: a check mark, a warning with the error underneath, or a skipped note (C3).
-private struct RebuildResultRow: View {
+struct RebuildResultRow: View {
     let result: RebuildResult
 
     var body: some View {
