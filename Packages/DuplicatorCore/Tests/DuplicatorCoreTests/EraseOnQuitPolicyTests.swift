@@ -12,9 +12,20 @@ final class EraseOnQuitPolicyTests: XCTestCase {
         return String(cString: pointer)
     }
 
+    static let bundleIdentifier = "com.mikekuta.appduplicator.test"
+
+    /// `EraseOnQuitPolicy.check` for the test shortcut.
+    private func check(dataPath: String, home: URL) -> Result<URL, EraseOnQuitRefusal> {
+        EraseOnQuitPolicy.check(dataPath: dataPath, home: home, bundleIdentifier: Self.bundleIdentifier)
+    }
+
+    /// Creates `url` with the ownership marker App Duplicator would have written.
     @discardableResult
-    private func makeFolder(_ url: URL) throws -> URL {
+    private func makeFolder(_ url: URL, marker: String? = EraseOnQuitPolicyTests.bundleIdentifier) throws -> URL {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        if let marker {
+            try Data(marker.utf8).write(to: url.appending(path: DataFolderOwnership.markerFileName))
+        }
         return url
     }
 
@@ -27,22 +38,22 @@ final class EraseOnQuitPolicyTests: XCTestCase {
         let notes = try makeFolder(defaultFolder(slug: "notes-work", home: home))
         let custom = try makeFolder(home.appending(path: "Work/Notes Data", directoryHint: .isDirectory))
 
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: notes.path, home: home).map(\.path), .success(try resolved(notes)))
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: custom.path + "/", home: home).map(\.path), .success(try resolved(custom)))
+        XCTAssertEqual(check(dataPath: notes.path, home: home).map(\.path), .success(try resolved(notes)))
+        XCTAssertEqual(check(dataPath: custom.path + "/", home: home).map(\.path), .success(try resolved(custom)))
     }
 
     func testRefusesMalformedMissingAndUnresolvablePaths() throws {
         let home = try makeTemporaryDirectory()
         let notes = try makeFolder(home.appending(path: "Work/Notes", directoryHint: .isDirectory))
 
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: "", home: home), .failure(.malformedPath))
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: "/", home: home), .failure(.malformedPath))
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: "Work/Notes", home: home), .failure(.malformedPath))
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: home.path + "/Work/Notes/../Notes", home: home), .failure(.malformedPath))
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: home.path + "/Work/./Notes", home: home), .failure(.malformedPath))
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: home.path + "/Work/Missing", home: home), .failure(.missing))
+        XCTAssertEqual(check(dataPath: "", home: home), .failure(.malformedPath))
+        XCTAssertEqual(check(dataPath: "/", home: home), .failure(.malformedPath))
+        XCTAssertEqual(check(dataPath: "Work/Notes", home: home), .failure(.malformedPath))
+        XCTAssertEqual(check(dataPath: home.path + "/Work/Notes/../Notes", home: home), .failure(.malformedPath))
+        XCTAssertEqual(check(dataPath: home.path + "/Work/./Notes", home: home), .failure(.malformedPath))
+        XCTAssertEqual(check(dataPath: home.path + "/Work/Missing", home: home), .failure(.missing))
         XCTAssertEqual(
-            EraseOnQuitPolicy.check(dataPath: notes.path, home: home.appending(path: "No Such Home", directoryHint: .isDirectory)),
+            check(dataPath: notes.path, home: home.appending(path: "No Such Home", directoryHint: .isDirectory)),
             .failure(.homeUnresolvable)
         )
     }
@@ -56,9 +67,9 @@ final class EraseOnQuitPolicyTests: XCTestCase {
         let file = home.appending(path: "Work/notes.txt", directoryHint: .notDirectory)
         try Data("x".utf8).write(to: file)
 
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: link.path, home: home), .failure(.symbolicLink))
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: link.path + "/", home: home), .failure(.symbolicLink))
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: file.path, home: home), .failure(.notDirectory))
+        XCTAssertEqual(check(dataPath: link.path, home: home), .failure(.symbolicLink))
+        XCTAssertEqual(check(dataPath: link.path + "/", home: home), .failure(.symbolicLink))
+        XCTAssertEqual(check(dataPath: file.path, home: home), .failure(.notDirectory))
     }
 
     func testResolvesSymbolicLinksAboveTheFolderBeforeCheckingWhereItIs() throws {
@@ -73,10 +84,10 @@ final class EraseOnQuitPolicyTests: XCTestCase {
             withDestinationURL: notes.deletingLastPathComponent()
         )
 
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: work.path + "/Escape/a/b", home: home), .failure(.outsideHome))
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: outside.path + "/a/b", home: home), .failure(.outsideHome))
+        XCTAssertEqual(check(dataPath: work.path + "/Escape/a/b", home: home), .failure(.outsideHome))
+        XCTAssertEqual(check(dataPath: outside.path + "/a/b", home: home), .failure(.outsideHome))
         XCTAssertEqual(
-            EraseOnQuitPolicy.check(dataPath: work.path + "/RootLink/notes", home: home).map(\.path),
+            check(dataPath: work.path + "/RootLink/notes", home: home).map(\.path),
             .success(try resolved(notes))
         )
     }
@@ -98,12 +109,12 @@ final class EraseOnQuitPolicyTests: XCTestCase {
                 ? home
                 : makeFolder(home.appending(path: expectation.relativePath, directoryHint: .isDirectory))
             XCTAssertEqual(
-                EraseOnQuitPolicy.check(dataPath: folder.path, home: home),
+                check(dataPath: folder.path, home: home),
                 .failure(expectation.refusal),
                 expectation.relativePath
             )
         }
-        XCTAssertEqual(EraseOnQuitPolicy.check(dataPath: root.path, home: home), .failure(.dataRoot))
+        XCTAssertEqual(check(dataPath: root.path, home: home), .failure(.dataRoot))
     }
 
     func testShapeRulesOnResolvedComponents() {
@@ -125,6 +136,7 @@ final class EraseOnQuitPolicyTests: XCTestCase {
         let refusals: [EraseOnQuitRefusal] = [
             .malformedPath, .missing, .unreadable(errno: EACCES), .symbolicLink, .notDirectory, .homeUnresolvable,
             .outsideHome, .home, .homeChild, .protectedFolder("Documents"), .libraryChild, .dataRoot, .tooShallow,
+            .protectedSubtree("~/Library/CloudStorage"), .ownerMarkerMissing, .ownerMarkerMismatch,
         ]
         XCTAssertEqual(Set(refusals.map(\.logReason)).count, refusals.count)
         XCTAssertEqual(EraseOnQuitRefusal.symbolicLink.logReason, "the path is a symbolic link")

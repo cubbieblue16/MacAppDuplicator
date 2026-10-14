@@ -16,6 +16,9 @@ public enum EraseOnQuitRefusal: Error, Equatable {
     case libraryChild
     case dataRoot
     case tooShallow
+    case protectedSubtree(String)
+    case ownerMarkerMissing
+    case ownerMarkerMismatch
 
     public var logReason: String {
         switch self {
@@ -32,6 +35,9 @@ public enum EraseOnQuitRefusal: Error, Equatable {
         case .libraryChild: "the folder is directly inside ~/Library"
         case .dataRoot: "the folder is the App Duplicator data root"
         case .tooShallow: "the folder is fewer than four levels below /"
+        case .protectedSubtree(let name): "the folder is \(name) or inside it, where other apps and the user keep their files"
+        case .ownerMarkerMissing: "the folder has no \(DataFolderOwnership.markerFileName) ownership marker, so App Duplicator did not create it"
+        case .ownerMarkerMismatch: "the folder's \(DataFolderOwnership.markerFileName) ownership marker names a different shortcut"
         }
     }
 }
@@ -41,15 +47,12 @@ public enum EraseOnQuitRefusal: Error, Equatable {
 /// sit at least two levels inside the home folder, away from `~/Library`'s direct children and the App Duplicator data
 /// root. Callers erase the URL this returns, never the configured string.
 public enum EraseOnQuitPolicy {
-    /// Folders directly inside the home folder, named in the refusal. Every other direct child is refused as well.
-    public static let protectedFolders = ["Applications", "Desktop", "Documents", "Downloads", "Library", "Movies", "Music", "Pictures", "Public"]
-    /// `<home>/Library/Application Support/App Duplicator`, the parent of every default data folder
-    /// (`ShortcutConfig.defaultDataPath(forSlug:home:)`).
-    static let dataRootComponents = ["Library", "Application Support", "App Duplicator"]
-    /// The shortest path accepted, counted in components below `/`.
-    static let minimumComponentCount = 4
+    /// Folders directly inside the home folder, named in the refusal (`DataPathRules.protectedFolders`).
+    public static var protectedFolders: [String] { DataPathRules.protectedFolders }
 
-    public static func check(dataPath: String, home: URL) -> Result<URL, EraseOnQuitRefusal> {
+    /// - Parameter bundleIdentifier: the shortcut's own bundle identifier; the folder's `.mad-data-owner` marker must name
+    ///   exactly it, so a folder App Duplicator did not create for this shortcut is never emptied.
+    public static func check(dataPath: String, home: URL, bundleIdentifier: String) -> Result<URL, EraseOnQuitRefusal> {
         let components = dataPath.split(separator: "/").map(String.init)
         guard dataPath.hasPrefix("/"), let name = components.last, !components.contains(where: { $0 == "." || $0 == ".." }) else {
             return .failure(.malformedPath)
@@ -79,41 +82,16 @@ public enum EraseOnQuitPolicy {
         if let refusal = checkShape(resolved, home: homeComponents) {
             return .failure(refusal)
         }
-        return .success(URL(fileURLWithPath: "/" + resolved.joined(separator: "/"), isDirectory: true))
+        let folder = URL(fileURLWithPath: "/" + resolved.joined(separator: "/"), isDirectory: true)
+        if let refusal = DataFolderOwnership.refusal(for: folder, bundleIdentifier: bundleIdentifier) {
+            return .failure(refusal)
+        }
+        return .success(folder)
     }
 
     /// The location rules on already resolved components; no file-system access. `nil` means the folder may be emptied.
     static func checkShape(_ path: [String], home: [String]) -> EraseOnQuitRefusal? {
-        let folded = path.map(fold)
-        let foldedHome = home.map(fold)
-        guard folded.starts(with: foldedHome) else {
-            return .outsideHome
-        }
-        let relative = Array(folded.dropFirst(foldedHome.count))
-        if relative.isEmpty {
-            return .home
-        }
-        if relative.count == 1 {
-            if let named = protectedFolders.first(where: { fold($0) == relative[0] }) {
-                return .protectedFolder(named)
-            }
-            return .homeChild
-        }
-        if relative.count == 2, relative[0] == fold("Library") {
-            return .libraryChild
-        }
-        if relative == dataRootComponents.map(fold) {
-            return .dataRoot
-        }
-        if path.count < minimumComponentCount {
-            return .tooShallow
-        }
-        return nil
-    }
-
-    /// APFS compares names case-insensitively after Unicode normalisation, so the guard does too.
-    static func fold(_ component: String) -> String {
-        component.precomposedStringWithCanonicalMapping.lowercased()
+        DataPathRules.refusal(path, home: home)
     }
 
     /// `realpath(3)` split into components, or `nil` with `errno` set.

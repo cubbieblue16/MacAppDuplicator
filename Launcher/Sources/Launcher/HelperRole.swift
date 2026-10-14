@@ -40,6 +40,7 @@ func runHelperRole(arguments argv: [String]) -> Never {
         startTime: helperArguments.startTime,
         requiresExec: true,
         erasePath: erasePath,
+        bundleIdentifier: helperConfig.bundleIdentifier,
         home: FileManager.default.homeDirectoryForCurrentUser,
         log: helperLog
     )

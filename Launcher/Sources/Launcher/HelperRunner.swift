@@ -13,6 +13,8 @@ struct HelperSession: Sendable {
     var requiresExec: Bool
     /// The data folder to empty after the target quits, already matched against `MADConfig`; nil means no erase.
     var erasePath: String?
+    /// The shortcut's bundle identifier; the data folder's ownership marker must name it before anything is erased.
+    var bundleIdentifier: String
     /// The real home folder, for `EraseOnQuitPolicy`.
     var home: URL
     var log: LaunchLogger
@@ -169,7 +171,7 @@ enum HelperRunner {
             session.log.log(HelperLogLine.otherCopiesRunning(pids: others))
             return
         }
-        switch EraseOnQuitPolicy.check(dataPath: erasePath, home: session.home) {
+        switch EraseOnQuitPolicy.check(dataPath: erasePath, home: session.home, bundleIdentifier: session.bundleIdentifier) {
         case .success(let folder):
             let outcome = EraseOnQuitPerformer.erase(at: folder)
             session.log.log(HelperLogLine.erased(path: folder.path, removed: outcome.removed, failed: outcome.failures.count))

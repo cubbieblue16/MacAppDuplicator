@@ -146,9 +146,14 @@ public struct LauncherActionPlanner {
         }
         let path = URL(filePath: ShortcutConfig.defaultDataPath(forSlug: config.slug, home: realHome), directoryHint: .isDirectory)
         do {
-            try fileManager.createDirectory(at: path, withIntermediateDirectories: true)
+            let claims = DataFolderOwnership.canClaim(path, home: realHome, fileManager: fileManager)
+            try DataFolderOwnership.createOrVerify(path, fileManager: fileManager)
             let symlinkEntries = config.homeSymlinkEntries ?? HomeTreeBuilder.defaultSymlinkEntries
-            return try HomeTreeBuilder(fileManager: fileManager, realHome: realHome, symlinkEntries: symlinkEntries).materialize(at: path)
+            let home = try HomeTreeBuilder(fileManager: fileManager, realHome: realHome, symlinkEntries: symlinkEntries).materialize(at: path)
+            if claims {
+                try? DataFolderOwnership.claim(path, bundleIdentifier: config.bundleIdentifier)
+            }
+            return home
         } catch {
             throw LauncherError.dataPathNotWritable(path.path)
         }
