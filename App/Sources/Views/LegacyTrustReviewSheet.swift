@@ -72,9 +72,10 @@ struct LegacyTrustReviewSheet: View {
 
     private var explanation: String {
         let count = review.approvals.count
+        // "Look like": the rule (tokenless, ad hoc, not quarantined) cannot prove who built a bundle, so the user decides.
         let built = count == 1
-            ? "This shortcut was built by an earlier App Duplicator (or madctl) before shortcuts were stamped as yours, so it reads"
-            : "These \(count) shortcuts were built by an earlier App Duplicator (or madctl) before shortcuts were stamped as yours, so they read"
+            ? "This shortcut looks like one an earlier App Duplicator (or madctl) built before shortcuts were stamped as yours, so it reads"
+            : "These \(count) shortcuts look like ones an earlier App Duplicator (or madctl) built before shortcuts were stamped as yours, so they read"
         let them = count == 1 ? "it" : "them"
         return "\(built) as not created here. Trust All and Rebuild signs \(them) as your own and trusts \(them) from then on. "
             + "Check every value first."
