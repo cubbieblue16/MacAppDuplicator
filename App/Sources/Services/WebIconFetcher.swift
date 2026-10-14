@@ -12,6 +12,53 @@ protocol WebIconFetching: Sendable {
     func fetchIcon(for pageURL: URL) async throws -> Data?
 }
 
+/// Resolves a host name to the raw addresses (4-byte IPv4 or 16-byte IPv6, network order) it points at. An empty
+/// result means the name did not resolve. Injected so tests never touch DNS.
+typealias IconHostResolver = @Sendable (_ host: String) async -> [[UInt8]]
+
+/// The resolver the app uses: `getaddrinfo` on a background queue, so a slow lookup never blocks the main actor.
+enum SystemIconHostResolver {
+    static let resolve: IconHostResolver = { host in
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(returning: addresses(of: host))
+            }
+        }
+    }
+
+    /// Every IPv4 and IPv6 address `getaddrinfo` returns for `host` (IP literals resolve to themselves).
+    static func addresses(of rawHost: String) -> [[UInt8]] {
+        var host = rawHost
+        if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC
+        hints.ai_socktype = SOCK_STREAM
+        var head: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host, nil, &hints, &head) == 0, let first = head else { return [] }
+        defer { freeaddrinfo(head) }
+        var result: [[UInt8]] = []
+        var node: UnsafeMutablePointer<addrinfo>? = first
+        while let current = node {
+            if let address = current.pointee.ai_addr {
+                switch Int32(address.pointee.sa_family) {
+                case AF_INET:
+                    address.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { pointer in
+                        result.append(withUnsafeBytes(of: pointer.pointee.sin_addr) { Array($0) })
+                    }
+                case AF_INET6:
+                    address.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { pointer in
+                        result.append(withUnsafeBytes(of: pointer.pointee.sin6_addr) { Array($0) })
+                    }
+                default:
+                    break
+                }
+            }
+            node = current.pointee.ai_next
+        }
+        return result
+    }
+}
+
 /// Picks the icon address out of a page's HTML. Pure and offline so the precedence rules are tested without a network.
 enum WebIconHTMLParser {
     /// `apple-touch-icon` links beat `icon` links; within a class the largest `sizes` wins and the first one in the
@@ -92,6 +139,18 @@ enum WebIconHTMLParser {
         return !isLoopbackOrPrivate(host: host)
     }
 
+    /// `isFetchableIconURL(_:pageHost:)` plus name resolution: the host must resolve, and EVERY address it resolves to
+    /// must be public. A public-looking name that points at `10.x`, `127.0.0.1` or a link-local address (including the
+    /// page's own host: only the literal check has that exemption) is refused. This closes the "attacker.example has
+    /// an A record for 169.254.169.254" route that the literal check cannot see. A DNS answer that changes between
+    /// this check and the connection (rebinding) is not covered.
+    static func isFetchableIconURL(_ url: URL, pageHost: String?, resolver: IconHostResolver) async -> Bool {
+        guard isFetchableIconURL(url, pageHost: pageHost),
+              let host = url.host(percentEncoded: false), !host.isEmpty else { return false }
+        let addresses = await resolver(host)
+        return !addresses.isEmpty && addresses.allSatisfy { !isNonPublic($0) }
+    }
+
     /// True when `rawHost` names this machine or a non-public network: `localhost`, `.local`, and any IP literal in a
     /// loopback, private, link-local, carrier-grade NAT, unspecified or multicast range. IP literals are parsed the way
     /// the system resolver does, so legacy spellings (`127.1`, `0x7f000001`, `2130706433`) and IPv4-mapped IPv6
@@ -112,7 +171,7 @@ enum WebIconHTMLParser {
     }
 
     /// `bytes` is a 4-byte IPv4 or 16-byte IPv6 address in network order.
-    private static func isNonPublic(_ bytes: [UInt8]) -> Bool {
+    static func isNonPublic(_ bytes: [UInt8]) -> Bool {
         if bytes.count == 4 {
             switch (bytes[0], bytes[1]) {
             case (0, _), (10, _), (127, _), (169, 254), (192, 168): return true
@@ -154,6 +213,13 @@ final class RedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
     /// Attached per task (not per session): a session that owns a delegate stays alive until it is invalidated.
     static let shared = RedirectGuard()
 
+    private let resolver: IconHostResolver
+
+    init(resolver: @escaping IconHostResolver = SystemIconHostResolver.resolve) {
+        self.resolver = resolver
+    }
+
+    /// The literal check answers at once; a name that passes it is resolved first, so the answer is asynchronous.
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
@@ -161,11 +227,16 @@ final class RedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
         newRequest request: URLRequest,
         completionHandler: @escaping @Sendable (URLRequest?) -> Void
     ) {
+        let originalHost = task.originalRequest?.url?.host(percentEncoded: false)
         guard let target = request.url, WebIconHTMLParser.isRedirectAllowed(to: target, from: task.originalRequest?.url) else {
             completionHandler(nil)
             return
         }
-        completionHandler(request)
+        let resolver = resolver
+        Task {
+            let allowed = await WebIconHTMLParser.isFetchableIconURL(target, pageHost: originalHost, resolver: resolver)
+            completionHandler(allowed ? request : nil)
+        }
     }
 }
 
@@ -180,9 +251,12 @@ struct URLSessionWebIconFetcher: WebIconFetching {
     private static let logger = Logger(subsystem: "com.mikekuta.MacAppDuplicator", category: "WebIconFetcher")
 
     let session: URLSession
+    /// Resolves candidate icon hosts before they are requested; replaced in tests.
+    let resolver: IconHostResolver
 
-    init(session: URLSession = URLSessionWebIconFetcher.makeSession()) {
+    init(session: URLSession = URLSessionWebIconFetcher.makeSession(), resolver: @escaping IconHostResolver = SystemIconHostResolver.resolve) {
         self.session = session
+        self.resolver = resolver
     }
 
     /// An ephemeral session (no cookies, no cache) with the fetcher's timeouts.
@@ -204,7 +278,7 @@ struct URLSessionWebIconFetcher: WebIconFetching {
             let baseURL = page.finalURL
             let html = String(decoding: page.data, as: UTF8.self)
             if let declared = WebIconHTMLParser.iconURL(inHTML: html, pageURL: baseURL),
-               WebIconHTMLParser.isFetchableIconURL(declared, pageHost: baseURL.host(percentEncoded: false)) {
+               await WebIconHTMLParser.isFetchableIconURL(declared, pageHost: baseURL.host(percentEncoded: false), resolver: resolver) {
                 candidates.append(declared)
             }
             if let favicon = URL(string: "/favicon.ico", relativeTo: baseURL)?.absoluteURL, !candidates.contains(favicon) {
@@ -219,6 +293,11 @@ struct URLSessionWebIconFetcher: WebIconFetching {
             if let favicon = URL(string: "/favicon.ico", relativeTo: pageURL)?.absoluteURL { candidates.append(favicon) }
         }
         for candidate in candidates {
+            // The /favicon.ico candidates were not declared by the page, but they are on the page's host, which may
+            // itself resolve to a private address; every candidate is resolved before it is requested.
+            guard await WebIconHTMLParser.isFetchableIconURL(
+                candidate, pageHost: candidate.host(percentEncoded: false), resolver: resolver
+            ) else { continue }
             do {
                 if let icon = try await get(candidate, oversize: .reject), Self.isDecodableImage(icon.data) { return icon.data }
             } catch let error as URLError {

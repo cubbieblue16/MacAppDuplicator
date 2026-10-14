@@ -101,23 +101,93 @@ final class WebIconHTMLParserTests: XCTestCase {
         XCTAssertFalse(try allowed("http://192.168.1.2/", from: "http://192.168.1.1/"), "a different private host is not")
     }
 
-    func testTheRedirectGuardCancelsUnfetchableRedirectsAndFollowsOthers() throws {
+    func testTheRedirectGuardCancelsUnfetchableRedirectsAndFollowsOthers() async throws {
         let session = URLSessionWebIconFetcher.makeSession()
         defer { session.invalidateAndCancel() }
+        let guardUnderTest = RedirectGuard(resolver: { host in
+            host == "rebind.example.test" ? [[10, 0, 0, 8]] : [[93, 184, 216, 34]]
+        })
         let original = try XCTUnwrap(URL(string: "https://www.example.test/favicon.ico"))
         let task = session.dataTask(with: URLRequest(url: original))
         let response = try XCTUnwrap(HTTPURLResponse(url: original, statusCode: 302, httpVersion: nil, headerFields: nil))
-        func decision(for target: String) throws -> URLRequest? {
+        func decision(for target: String) async throws -> URLRequest? {
             let next = URLRequest(url: try XCTUnwrap(URL(string: target)))
-            let answer = OSAllocatedUnfairLock<URLRequest??>(initialState: nil)
-            RedirectGuard.shared.urlSession(session, task: task, willPerformHTTPRedirection: response, newRequest: next) { decided in
-                answer.withLock { $0 = .some(decided) }
+            return await withCheckedContinuation { continuation in
+                guardUnderTest.urlSession(session, task: task, willPerformHTTPRedirection: response, newRequest: next) { decided in
+                    continuation.resume(returning: decided)
+                }
             }
-            return try XCTUnwrap(answer.withLock { $0 }, "the guard must answer synchronously")
         }
-        XCTAssertEqual(try decision(for: "https://cdn.example.test/favicon.ico")?.url?.host, "cdn.example.test")
-        XCTAssertNil(try decision(for: "http://169.254.169.254/latest/meta-data/"))
-        XCTAssertNil(try decision(for: "http://127.1/"))
+        let followed = try await decision(for: "https://cdn.example.test/favicon.ico")
+        XCTAssertEqual(followed?.url?.host, "cdn.example.test")
+        let metadata = try await decision(for: "http://169.254.169.254/latest/meta-data/")
+        XCTAssertNil(metadata)
+        let loopback = try await decision(for: "http://127.1/")
+        XCTAssertNil(loopback)
+        let rebound = try await decision(for: "https://rebind.example.test/favicon.ico")
+        XCTAssertNil(rebound, "a public-looking name that resolves to 10.x is refused")
+    }
+
+    // MARK: - R5: resolved addresses
+
+    private func resolverReturning(_ addresses: [[UInt8]]) -> IconHostResolver { { _ in addresses } }
+
+    private func fetchable(_ address: String, resolves: [[UInt8]], pageHost: String? = "www.example.test") async throws -> Bool {
+        await WebIconHTMLParser.isFetchableIconURL(
+            try XCTUnwrap(URL(string: address)), pageHost: pageHost, resolver: resolverReturning(resolves)
+        )
+    }
+
+    func testANameResolvingToANonPublicAddressIsRefused() async throws {
+        let ipv6Loopback = [UInt8](repeating: 0, count: 15) + [1]
+        let linkLocal: [UInt8] = [0xfe, 0x80] + [UInt8](repeating: 0, count: 13) + [1]
+        let mappedPrivate: [UInt8] = [UInt8](repeating: 0, count: 10) + [0xff, 0xff, 10, 0, 0, 1]
+        let uniqueLocal: [UInt8] = [0xfd, 0x12] + [UInt8](repeating: 0, count: 14)
+        let multicast: [UInt8] = [0xff, 0x02] + [UInt8](repeating: 0, count: 13) + [1]
+        let refused: [[UInt8]] = [[10, 1, 2, 3], [127, 0, 0, 1], [172, 16, 0, 1], [192, 168, 1, 1], [169, 254, 169, 254],
+                                  [100, 64, 0, 1], [0, 0, 0, 0], ipv6Loopback, linkLocal, mappedPrivate, uniqueLocal, multicast]
+        for address in refused {
+            let allowed = try await fetchable("https://cdn.example.test/i.png", resolves: [address])
+            XCTAssertFalse(allowed, "\(address)")
+        }
+    }
+
+    func testANameResolvingToAPublicAddressIsAllowed() async throws {
+        let allowed = try await fetchable("https://cdn.example.test/i.png", resolves: [[93, 184, 216, 34]])
+        XCTAssertTrue(allowed)
+        let publicV6: [UInt8] = [0x26, 0x06, 0x47, 0x00] + [UInt8](repeating: 0, count: 11) + [0x11]
+        let dual = try await fetchable("https://cdn.example.test/i.png", resolves: [[93, 184, 216, 34], publicV6])
+        XCTAssertTrue(dual)
+    }
+
+    func testOneNonPublicAddressAmongPublicOnesRefuses() async throws {
+        let mixed = try await fetchable("https://cdn.example.test/i.png", resolves: [[93, 184, 216, 34], [10, 0, 0, 1]])
+        XCTAssertFalse(mixed)
+    }
+
+    func testAnUnresolvableNameIsRefused() async throws {
+        let none = try await fetchable("https://cdn.example.test/i.png", resolves: [])
+        XCTAssertFalse(none)
+    }
+
+    func testThePageHostIsStillResolved() async throws {
+        let own = try await fetchable("https://www.example.test/i.png", resolves: [[10, 0, 0, 5]], pageHost: "www.example.test")
+        XCTAssertFalse(own, "the pageHost exemption covers the literal check only")
+        let ownPublic = try await fetchable("https://www.example.test/i.png", resolves: [[93, 184, 216, 34]], pageHost: "www.example.test")
+        XCTAssertTrue(ownPublic)
+    }
+
+    func testTheLiteralCheckStillRunsBeforeResolution() async throws {
+        let literal = try await fetchable("http://127.0.0.1/i.png", resolves: [[93, 184, 216, 34]])
+        XCTAssertFalse(literal)
+    }
+
+    func testSystemResolverReturnsIPLiteralsWithoutDNS() {
+        XCTAssertEqual(SystemIconHostResolver.addresses(of: "127.0.0.1"), [[127, 0, 0, 1]])
+        XCTAssertEqual(SystemIconHostResolver.addresses(of: "93.184.216.34"), [[93, 184, 216, 34]])
+        let loopback6 = SystemIconHostResolver.addresses(of: "[::1]")
+        XCTAssertEqual(loopback6, [[UInt8](repeating: 0, count: 15) + [1]])
+        XCTAssertTrue(SystemIconHostResolver.addresses(of: "").isEmpty)
     }
 
     func testUnusableLinksAreSkipped() {
@@ -141,11 +211,12 @@ final class URLSessionWebIconFetcherTests: XCTestCase {
     private var host: String!
     private var routes: [String] = []
     private var fetcher: URLSessionWebIconFetcher!
+    private let publicResolver: IconHostResolver = { _ in [[93, 184, 216, 34]] }
 
     override func setUp() {
         host = "icons-\(UUID().uuidString.prefix(8).lowercased()).test"
         routes = []
-        fetcher = URLSessionWebIconFetcher(session: StubURLProtocol.makeSession())
+        fetcher = URLSessionWebIconFetcher(session: StubURLProtocol.makeSession(), resolver: publicResolver)
     }
 
     override func tearDown() {
@@ -188,6 +259,23 @@ final class URLSessionWebIconFetcherTests: XCTestCase {
         let data = try await fetcher.fetchIcon(for: url("/"))
 
         XCTAssertEqual(data, png)
+    }
+
+    func testNeverRequestsAnIconHostThatResolvesToAPrivateAddress() async throws {
+        let png = try pngData(letter: "P")
+        let evil = "cdn-\(host!)"
+        route("/", StubbedResponse(html: #"<link rel="icon" href="https://\#(evil)/steal.png">"#))
+        StubURLProtocol.setRoute("https://\(evil)/steal.png", StubbedResponse(body: png))
+        routes.append("https://\(evil)/steal.png")
+        let privateHost = host!
+        let guarded = URLSessionWebIconFetcher(session: StubURLProtocol.makeSession(), resolver: { name in
+            name == privateHost ? [[93, 184, 216, 34]] : [[10, 0, 0, 7]]
+        })
+
+        let data = try await guarded.fetchIcon(for: url("/"))
+
+        XCTAssertNil(data)
+        XCTAssertTrue(StubURLProtocol.requests(forHost: evil).isEmpty, "the private-resolving host was never contacted")
     }
 
     func testFallsBackToFaviconIcoWhenThePageDeclaresNothingOrTheDeclaredIconFails() async throws {
