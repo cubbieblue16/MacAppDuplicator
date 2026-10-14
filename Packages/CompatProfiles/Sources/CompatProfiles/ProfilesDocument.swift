@@ -178,12 +178,8 @@ extension ProfilesDocument {
     /// `CFFIXED_USER_HOME`, Firefox's `XRE_` overrides).
     static let refusedEnvironmentKeyPattern =
         #"\A(?:DYLD_|LD_|MAD_|XRE_)|\A(?:NODE_OPTIONS|ELECTRON_RUN_AS_NODE|JAVA_TOOL_OPTIONS|_JAVA_OPTIONS|JDK_JAVA_OPTIONS|HOME|CFFIXED_USER_HOME)\z"#
-    /// Argument prefixes a profile may not use, with one or two leading dashes in any case (Chromium accepts both):
-    /// debugger and remote-control switches, code loaders (`--load-extension`, `--renderer-cmd-prefix`, `-vmargs`,
-    /// `-javaagent`), sandbox and web-security switches, and the profile and data-folder switches the planner owns
-    /// (`--user-data-dir`, `--profile-directory`, Firefox `-profile` and `-P`, Eclipse `-data` and `-configuration`).
-    static let refusedArgumentPattern =
-        #"(?i)\A--?(?:inspect|remote-debugging|remote-allow-origins|load-extension|disable-extensions-except|disable-web-security|no-sandbox|renderer-cmd-prefix|utility-cmd-prefix|gpu-launcher|browser-subprocess-path|user-data-dir|profile|configuration|data\z|p\z|vm|javaagent)"#
+    /// Argument prefixes a profile may not use; defined once in DuplicatorCore so the wizard shares it.
+    static let refusedArgumentPattern = ProfileTrustRules.refusedArgumentPattern
 
     static func matches(_ value: String, _ pattern: String) -> Bool {
         value.range(of: pattern, options: .regularExpression) != nil
@@ -268,7 +264,13 @@ extension AppProfile {
             }
             try ProfilesDocument.checkString(value, at: entryPath)
         }
-        if let newWindowCommand { try ProfilesDocument.checkString(newWindowCommand, at: "\(path).newWindowCommand") }
+        if let newWindowCommand {
+            try ProfilesDocument.checkString(newWindowCommand, at: "\(path).newWindowCommand")
+            // Remote documents may only plant a restricted template; users may still type anything in the editor.
+            guard NewWindowCommandBuilder.profileValidationMessage(for: newWindowCommand) == nil else {
+                throw ProfilesError.invalidField("\(path).newWindowCommand")
+            }
+        }
         if let notes { try ProfilesDocument.checkString(notes, at: "\(path).notes") }
     }
 }

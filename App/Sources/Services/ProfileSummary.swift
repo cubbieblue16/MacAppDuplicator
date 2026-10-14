@@ -12,6 +12,9 @@ enum ProfileSummary {
         var id: String { label }
     }
 
+    /// Shown in place of a remote profile's New Window command that fails `NewWindowCommandBuilder.profileValidationMessage`.
+    static let ignoredNewWindowNote = "Profile New Window command ignored (not allowed)"
+
     static func statusLabel(_ status: ProfileStatus) -> String {
         switch status {
         case .verified: "Verified"
@@ -46,8 +49,13 @@ enum ProfileSummary {
         rows.append(Row(label: "Environment",
                         value: environment.isEmpty ? "None" : environment.keys.sorted().map { "\($0)=\(environment[$0] ?? "")" }.joined(separator: " ")))
         if let template = profile.newWindowCommand?.trimmingCharacters(in: .whitespacesAndNewlines), !template.isEmpty {
-            let tokens = template.split(whereSeparator: \.isWhitespace).map(String.init)
-            rows.append(Row(label: "New Window", value: SecretMasking.maskArguments(tokens).joined(separator: " ")))
+            if NewWindowCommandBuilder.profileValidationMessage(for: template) != nil {
+                // The wizard does not copy this template (WizardModel.selectTarget); say so instead of listing it as a default.
+                rows.append(Row(label: "New Window", value: ignoredNewWindowNote))
+            } else {
+                let tokens = template.split(whereSeparator: \.isWhitespace).map(String.init)
+                rows.append(Row(label: "New Window", value: SecretMasking.maskArguments(tokens).joined(separator: " ")))
+            }
         }
         if let notes = profile.notes, !notes.isEmpty {
             rows.append(Row(label: "Notes", value: notes))

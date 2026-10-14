@@ -45,8 +45,8 @@ final class WizardModel {
     /// The compatibility profile for the selected target, if the profiles in use have one (spec §8).
     private(set) var profile: AppProfile?
     /// The profile's `args`, `env` and `newWindowCommand`, copied into the new shortcut by `makeConfig()` as editable
-    /// defaults; replaced whenever the target changes. A template `NewWindowCommandBuilder.validationMessage(for:)`
-    /// rejects is not copied, so a new shortcut never starts with a command its editor would refuse to save.
+    /// defaults; replaced whenever the target changes. A template `NewWindowCommandBuilder.profileValidationMessage(for:)`
+    /// rejects (the strict check for remote documents, which includes the editor's own rules) is not copied.
     private(set) var arguments: [String] = []
     private(set) var environment: [String: String] = [:]
     private(set) var newWindowCommand: String?
@@ -224,7 +224,7 @@ final class WizardModel {
             profile = profileLookup(app.bundleIdentifier)
             arguments = profile?.args ?? []
             environment = profile?.env ?? [:]
-            if let template = profile?.newWindowCommand, NewWindowCommandBuilder.validationMessage(for: template) == nil {
+            if let template = profile?.newWindowCommand, NewWindowCommandBuilder.profileValidationMessage(for: template) == nil {
                 newWindowCommand = template
             } else {
                 newWindowCommand = nil

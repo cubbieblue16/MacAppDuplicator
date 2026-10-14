@@ -37,6 +37,34 @@ public enum NewWindowCommandBuilder {
         return hasControlCharacter ? "The New Window command may not contain control characters." : nil
     }
 
+    /// The only programs a remote profile's template may run: the target itself, or `open`.
+    public static let profileAllowedPrograms: Set<String> = ["{target}", "/usr/bin/open"]
+    /// Every token after the program must be a placeholder or a plain dashed flag. No shell metacharacter, `$`,
+    /// quote, backtick, `;`, `|`, `&` or whitespace can appear, so a token cannot carry a command even if a later
+    /// stage were ever to hand the line to a shell.
+    static let profileTokenPattern = #"\A(?:\{target\}|\{bundleId\}|\{dataPath\}|--?[A-Za-z0-9][-A-Za-z0-9_=.:/]*)\z"#
+
+    /// Why a template that came from a remote profile may not be used, or nil when it may. Stricter than
+    /// `validationMessage(for:)`: the program must be `{target}` or `/usr/bin/open`, every other token must be a
+    /// placeholder or a plain flag, and no token may match `ProfileTrustRules.refusedArgumentPattern`. Templates the
+    /// user types are governed by `validationMessage(for:)` alone; only remote documents are held to this check.
+    public static func profileValidationMessage(for template: String?) -> String? {
+        if let message = validationMessage(for: template) { return message }
+        guard let template else { return nil }
+        let tokens = template.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard let program = tokens.first else { return nil }
+        guard profileAllowedPrograms.contains(program) else {
+            return "A profile's New Window command must start with {target} or /usr/bin/open."
+        }
+        for token in tokens.dropFirst() {
+            guard ProfileTrustRules.matches(token, profileTokenPattern),
+                  !ProfileTrustRules.matches(token, ProfileTrustRules.refusedArgumentPattern) else {
+                return "A profile's New Window command may only use {target}, {bundleId}, {dataPath} and plain flags."
+            }
+        }
+        return nil
+    }
+
     /// One left-to-right pass: each `{name}` with a known name is replaced by its value; everything else is copied.
     private static func substitute(_ token: String, values: [(name: String, value: String)]) -> String {
         var result = ""

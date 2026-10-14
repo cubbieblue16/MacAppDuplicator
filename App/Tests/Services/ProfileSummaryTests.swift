@@ -69,11 +69,11 @@ final class ProfileSummaryTests: XCTestCase {
     func testNewWindowRowIsMaskedAndOnlyShownWhenPresent() throws {
         let profile = AppProfile(
             name: "Target", status: .verified, family: .native, args: [], env: [:],
-            newWindowCommand: "open -na {target} --args --api-key hunter2", notes: "Sign in once."
+            newWindowCommand: "/usr/bin/open -na {target} --args --api-key=hunter2", notes: "Sign in once."
         )
         let rows = ProfileSummary.rows(for: profile, detectedFamily: .native)
         let newWindow = try XCTUnwrap(rows.first { $0.label == "New Window" })
-        XCTAssertEqual(newWindow.value, "open -na {target} --args --api-key \(SecretMasking.maskedValue)")
+        XCTAssertEqual(newWindow.value, "/usr/bin/open -na {target} --args --api-key=\(SecretMasking.maskedValue)")
         let labels = rows.map(\.label)
         let environmentIndex = try XCTUnwrap(labels.firstIndex(of: "Environment"))
         let newWindowIndex = try XCTUnwrap(labels.firstIndex(of: "New Window"))
@@ -88,5 +88,13 @@ final class ProfileSummaryTests: XCTestCase {
                 String(describing: template)
             )
         }
+    }
+
+    func testDisallowedNewWindowTemplateIsReplacedByANote() throws {
+        let profile = AppProfile(name: "Target", status: .verified, family: .native,
+                                 newWindowCommand: "/bin/sh -c id")
+        let rows = ProfileSummary.rows(for: profile, detectedFamily: .native)
+        XCTAssertEqual(rows.first { $0.label == "New Window" }?.value, "Profile New Window command ignored (not allowed)")
+        XCTAssertFalse(rows.contains { $0.value.contains("/bin/sh") })
     }
 }
