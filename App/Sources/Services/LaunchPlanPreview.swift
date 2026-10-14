@@ -99,7 +99,7 @@ struct LaunchPlanPreview: Sendable {
         }
         planned.environment = plannedEnvironment
         let base = previewBaseEnvironment(home: home)
-        let action = try LauncherActionPlanner(realHome: home, terminalLocator: terminalLocator)
+        let action = try LauncherActionPlanner(realHome: home, terminalLocator: terminalLocator, terminalCommands: .preview)
             .plan(config: planned, baseEnvironment: base, shortcutBundleURL: bundleURL)
         guard case .spawn(let executable, let arguments, _, let environment, _, _) = action else {
             throw LauncherError.launcherConfigMissing(config.kind)
