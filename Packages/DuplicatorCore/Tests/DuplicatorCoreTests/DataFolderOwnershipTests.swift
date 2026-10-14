@@ -74,6 +74,29 @@ final class DataFolderOwnershipTests: XCTestCase {
         }
     }
 
+    func testPathStringRulesBackMadctlDataPathAndEraseOnQuit() throws {
+        let home = try makeHome()
+        func refusal(_ relative: String, erase: Bool) -> EraseOnQuitRefusal? {
+            DataPathRules.refusal(forPath: home.path + "/" + relative, home: home, allowOutsideHome: !erase)
+        }
+        XCTAssertEqual(refusal("Library/Mobile Documents/com~apple~CloudDocs/x", erase: true), .protectedSubtree("~/Library/Mobile Documents"))
+        XCTAssertEqual(refusal("Library/CloudStorage/Dropbox", erase: false), .protectedSubtree("~/Library/CloudStorage"))
+        XCTAssertEqual(refusal("Documents/Project", erase: true), .protectedSubtree("~/Documents"))
+        XCTAssertEqual(refusal("Library/Application Support/Slack", erase: true), .protectedSubtree("~/Library/Application Support"))
+        XCTAssertNil(refusal("Library/Application Support/App Duplicator/notes", erase: true))
+        XCTAssertNil(refusal("Work/Notes", erase: true), "A folder that does not exist yet passes; the marker is checked at quit")
+        XCTAssertEqual(DataPathRules.refusal(forPath: "/Users/Shared/notes", home: home, allowOutsideHome: true), nil)
+        XCTAssertEqual(DataPathRules.refusal(forPath: "/Users/Shared/notes", home: home, allowOutsideHome: false), .outsideHome)
+        XCTAssertEqual(DataPathRules.refusal(forPath: "relative/path", home: home, allowOutsideHome: true), .malformedPath)
+        XCTAssertEqual(DataPathRules.refusal(forPath: home.path + "/Work/../Documents/x", home: home, allowOutsideHome: true), .malformedPath)
+
+        let link = home.appending(path: "Work/link", directoryHint: .notDirectory)
+        try fileManager.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fileManager.createSymbolicLink(at: link, withDestinationURL: home.appending(path: "Library", directoryHint: .isDirectory))
+        try fileManager.createDirectory(at: home.appending(path: "Library/CloudStorage/Box", directoryHint: .isDirectory), withIntermediateDirectories: true)
+        XCTAssertEqual(DataPathRules.refusal(forPath: link.path + "/CloudStorage/Box", home: home, allowOutsideHome: false), .protectedSubtree("~/Library/CloudStorage"))
+    }
+
     // MARK: C4 ownership marker
 
     func testEraseRequiresAMarkerNamingTheShortcut() throws {

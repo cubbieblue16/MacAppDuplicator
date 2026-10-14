@@ -31,6 +31,13 @@ func makeConfig(app: InspectedApp, options: ShortcutOptions) throws -> ShortcutC
     }
     let dataPath: String?
     if let explicit = options.dataPath {
+        // The same location rules the app applies when a data folder is picked and the helper applies before it erases.
+        if let refusal = DataPathRules.refusal(
+            forPath: explicit, home: FileManager.default.homeDirectoryForCurrentUser, allowOutsideHome: !options.eraseOnQuit
+        ) {
+            let consequence = options.eraseOnQuit ? "--erase-on-quit would empty it" : "it is not a shortcut data folder"
+            throw ValidationError("--data-path \(explicit) is refused (\(refusal.logReason)); \(consequence).")
+        }
         dataPath = explicit
     } else if dataMode == .auto || dataMode == .homeOverride {
         dataPath = ShortcutConfig.defaultDataPath(forSlug: slug, home: FileManager.default.homeDirectoryForCurrentUser)

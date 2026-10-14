@@ -182,14 +182,41 @@ final class DataPathGuardTests: XCTestCase {
         ] {
             assertRefused(home.appending(path: folder).path, as: "targetAppData")
         }
-        let support = try realPath(dataRoot.deletingLastPathComponent())
-        assertAccepted(home.appending(path: "Library/Application Support/Target Work Data").path, resolvingTo: support + "/Target Work Data")
+        // Any other ~/Library/Application Support folder is refused too (C4): only the app's own data root is allowed.
+        assertRefused(home.appending(path: "Library/Application Support/Target Work Data").path, as: "protectedSubtree")
         // A shortcut of App Duplicator itself: its data folders inside the data root stay its own.
         let selfShortcut = DataPathGuard.validate(
             dataPath: dataRoot.appending(path: "work").path, targetPath: dir.appending(path: "Apps/App Duplicator.app").path,
             outputFolder: output, libraryFolders: [], otherRecordDataPaths: [], home: home
         )
         XCTAssertEqual(try selfShortcut.get().path, try realPath(dataRoot) + "/work")
+    }
+
+    func testRefusesSyncedContainerAndOtherAppsFolders() throws {
+        for relative in [
+            "Library/Mobile Documents/com~apple~CloudDocs/work",
+            "Library/CloudStorage/Dropbox/work",
+            "Library/Containers/com.example.app/Data/work",
+            "Library/Group Containers/group.example/work",
+            "Library/Application Support/SomeOtherApp/work",
+            "Documents/Project",
+            "Desktop/Stuff",
+            "Downloads/Stuff",
+        ] {
+            assertRefused(home.appending(path: relative).path, as: "protectedSubtree")
+        }
+        assertAccepted(dataRoot.appending(path: "fresh").path, resolvingTo: try realPath(dataRoot) + "/fresh")
+    }
+
+    func testDeepDocumentsFolderNeedsTheOwnerMarkerOnlyWhenItExists() throws {
+        let folder = home.appending(path: "Documents/Project/data", directoryHint: .isDirectory)
+        assertAccepted(folder.path, resolvingTo: try realPath(home.appending(path: "Documents")) + "/Project/data")
+
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        assertRefused(folder.path, as: "needsOwnerMarker")
+
+        try DataFolderOwnership.claim(folder, bundleIdentifier: "com.mikekuta.appduplicator.notes")
+        assertAccepted(folder.path, resolvingTo: try realPath(folder))
     }
 }
 
@@ -205,6 +232,8 @@ private extension DataPathGuardError {
         case .usedByAnotherShortcut: "usedByAnotherShortcut"
         case .overlapsShortcut: "overlapsShortcut"
         case .targetAppData: "targetAppData"
+        case .protectedSubtree: "protectedSubtree"
+        case .needsOwnerMarker: "needsOwnerMarker"
         }
     }
 }

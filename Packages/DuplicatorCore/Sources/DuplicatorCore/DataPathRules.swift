@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// The location rules for a shortcut data folder, shared by every place that accepts or erases one: the app's pick-time
@@ -56,6 +57,43 @@ public enum DataPathRules {
             return .tooShallow
         }
         return nil
+    }
+
+    /// `refusal(_:home:)` for a path string, for callers that have no resolved components (madctl): symbolic links along
+    /// the longest existing prefix are followed first, as the helper does at quit. A relative or `..` path is malformed.
+    /// - Parameter allowOutsideHome: true for a data folder that will not be erased, where `/Users/Shared` and similar
+    ///   places stay open; erase-on-quit never accepts a folder outside home.
+    public static func refusal(forPath dataPath: String, home: URL, allowOutsideHome: Bool) -> EraseOnQuitRefusal? {
+        let parts = dataPath.split(separator: "/").map(String.init)
+        guard dataPath.hasPrefix("/"), !parts.isEmpty, !parts.contains(where: { $0 == "." || $0 == ".." }) else {
+            return .malformedPath
+        }
+        let homeComponents = resolvedComponents(home.path) ?? home.path.split(separator: "/").map(String.init)
+        // Resolve the longest existing prefix, keep the rest as typed.
+        var existing = parts
+        var missing: [String] = []
+        var resolvedPrefix: [String]?
+        while !existing.isEmpty {
+            if let resolved = resolvedComponents("/" + existing.joined(separator: "/")) {
+                resolvedPrefix = resolved
+                break
+            }
+            missing.insert(existing.removeLast(), at: 0)
+        }
+        let path = (resolvedPrefix ?? []) + missing
+        let result = refusal(path, home: homeComponents)
+        if allowOutsideHome, result == .outsideHome || result == .tooShallow, !path.starts(with: homeComponents) {
+            return nil
+        }
+        return result
+    }
+
+    private static func resolvedComponents(_ path: String) -> [String]? {
+        guard let pointer = realpath(path, nil) else {
+            return nil
+        }
+        defer { free(pointer) }
+        return String(cString: pointer).split(separator: "/").map(String.init)
     }
 
     /// True for a folder that passes `refusal` but sits where the user keeps their own files (`~/Documents/<x>/<y>`):

@@ -46,21 +46,28 @@ nonisolated enum HelperEditorPolicy {
     /// The helper's own reason for never emptying `dataPath` (`EraseOnQuitPolicy.check`), or nil when it would. A folder
     /// that does not exist yet is not refused here: the shortcut's first launch creates it and the helper checks it
     /// again at every quit.
-    static func eraseRefusalReason(dataPath: String, home: URL) -> String? {
-        switch EraseOnQuitPolicy.check(dataPath: dataPath, home: home) {
+    ///
+    /// A folder without the ownership marker is accepted when the shortcut's next launch will claim it (new, empty,
+    /// inside App Duplicator's data folder or an App Duplicator HOME tree, `DataFolderOwnership.canClaim`); any other
+    /// unmarked folder is one App Duplicator did not create and is refused here as the helper would refuse it.
+    static func eraseRefusalReason(dataPath: String, home: URL, bundleIdentifier: String) -> String? {
+        switch EraseOnQuitPolicy.check(dataPath: dataPath, home: home, bundleIdentifier: bundleIdentifier) {
         case .success, .failure(.missing):
             return nil
+        case .failure(.ownerMarkerMissing):
+            let claimable = DataFolderOwnership.canClaim(URL(fileURLWithPath: dataPath, isDirectory: true), home: home)
+            return claimable ? nil : EraseOnQuitRefusal.ownerMarkerMissing.logReason
         case .failure(let refusal):
             return refusal.logReason
         }
     }
 
     /// What turning Erase on quit on needs for the data folder `dataPath` under `dataMode`.
-    static func eraseCheck(dataPath: String?, dataMode: DataMode, home: URL) -> EraseCheck {
+    static func eraseCheck(dataPath: String?, dataMode: DataMode, home: URL, bundleIdentifier: String) -> EraseCheck {
         guard dataMode != .disabled, let dataPath, !dataPath.isEmpty else {
             return .refused(disabledDataMessage)
         }
-        if let reason = eraseRefusalReason(dataPath: dataPath, home: home) {
+        if let reason = eraseRefusalReason(dataPath: dataPath, home: home, bundleIdentifier: bundleIdentifier) {
             return .refused("Erase on quit never empties this folder: \(reason).")
         }
         return canEnableEraseWithoutConfirm(dataPath: dataPath, home: home) ? .allowed : .needsConfirmation(dataPath: dataPath)
@@ -68,7 +75,7 @@ nonisolated enum HelperEditorPolicy {
 
     /// `eraseCheck(dataPath:dataMode:home:)` for the folder `config` uses: its `dataPath`, else its default folder.
     static func eraseCheck(for config: ShortcutConfig, home: URL) -> EraseCheck {
-        eraseCheck(dataPath: config.effectiveDataPath(home: home), dataMode: config.dataMode, home: home)
+        eraseCheck(dataPath: config.effectiveDataPath(home: home), dataMode: config.dataMode, home: home, bundleIdentifier: config.bundleIdentifier)
     }
 
     /// Message of the destructive confirmation for a custom folder.
@@ -159,7 +166,7 @@ nonisolated enum HelperEditorPolicy {
         guard let dataPath = HelperPlan.eraseDataPath(for: config.resolvingDefaultDataPath(home: home)) else {
             return "Off (no data folder to erase)"
         }
-        if let reason = eraseRefusalReason(dataPath: dataPath, home: home) {
+        if let reason = eraseRefusalReason(dataPath: dataPath, home: home, bundleIdentifier: config.bundleIdentifier) {
             return "On, but the folder is never erased: \(reason)"
         }
         return "On: \(dataPath)"
