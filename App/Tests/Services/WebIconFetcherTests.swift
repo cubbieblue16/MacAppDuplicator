@@ -190,6 +190,59 @@ final class WebIconHTMLParserTests: XCTestCase {
         XCTAssertTrue(SystemIconHostResolver.addresses(of: "").isEmpty)
     }
 
+    // MARK: - R6: bounded HTML
+
+    func testMegabyteOfUnterminatedLinkTagsReturnsQuickly() {
+        let hostile = String(repeating: "<link ", count: 1_048_576 / 6)
+        let started = Date()
+        let result = WebIconHTMLParser.iconURL(inHTML: hostile, pageURL: page)
+        let elapsed = Date().timeIntervalSince(started)
+        XCTAssertNil(result)
+        XCTAssertLessThan(elapsed, 2, "took \(elapsed)s")
+    }
+
+    func testMegabyteOfLinkLikeTextWithoutBracketsReturnsQuickly() {
+        let hostile = "<link " + String(repeating: "a=b ", count: 1_048_576 / 4)
+        let started = Date()
+        _ = WebIconHTMLParser.iconURL(inHTML: hostile, pageURL: page)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2)
+    }
+
+    func testManyMaxLengthTagsOfOneEndlessWordReturnQuickly() {
+        let tag = "<link rel=icon " + String(repeating: "a", count: 4000) + ">"
+        let hostile = String(repeating: tag, count: 60)
+        let started = Date()
+        _ = WebIconHTMLParser.iconURL(inHTML: hostile, pageURL: page)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2)
+    }
+
+    func testTagNameMustEndAfterLink() {
+        XCTAssertNil(icon(#"<linkage rel="icon" href="/x.png">"#))
+        XCTAssertEqual(icon(#"<link rel="icon" href="/x.png">"#), "https://www.example.test/x.png")
+    }
+
+    func testOnlyTheHeadIsScanned() {
+        XCTAssertEqual(icon(#"<head><link rel="icon" href="/h.png"></head><body><link rel="icon" href="/b.png">"#),
+                       "https://www.example.test/h.png")
+        XCTAssertNil(icon(#"<html><HEAD><title>x</title></HEAD><BODY><link rel="icon" href="/b.png"></BODY>"#))
+        XCTAssertNil(icon(#"<head></HEAD><link rel="icon" href="/after.png">"#))
+        XCTAssertNil(icon(#"<p>hi</p><BODY class=x><link rel="icon" href="/b.png">"#))
+        XCTAssertEqual(icon(#"<link rel="icon" href="/nohead.png">"#), "https://www.example.test/nohead.png", "no head or body marker: the capped text is scanned")
+    }
+
+    func testScanStopsAt256KiB() {
+        let filler = String(repeating: " ", count: WebIconHTMLParser.maxHeadBytes)
+        XCTAssertNil(icon(filler + #"<link rel="icon" href="/late.png">"#))
+        XCTAssertEqual(icon(#"<link rel="icon" href="/early.png">"# + filler), "https://www.example.test/early.png")
+    }
+
+    func testLinkTagLongerThan4096CharactersIsIgnored() {
+        let padding = String(repeating: "x", count: 5000)
+        XCTAssertNil(icon(#"<link rel="icon" data-pad=""# + padding + #"" href="/long.png">"#))
+        XCTAssertEqual(icon(#"<link rel="icon" data-pad=""# + String(repeating: "x", count: 3000) + #"" href="/ok.png">"#),
+                       "https://www.example.test/ok.png")
+    }
+
     func testUnusableLinksAreSkipped() {
         let html = """
         <link rel="mask-icon" href="/mask.svg">

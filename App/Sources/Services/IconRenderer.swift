@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import DuplicatorCore
 import Foundation
 import ImageIO
 
@@ -77,8 +78,13 @@ enum IconRenderer {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
             throw RenderError.unreadableImage("the fetched site icon")
         }
+        // Header-only checks first: a source with too many frames, or only frames over the pixel limit, is refused
+        // without decoding anything.
+        guard let indexes = ImageSourceLimits.decodableFrameIndexes(in: source) else {
+            throw RenderError.unreadableImage("the fetched site icon")
+        }
         var largest: CGImage?
-        for index in 0..<CGImageSourceGetCount(source) {
+        for index in indexes {
             guard let frame = CGImageSourceCreateImageAtIndex(source, index, nil) else { continue }
             if let current = largest, current.width * current.height >= frame.width * frame.height { continue }
             largest = frame
@@ -107,10 +113,16 @@ enum IconRenderer {
     /// `.icns` sources are copied; any other image readable by `NSImage` is resampled into an iconset.
     static func writeICNS(fromImageFile source: URL, to url: URL) throws {
         if source.pathExtension.lowercased() == "icns" {
-            try replaceFile(at: url, with: try Data(contentsOf: source))
+            try replaceFile(at: url, with: try BoundedFileReader.read(source))
             return
         }
-        guard let image = NSImage(contentsOf: source) else { throw RenderError.unreadableImage(source.path) }
+        let data = try BoundedFileReader.read(source)
+        // ImageIO formats are checked against the size limits first; formats it does not handle (a PDF) go to NSImage.
+        if let imageSource = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(imageSource) > 0,
+           ImageSourceLimits.decodableFrameIndexes(in: imageSource)?.isEmpty != false {
+            throw RenderError.unreadableImage(source.path)
+        }
+        guard let image = NSImage(data: data) else { throw RenderError.unreadableImage(source.path) }
         var proposed = CGRect(origin: .zero, size: NSSize(width: 1024, height: 1024))
         guard let cg = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil) else {
             throw RenderError.unreadableImage(source.path)

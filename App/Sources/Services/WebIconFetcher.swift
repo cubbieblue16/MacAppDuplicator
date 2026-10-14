@@ -66,7 +66,7 @@ enum WebIconHTMLParser {
     /// Relative hrefs are resolved against `pageURL`. Nil when the page declares no usable icon.
     static func iconURL(inHTML html: String, pageURL: URL) -> URL? {
         var best: (rank: Int, area: Int, url: URL)?
-        for tag in linkTags(in: html) {
+        for tag in linkTags(in: headSection(of: html)) {
             let attributes = attributes(in: tag)
             guard let rel = attributes["rel"], let href = attributes["href"] else { continue }
             let tokens = Set(rel.lowercased().split(whereSeparator: \.isWhitespace).map(String.init))
@@ -87,8 +87,22 @@ enum WebIconHTMLParser {
         return best?.url
     }
 
-    private static let linkTagPattern = regex(#"<link\b[^>]*>"#, options: [.caseInsensitive])
-    private static let attributePattern = regex(#"([A-Za-z_:][-A-Za-z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))"#)
+    /// Most of a page that is scanned for icon links, in bytes.
+    static let maxHeadBytes = 256 * 1024
+
+    /// The part of `html` that can hold icon links: up to the first `</head` or `<body` (case-insensitive), and never
+    /// more than `maxHeadBytes`. Bounds the regex work on a hostile page of unterminated tags.
+    static func headSection(of html: String) -> String {
+        let capped = String(decoding: html.utf8.prefix(maxHeadBytes), as: UTF8.self)
+        let ends = ["</head", "<body"].compactMap { capped.range(of: $0, options: .caseInsensitive)?.lowerBound }
+        guard let end = ends.min() else { return capped }
+        return String(capped[..<end])
+    }
+
+    /// Longest `<link ...>` tag that is considered; a longer one is not a real icon link.
+    static let maxLinkTagLength = 4096
+    /// Attribute names are bounded to 64 characters so a tag of one endless word cannot make the match quadratic.
+    private static let attributePattern = regex(#"(?<![-A-Za-z0-9_:.])([A-Za-z_:][-A-Za-z0-9_:.]{0,63}+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))"#)
     private static let sizePattern = regex(#"(\d+)\s*[xX]\s*(\d+)"#)
 
     /// The patterns above are constants; a failure here is a programming error caught by the first test run.
@@ -100,9 +114,47 @@ enum WebIconHTMLParser {
         }
     }
 
+    /// Every `<link ...>` tag of up to `maxLinkTagLength` characters after `<link`, in document order. A plain byte
+    /// scan rather than a regex: an unterminated `<link` repeated for a megabyte stays linear, because the position of
+    /// the next `>` is found once and reused for every later start before it.
     private static func linkTags(in html: String) -> [String] {
-        let range = NSRange(html.startIndex..., in: html)
-        return linkTagPattern.matches(in: html, range: range).compactMap { Range($0.range, in: html).map { String(html[$0]) } }
+        let bytes = Array(html.utf8)
+        let open = Array("<link".utf8)
+        var tags: [String] = []
+        var nextClose = 0
+        var index = 0
+        while index + open.count < bytes.count {
+            guard bytes[index] == UInt8(ascii: "<"), matchesLink(bytes, at: index, open: open) else {
+                index += 1
+                continue
+            }
+            let afterName = index + open.count
+            // `\b`: the tag name must end here, so `<linkage>` is not a link.
+            if isWordByte(bytes[afterName]) {
+                index += 1
+                continue
+            }
+            if nextClose < afterName {
+                guard let found = bytes[afterName...].firstIndex(of: UInt8(ascii: ">")) else { break }
+                nextClose = found
+            }
+            if nextClose - afterName <= maxLinkTagLength {
+                tags.append(String(decoding: bytes[index...nextClose], as: UTF8.self))
+                index = nextClose + 1
+            } else {
+                index += 1
+            }
+        }
+        return tags
+    }
+
+    private static func matchesLink(_ bytes: [UInt8], at index: Int, open: [UInt8]) -> Bool {
+        for offset in 1..<open.count where bytes[index + offset] | 0x20 != open[offset] { return false }
+        return true
+    }
+
+    private static func isWordByte(_ byte: UInt8) -> Bool {
+        (byte >= 0x30 && byte <= 0x39) || (byte | 0x20 >= 0x61 && byte | 0x20 <= 0x7a) || byte == UInt8(ascii: "_")
     }
 
     /// Lower-cased attribute names mapped to their values; the first occurrence of a name wins.
@@ -276,7 +328,7 @@ struct URLSessionWebIconFetcher: WebIconFetching {
         if let page {
             // Redirects (for example web.whatsapp.com → another host) change what relative hrefs mean.
             let baseURL = page.finalURL
-            let html = String(decoding: page.data, as: UTF8.self)
+            let html = String(decoding: page.data.prefix(WebIconHTMLParser.maxHeadBytes), as: UTF8.self)
             if let declared = WebIconHTMLParser.iconURL(inHTML: html, pageURL: baseURL),
                await WebIconHTMLParser.isFetchableIconURL(declared, pageHost: baseURL.host(percentEncoded: false), resolver: resolver) {
                 candidates.append(declared)
@@ -345,7 +397,8 @@ struct URLSessionWebIconFetcher: WebIconFetching {
     }
 
     static func isDecodableImage(_ data: Data) -> Bool {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return false }
-        return CGImageSourceGetCount(source) > 0
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let indexes = ImageSourceLimits.decodableFrameIndexes(in: source) else { return false }
+        return !indexes.isEmpty
     }
 }
