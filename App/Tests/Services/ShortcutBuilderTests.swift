@@ -167,6 +167,61 @@ final class ShortcutBuilderTests: XCTestCase {
         XCTAssertNil(record.config.dataPath)
     }
 
+    // MARK: erase-on-quit data folder shape rules (C4)
+
+    private func eraseConfig(path: String?, mode: DataMode = .homeOverride, erase: Bool = true) -> ShortcutConfig {
+        var c = config()
+        c.dataMode = mode
+        c.dataPath = path
+        c.eraseOnQuit = erase
+        return c
+    }
+
+    private var home: URL { FileManager.default.homeDirectoryForCurrentUser }
+
+    func testCreateRefusesEraseOnQuitOnAFolderThatFailsTheDataPathRules() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let documents = home.path + "/Documents"
+        XCTAssertThrowsError(try builder.create(config: eraseConfig(path: documents), in: out)) { error in
+            guard case ShortcutBuilder.BuilderError.eraseOnQuitFolderRefused(let path, _) = error else { return XCTFail("\(error)") }
+            XCTAssertEqual(path, documents)
+            XCTAssertTrue(error.localizedDescription.contains(documents))
+            XCTAssertTrue(error.localizedDescription.contains("Turn Erase on quit off"))
+        }
+        let written = (try? FileManager.default.contentsOfDirectory(atPath: out.path)) ?? []
+        XCTAssertTrue(written.isEmpty, "a refused build must write nothing: \(written)")
+
+        XCTAssertThrowsError(try builder.create(config: eraseConfig(path: home.path + "/Library/Mobile Documents/x"), in: out)) { error in
+            guard case ShortcutBuilder.BuilderError.eraseOnQuitFolderRefused = error else { return XCTFail("\(error)") }
+        }
+    }
+
+    func testCreateAllowsTheSameFolderWhenEraseOnQuitIsOff() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: eraseConfig(path: home.path + "/Documents", erase: false), in: out)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: bundle.path))
+    }
+
+    func testCreateAllowsEraseOnQuitOnTheDefaultDataFolder() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: eraseConfig(path: nil, mode: .auto), in: out)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: bundle.path))
+    }
+
+    func testRegenerateRefusesEraseOnQuitOnARefusedFolderAndLeavesTheBundleAlone() throws {
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try builder.create(config: config(), in: out)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        let plist = bundle.appending(path: "Contents/Info.plist")
+        let before = try Data(contentsOf: plist)
+
+        XCTAssertThrowsError(try builder.regenerate(record: record, config: eraseConfig(path: home.path + "/Documents"))) { error in
+            guard case ShortcutBuilder.BuilderError.eraseOnQuitFolderRefused = error else { return XCTFail("\(error)") }
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: bundle.path))
+        XCTAssertEqual(try Data(contentsOf: plist), before)
+    }
+
     func testExportCopiesBundle() throws {
         let out = dir.appending(path: "out", directoryHint: .isDirectory)
         let bundle = try builder.create(config: config(), in: out)
