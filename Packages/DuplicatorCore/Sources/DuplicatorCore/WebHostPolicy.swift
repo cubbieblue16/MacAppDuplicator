@@ -22,9 +22,11 @@ public struct WebHostPolicy: Equatable, Sendable {
         allowedHosts = hosts
     }
 
-    /// True when `url` is `http` or `https` and its host equals, or is a subdomain of, an allowed host.
+    /// True when `url` is `https` and its host equals, or is a subdomain of, an allowed host. Plain `http` never
+    /// stays in place: a network attacker could rewrite it, and the page would then run with the web app's
+    /// window, data store and native bridges.
     public func allowsInPlace(_ url: URL) -> Bool {
-        guard let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",
+        guard let scheme = url.scheme?.lowercased(), scheme == "https",
               let host = Self.normalizedHost(url.host)
         else {
             return false

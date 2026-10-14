@@ -16,7 +16,8 @@ final class WebHostPolicyTests: XCTestCase {
             ("https://web.whatsapp.com/", true),            // base host
             ("https://web.whatsapp.com/chat?x=1#frag", true),
             ("HTTPS://WEB.WhatsApp.COM/", true),            // case-insensitive
-            ("http://web.whatsapp.com/", true),             // http on an allowed host stays in place
+            ("http://web.whatsapp.com/", false),            // http never stays in place, even on an allowed host
+            ("HTTP://media.whatsapp.net/", false),
             ("https://static.web.whatsapp.com/", true),     // subdomain of base
             ("https://a.b.web.whatsapp.com/", true),        // nested subdomain
             ("https://whatsapp.net/", true),                // extra host

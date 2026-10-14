@@ -55,7 +55,8 @@ final class NavigationPolicyTests: XCTestCase {
     func testMainFrameHTTPInPolicyIsAllowed() throws {
         XCTAssertEqual(try decide("https://mail.example.com/inbox?folder=1", targetFrameIsMain: true), .allow)
         XCTAssertEqual(try decide("https://eu.mail.example.com/", targetFrameIsMain: true, navigationType: .other), .allow)
-        XCTAssertEqual(try decide("http://LOGIN.example.net/sso", targetFrameIsMain: true), .allow)
+        XCTAssertEqual(try decide("https://LOGIN.example.net/sso", targetFrameIsMain: true), .allow)
+        XCTAssertEqual(try decide("http://LOGIN.example.net/sso", targetFrameIsMain: true), .openExternally)
     }
 
     func testMainFrameHTTPOffPolicyOpensExternally() throws {
