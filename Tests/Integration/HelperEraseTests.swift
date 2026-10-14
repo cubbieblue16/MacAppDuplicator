@@ -184,8 +184,9 @@ final class HelperEraseTests: XCTestCase {
             logText = try String(contentsOf: logURL, encoding: .utf8)
         }
         let dump = try loadDump(from: dumpURL)
-        // The helper logs the folder `EraseOnQuitPolicy` resolved, so the test resolves it the same way.
-        let folder = try EraseOnQuitPolicy.check(dataPath: dataPath, home: home).get()
+        // The helper logs the folder `EraseOnQuitPolicy` resolved, so the test resolves it the same way (the erase removed
+        // the ownership marker too, so the policy would now refuse it).
+        let folder = URL(fileURLWithPath: String(cString: realpath(dataPath, nil)), isDirectory: true)
         let remaining = try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted()
 
         XCTAssertTrue(fixtureFinished, "The fixture was still running after 30 s. Log: \(logText)")

@@ -268,7 +268,7 @@ struct LaunchSection: View {
             return
         }
         let candidate = path ?? ShortcutConfig.defaultDataPath(forSlug: draft.slug, home: home)
-        switch HelperEditorPolicy.eraseCheck(dataPath: candidate, dataMode: draft.dataMode, home: home) {
+        switch HelperEditorPolicy.eraseCheck(dataPath: candidate, dataMode: draft.dataMode, home: home, bundleIdentifier: draft.bundleIdentifier) {
         case .allowed:
             draft.dataPath = path
         case .needsConfirmation(let dataPath):

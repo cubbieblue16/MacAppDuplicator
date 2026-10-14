@@ -36,19 +36,22 @@ public struct HomeTreeBuilder {
     /// Returns the effective HOME: `path`, or `path/<NSUserName()>` when `path` was not empty on first use.
     public func materialize(at path: URL) throws -> URL {
         let root = path.standardizedFileURL
+        // An existing folder is reused only when this user owns it and nobody else can write to it (R4): a planted
+        // `.mad-home-tree` in another account's folder is not trusted.
+        try DataFolderOwnership.createOrVerify(root, fileManager: fileManager)
         if isComplete(root) {
             return root
         }
-        try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
         let home: URL
         if try isEmpty(root) {
             home = root
         } else {
             home = root.appending(path: NSUserName(), directoryHint: .isDirectory)
+            try DataFolderOwnership.verifyUsable(home)
             if isComplete(home) {
                 return home
             }
-            try fileManager.createDirectory(at: home, withIntermediateDirectories: true)
+            try DataFolderOwnership.createOrVerify(home, fileManager: fileManager)
         }
         try build(at: home)
         return home

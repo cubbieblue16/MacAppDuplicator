@@ -12,6 +12,8 @@ enum DataPathGuardError: Error, Equatable, LocalizedError {
     case usedByAnotherShortcut(String)
     case overlapsShortcut(String)
     case targetAppData(String)
+    case protectedSubtree(String)
+    case needsOwnerMarker(String)
 
     var errorDescription: String? {
         switch self {
@@ -23,6 +25,8 @@ enum DataPathGuardError: Error, Equatable, LocalizedError {
         case .overlapsLibraryFolder(let path): "\(path) is or contains a shortcut library folder."
         case .usedByAnotherShortcut(let path): "\(path) is, contains or is inside another shortcut's data folder."
         case .overlapsShortcut(let path): "\(path) is, contains or is inside a shortcut bundle."
+        case .protectedSubtree(let name): "\(name) is a synced, system or personal folder (iCloud Drive, cloud storage, app containers, other apps' data, or a top-level folder in Documents, Desktop or Downloads), not a shortcut data folder."
+        case .needsOwnerMarker(let path): "\(path) already exists and App Duplicator did not create it (it has no \(DataFolderOwnership.markerFileName) marker); pick a new or empty folder."
         case .targetAppData(let path): "\(path) is or is inside the target app's own data in ~/Library (a folder named after the app or its bundle identifier); App Duplicator never uses or trashes it."
         }
     }
@@ -93,6 +97,23 @@ enum DataPathGuard {
         // `/Volumes/<volume>`, …), never one shortcut's own folder.
         let isShallow = candidate.isInside(homePath) ? candidate.depth == homePath.depth + 1 : candidate.depth <= 2
         if isShallow { return .failure(.protectedLocation(shown)) }
+
+        // The shared location rules (`DataPathRules`, also run by madctl and the helper before it erases): synced and
+        // container subtrees, other apps' Application Support, and top-level children of Documents, Desktop and Downloads.
+        // Outside home the checks above are the whole story.
+        if candidate.isInside(homePath) {
+            let components = candidate.path.split(separator: "/").map(String.init)
+            let homeComponents = homePath.path.split(separator: "/").map(String.init)
+            if case .protectedSubtree(let name)? = DataPathRules.refusal(components, home: homeComponents) {
+                return .failure(.protectedSubtree(name))
+            }
+            // `~/Documents/<x>/<y>` is the user's own space: an existing folder there is a data folder only when App
+            // Duplicator marked it. A folder that does not exist yet is created and marked at the first launch.
+            if DataPathRules.needsOwnerMarker(components, home: homeComponents),
+               FileManager.default.fileExists(atPath: candidate.path), DataFolderOwnership.owner(of: candidate.url) == nil {
+                return .failure(.needsOwnerMarker(shown))
+            }
+        }
 
         return .success(candidate.url)
     }

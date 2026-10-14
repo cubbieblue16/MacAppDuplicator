@@ -78,6 +78,7 @@ private func runSystemLaunchHelper(prepared: PreparedLaunch, targetPID: pid_t?, 
         startTime: startTime,
         requiresExec: false,
         erasePath: erasePath,
+        bundleIdentifier: prepared.config.bundleIdentifier,
         home: FileManager.default.homeDirectoryForCurrentUser,
         log: logger
     )

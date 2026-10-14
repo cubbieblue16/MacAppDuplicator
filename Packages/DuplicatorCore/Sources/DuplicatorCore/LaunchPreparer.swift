@@ -54,10 +54,16 @@ public struct LaunchPreparer {
         let app = try AppInspector().inspect(appAt: targetURL)
         var plan = DataSeparationPlanner().plan(app: app, config: config, baseEnvironment: baseEnvironment, shortcutBundleURL: shortcutBundleURL)
 
+        // Decided before anything is created: only a new, empty, inside-the-data-root or App Duplicator-built folder is
+        // claimed with the ownership marker erase-on-quit requires (C4). Written after the HOME tree is built, since a
+        // marker in an "empty" folder would push the tree into a subfolder.
+        let dataFolder = config.dataPath.map { URL(filePath: $0, directoryHint: .isDirectory).standardizedFileURL }
+        let claimsDataFolder = dataFolder.map { DataFolderOwnership.canClaim($0, home: realHome, fileManager: fileManager) } ?? false
+
         for directory in plan.directoriesToCreate {
             progress?("create \(directory.path)")
             do {
-                try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+                try DataFolderOwnership.createOrVerify(directory, fileManager: fileManager)
             } catch {
                 throw LauncherError.dataPathNotWritable(directory.path)
             }
@@ -75,6 +81,9 @@ public struct LaunchPreparer {
             } catch {
                 throw LauncherError.dataPathNotWritable(home.path)
             }
+        }
+        if claimsDataFolder, let dataFolder, plan.directoriesToCreate.contains(dataFolder) {
+            try? DataFolderOwnership.claim(dataFolder, bundleIdentifier: config.bundleIdentifier)
         }
         return PreparedLaunch(config: config, app: app, plan: plan)
     }

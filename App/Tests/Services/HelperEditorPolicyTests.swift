@@ -70,7 +70,7 @@ final class HelperEditorPolicyTests: XCTestCase {
         try FileManager.default.createSymbolicLink(atPath: link, withDestinationPath: work)
 
         func check(_ path: String?, _ mode: DataMode = .homeOverride) -> HelperEditorPolicy.EraseCheck {
-            HelperEditorPolicy.eraseCheck(dataPath: path, dataMode: mode, home: home)
+            HelperEditorPolicy.eraseCheck(dataPath: path, dataMode: mode, home: home, bundleIdentifier: appConfig().bundleIdentifier)
         }
         func refused(_ reason: String) -> HelperEditorPolicy.EraseCheck {
             .refused("Erase on quit never empties this folder: \(reason).")
@@ -90,6 +90,28 @@ final class HelperEditorPolicyTests: XCTestCase {
         XCTAssertEqual(check(custom, .disabled), .refused(HelperEditorPolicy.disabledDataMessage))
         XCTAssertEqual(check(nil), .refused(HelperEditorPolicy.disabledDataMessage))
         XCTAssertEqual(check(""), .refused(HelperEditorPolicy.disabledDataMessage))
+    }
+
+    func testEraseCheckRequiresTheOwnerMarkerOnFoldersAppDuplicatorDidNotBuild() throws {
+        let bundle = appConfig().bundleIdentifier
+        func check(_ path: String) -> HelperEditorPolicy.EraseCheck {
+            HelperEditorPolicy.eraseCheck(dataPath: path, dataMode: .homeOverride, home: home, bundleIdentifier: bundle)
+        }
+        let foreign = try makeFolder("Projects/foreign")
+        try Data("x".utf8).write(to: URL(fileURLWithPath: foreign + "/thesis.txt"))
+        XCTAssertEqual(check(foreign), .refused("Erase on quit never empties this folder: \(EraseOnQuitRefusal.ownerMarkerMissing.logReason)."))
+
+        let owned = try makeFolder("Projects/owned")
+        try DataFolderOwnership.claim(URL(fileURLWithPath: owned), bundleIdentifier: bundle)
+        XCTAssertEqual(check(owned), .needsConfirmation(dataPath: owned))
+
+        let other = try makeFolder("Projects/other")
+        try DataFolderOwnership.claim(URL(fileURLWithPath: other), bundleIdentifier: "com.mikekuta.appduplicator.someone-else")
+        XCTAssertEqual(check(other), .refused("Erase on quit never empties this folder: \(EraseOnQuitRefusal.ownerMarkerMismatch.logReason)."))
+
+        let legacy = try makeFolder("Library/Application Support/App Duplicator/legacy")
+        try Data("x".utf8).write(to: URL(fileURLWithPath: legacy + "/old.txt"))
+        XCTAssertEqual(check(legacy), .allowed, "a legacy folder inside the data root is claimed at the next launch")
     }
 
     func testEraseCheckForAConfigUsesItsEffectiveDataFolder() throws {
