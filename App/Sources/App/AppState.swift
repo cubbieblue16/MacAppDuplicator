@@ -61,6 +61,8 @@ final class AppState {
     var profileUpdateMessage: String?
     /// Rebuild All progress while it runs; nil otherwise.
     var rebuildProgress: RebuildProgress?
+    /// A save of a shortcut this App Duplicator did not create (C3), held for `ForeignShortcutApprovalSheet`.
+    var pendingForeignApproval: ForeignShortcutApproval?
 
     /// Removes a web app's WebKit store (Task 6). A property rather than an initializer argument so tests swap in a
     /// fake without a second initializer; the default deletes real files under `~/Library/WebKit`.
@@ -126,7 +128,36 @@ final class AppState {
         }
     }
 
+    /// Rewrites `record` with `config`. A shortcut this App Duplicator did not create (security review C3) is not
+    /// rewritten here: the rewrite signs it with the user's identity, which would make a received or planted config
+    /// run as the user's own. Its save waits in `pendingForeignApproval` for the review sheet and returns false;
+    /// `approveForeignShortcut` writes it.
     func save(record: ShortcutRecord, config: ShortcutConfig) async -> Bool {
+        if record.isForeign {
+            let bundleURL = record.bundleURL
+            let signature = await Task.detached(priority: .userInitiated) { CodeSignature.of(bundleAt: bundleURL) }.value
+            pendingForeignApproval = ForeignShortcutApproval(record: record, config: config, signature: signature)
+            return false
+        }
+        return await write(record: record, config: config)
+    }
+
+    /// Trust and Rebuild (C3): writes the reviewed config with this install's token and signing identity, so the
+    /// shortcut reads as created here from then on. Returns false (and sets `pendingError`) when the write fails.
+    @discardableResult
+    func approveForeignShortcut(_ approval: ForeignShortcutApproval) async -> Bool {
+        pendingForeignApproval = nil
+        return await write(record: approval.record, config: approval.config)
+    }
+
+    /// Review in Editor (C3): drops the held save without writing anything and shows the shortcut.
+    func cancelForeignApproval() {
+        guard let approval = pendingForeignApproval else { return }
+        pendingForeignApproval = nil
+        select(approval.record.bundleURL)
+    }
+
+    private func write(record: ShortcutRecord, config: ShortcutConfig) async -> Bool {
         do {
             let url = try builder.regenerate(record: record, config: config)
             await library.rescan()
@@ -153,21 +184,27 @@ final class AppState {
     /// Rebuild All (final review M16): rewrites every record whose engine version is stale, one at a time in a
     /// detached task so the main actor stays free, and carries on past a failure. `rebuildProgress` counts the
     /// finished records while it runs. Returns one result per record, in `recordsNeedingRebuild` order; failures are
-    /// reported there, never through `pendingError`.
+    /// reported there, never through `pendingError`. A shortcut this App Duplicator did not create (C3) is skipped and
+    /// reported as `.skipped`: it is rewritten and re-signed only after its own review.
     func rebuildAll() async -> [RebuildResult] {
         let records = library.recordsNeedingRebuild
         let builder = self.builder
         var results: [RebuildResult] = []
         rebuildProgress = RebuildProgress(done: 0, total: records.count)
         for record in records {
-            let outcome = await Task.detached(priority: .userInitiated) { () -> RebuildResult.Outcome in
-                do {
-                    _ = try builder.regenerate(record: record, config: record.config)
-                    return .rebuilt
-                } catch {
-                    return .failed(error.localizedDescription)
-                }
-            }.value
+            let outcome: RebuildResult.Outcome
+            if let reason = record.foreignReason {
+                outcome = .skipped(reason)
+            } else {
+                outcome = await Task.detached(priority: .userInitiated) { () -> RebuildResult.Outcome in
+                    do {
+                        _ = try builder.regenerate(record: record, config: record.config)
+                        return .rebuilt
+                    } catch {
+                        return .failed(error.localizedDescription)
+                    }
+                }.value
+            }
             results.append(RebuildResult(id: record.bundleURL, name: record.name, outcome: outcome))
             rebuildProgress = RebuildProgress(done: results.count, total: records.count)
         }
@@ -177,6 +214,14 @@ final class AppState {
     }
 
     func duplicate(_ record: ShortcutRecord, newName: String) async {
+        // C3: the copy would be signed and stamped as this install's own, so a foreign shortcut is reviewed first.
+        if let reason = record.foreignReason {
+            pendingError = AppError(
+                context: "Could not duplicate shortcut",
+                message: "\u{201C}\(record.name)\u{201D} was not created by this App Duplicator (\(reason)). Choose Regenerate, review it and choose Trust and Rebuild before duplicating it."
+            )
+            return
+        }
         do {
             let url = try builder.duplicate(
                 record: record, newName: newName, in: record.bundleURL.deletingLastPathComponent(),
