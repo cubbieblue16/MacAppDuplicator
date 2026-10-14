@@ -125,6 +125,10 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         webApp = try container.decodeIfPresent(WebAppConfig.self, forKey: .webApp)
         file = try container.decodeIfPresent(FileConfig.self, forKey: .file)
         cli = try container.decodeIfPresent(CLIConfig.self, forKey: .cli)
+        // A command shortcut's environment is written into the terminal command, so it gets the same check as `cli`.
+        if cli != nil, let problem = CLIConfig.environmentControlCharacterProblem(environment) {
+            throw DecodingError.dataCorruptedError(forKey: .environment, in: container, debugDescription: problem)
+        }
         engineVersion = try container.decode(Int.self, forKey: .engineVersion)
     }
 

@@ -41,7 +41,19 @@ final class LauncherActionPlannerTests: XCTestCase {
         realHome: URL,
         locator: @escaping @Sendable (TerminalChoice) -> URL? = LauncherActionPlannerTests.installed
     ) -> LauncherActionPlanner {
-        LauncherActionPlanner(realHome: realHome, terminalLocator: locator)
+        // Terminal and iTerm2 commands are written as scripts; keep them in a folder the test cleans up.
+        let scriptRoot = (try? makeTemporaryDirectory()) ?? realHome
+        return LauncherActionPlanner(realHome: realHome, terminalLocator: locator, terminalCommands: TerminalCommandBuilder(scriptRoot: scriptRoot))
+    }
+
+    /// The run script a Terminal or iTerm2 plan typed `exec /bin/sh '<path>'` for: its path and contents.
+    private func runScript(typedIn arguments: [String], file: StaticString = #filePath, line: UInt = #line) throws -> (path: String, body: String) {
+        let osascript = try XCTUnwrap(arguments.last, file: file, line: line)
+        let prefix = "exec /bin/sh '"
+        let start = try XCTUnwrap(osascript.range(of: prefix), osascript, file: file, line: line)
+        let end = try XCTUnwrap(osascript[start.upperBound...].firstIndex(of: "'"), osascript, file: file, line: line)
+        let path = String(osascript[start.upperBound..<end])
+        return (path, try String(contentsOfFile: path, encoding: .utf8))
     }
 
     private func assertLauncherError(
@@ -214,20 +226,24 @@ final class LauncherActionPlannerTests: XCTestCase {
 
         let action = try makePlanner(realHome: root).plan(config: makeConfig(kind: .cli, cli: cli), baseEnvironment: [:], shortcutBundleURL: nil)
 
+        guard case .spawn(let executable, let arguments, let displayArguments, let environment, let workingDirectory, let terminal) = action else {
+            return XCTFail("expected spawn, got \(action)")
+        }
+        XCTAssertEqual(executable, URL(filePath: "/usr/bin/osascript", directoryHint: .notDirectory))
+        XCTAssertEqual(displayArguments, ["/usr/bin/top", "-o", "cpu"])
+        XCTAssertEqual(environment, ["MAD_SHORTCUT_NAME": "Projects"])
+        XCTAssertNil(workingDirectory)
+        XCTAssertEqual(terminal, .terminal)
+        // The script changes directory and runs the command; the typed text holds only our own path.
+        let script = try runScript(typedIn: arguments)
+        XCTAssertEqual(arguments, ["-e", TerminalCommandBuilder.terminalScript(typed: TerminalCommandBuilder.typedCommand(scriptPath: script.path))])
         XCTAssertEqual(
-            action,
-            .spawn(
-                executable: URL(filePath: "/usr/bin/osascript", directoryHint: .notDirectory),
-                arguments: ["-e", TerminalCommandBuilder.terminalScript(
-                    command: "/usr/bin/env 'MAD_SHORTCUT_NAME=Projects' '/usr/bin/top' '-o' 'cpu'",
-                    workingDirectory: root.path
-                )],
-                displayArguments: ["/usr/bin/top", "-o", "cpu"],
-                environment: ["MAD_SHORTCUT_NAME": "Projects"],
-                workingDirectory: nil,
-                terminal: .terminal
+            script.body,
+            TerminalCommandBuilder.scriptBody(
+                command: "/usr/bin/env 'MAD_SHORTCUT_NAME=Projects' '/usr/bin/top' '-o' 'cpu'", workingDirectory: root.path
             )
         )
+        XCTAssertTrue(script.body.contains("cd '\(root.path)' || exit 1\nexec /usr/bin/env "), script.body)
     }
 
     func testGhosttyRunsItsBinaryAndKeepsTheWorkingDirectory() throws {
@@ -265,10 +281,35 @@ final class LauncherActionPlannerTests: XCTestCase {
             "API_MODE=fast mode", "CFFIXED_USER_HOME=\(home)", "HOME=\(home)",
             "MAD_SHORTCUT_BUNDLE=/Applications/Projects.app", "MAD_SHORTCUT_NAME=Projects", "/usr/bin/top",
         ])
-        XCTAssertEqual(arguments, ["-e", TerminalCommandBuilder.iTermScript(command: command, workingDirectory: nil)])
+        let script = try runScript(typedIn: arguments)
+        XCTAssertEqual(arguments, ["-e", TerminalCommandBuilder.iTermScript(typed: TerminalCommandBuilder.typedCommand(scriptPath: script.path))])
+        XCTAssertEqual(script.body, TerminalCommandBuilder.scriptBody(command: command, workingDirectory: nil))
         XCTAssertEqual(environment["PATH"], "/usr/bin")
         XCTAssertEqual(environment["MAD_SHORTCUT_NAME"], "Projects")
         XCTAssertEqual(environment["API_MODE"], "fast mode")
+    }
+
+    func testControlCharactersInAnyCommandFieldAreRefusedBeforeAnythingIsCreated() throws {
+        let root = try makeTemporaryDirectory()
+        let bad = "a\u{03}b"
+        let clis = [
+            CLIConfig(executablePath: "/usr/bin/top" + bad, terminal: .terminal),
+            CLIConfig(executablePath: "/usr/bin/top", arguments: ["ok", bad], terminal: .terminal),
+            CLIConfig(executablePath: "/usr/bin/top", workingDirectory: root.path + "\u{7F}", terminal: .iterm2),
+        ]
+        for cli in clis {
+            assertLauncherError(try makePlanner(realHome: root).plan(config: makeConfig(kind: .cli, cli: cli), baseEnvironment: [:], shortcutBundleURL: nil)) { error in
+                if case .configCorrupt = error { return true }
+                return false
+            }
+        }
+        for environment in [[bad: "1"], ["K": bad]] {
+            let config = makeConfig(kind: .cli, cli: CLIConfig(executablePath: "/usr/bin/top", terminal: .terminal), environment: environment)
+            assertLauncherError(try makePlanner(realHome: root).plan(config: config, baseEnvironment: [:], shortcutBundleURL: nil)) { error in
+                if case .configCorrupt = error { return true }
+                return false
+            }
+        }
     }
 
     func testUninstalledTerminalDoesNotCreateTheHomeFolder() throws {
@@ -309,8 +350,9 @@ final class LauncherActionPlannerTests: XCTestCase {
             }
             XCTAssertEqual(displayArguments, ["/bin/echo", "--token", masked, "--api-key=\(masked)"], "\(choice)")
             if choice != .none {
-                // The osascript argv holds the command and its inline environment in clear text: never log it.
-                XCTAssertTrue(arguments.joined(separator: " ").contains("abc123"), "\(choice)")
+                // The command and its inline environment now live only in the 0600 run script, not in the osascript argv.
+                XCTAssertFalse(arguments.joined(separator: " ").contains("abc123"), "\(choice)")
+                XCTAssertTrue(try runScript(typedIn: arguments).body.contains("abc123"), "\(choice)")
             }
             // The lines main.swift writes for a command shortcut, in its order.
             let logger = LaunchLogger(name: "Log \(choice.rawValue)", directory: root, maxBytes: 100_000)

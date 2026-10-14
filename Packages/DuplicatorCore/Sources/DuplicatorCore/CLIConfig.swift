@@ -50,6 +50,8 @@ public struct CLIConfig: Codable, Hashable, Sendable {
     }
 
     /// Only `executablePath` is required on input; every other key falls back to the initializer default.
+    /// - Throws: `DecodingError.dataCorrupted` when `controlCharacterProblem` finds one, so a foreign config that hides
+    ///   a control character in the command is refused when it is scanned (C5), not when it is launched.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
@@ -59,5 +61,39 @@ public struct CLIConfig: Codable, Hashable, Sendable {
             terminal: try container.decodeIfPresent(TerminalChoice.self, forKey: .terminal) ?? .terminal,
             homeOverride: try container.decodeIfPresent(Bool.self, forKey: .homeOverride) ?? false
         )
+        if let problem = controlCharacterProblem {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: decoder.codingPath, debugDescription: problem)
+            )
+        }
+    }
+
+    /// True when `text` holds a Unicode scalar below 0x20 (this includes tab, newline and ETX) or DEL (0x7F). Terminal
+    /// and iTerm2 receive a command as keystrokes, where such a scalar ends or rewrites the line, and no field of a
+    /// command shortcut has a legitimate use for one.
+    public static func containsControlCharacter(_ text: String) -> Bool {
+        text.unicodeScalars.contains { $0.value < 0x20 || $0.value == 0x7F }
+    }
+
+    /// A user-facing sentence naming the first command field (executable, argument, working directory) that holds a
+    /// control character, or nil when all are clean. The environment belongs to `ShortcutConfig`; see
+    /// `environmentControlCharacterProblem(_:)`.
+    public var controlCharacterProblem: String? {
+        if Self.containsControlCharacter(executablePath) {
+            return "The program path may not contain control characters."
+        }
+        if arguments.contains(where: Self.containsControlCharacter) {
+            return "Arguments may not contain control characters."
+        }
+        if let workingDirectory, Self.containsControlCharacter(workingDirectory) {
+            return "The working directory may not contain control characters."
+        }
+        return nil
+    }
+
+    /// The same check for a command shortcut's environment, keys and values.
+    public static func environmentControlCharacterProblem(_ environment: [String: String]) -> String? {
+        let dirty = environment.contains { containsControlCharacter($0.key) || containsControlCharacter($0.value) }
+        return dirty ? "Environment variables may not contain control characters." : nil
     }
 }
