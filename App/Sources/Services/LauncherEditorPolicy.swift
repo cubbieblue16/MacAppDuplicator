@@ -54,6 +54,11 @@ nonisolated enum LauncherEditorPolicy {
             if path.isEmpty { return "Choose the file or folder this shortcut opens." }
             return path.hasPrefix("/") ? nil : "Use a full path that starts with /."
         case .cli:
+            // Checked on the raw values: the trim in `saveConfig` would silently drop a tab at either end.
+            if let cli = config.cli {
+                if let problem = cli.controlCharacterProblem { return problem }
+                if let problem = CLIConfig.environmentControlCharacterProblem(config.environment) { return problem }
+            }
             let path = config.cli?.executablePath.trimmingCharacters(in: .whitespaces) ?? ""
             if path.isEmpty { return "Enter the program to run." }
             return path.hasPrefix("/") ? nil : "Use a full path that starts with /."

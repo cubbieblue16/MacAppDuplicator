@@ -71,6 +71,29 @@ final class LauncherEditorPolicyTests: XCTestCase {
         XCTAssertNil(LauncherEditorPolicy.validationMessage(for: launcher(kind: .app)))
     }
 
+    func testValidationRejectsControlCharactersInEveryCommandField() {
+        let bad = "a\u{03}b"
+        let clean = CLIConfig(executablePath: "/bin/echo", arguments: ["x"], workingDirectory: "/tmp", terminal: .terminal, homeOverride: false)
+        XCTAssertNil(LauncherEditorPolicy.validationMessage(for: launcher(kind: .cli, cli: clean)))
+
+        var executable = clean
+        executable.executablePath = "/bin/echo" + bad
+        var argument = clean
+        argument.arguments = ["x", bad]
+        var tabArgument = clean
+        tabArgument.arguments = ["\t"]
+        var directory = clean
+        directory.workingDirectory = "/tmp\u{7F}"
+        for cli in [executable, argument, tabArgument, directory] {
+            XCTAssertTrue(LauncherEditorPolicy.validationMessage(for: launcher(kind: .cli, cli: cli))?.contains("control characters") == true, "\(cli)")
+        }
+        for environment in [[bad: "1"], ["K": bad]] {
+            var config = launcher(kind: .cli, cli: clean)
+            config.environment = environment
+            XCTAssertTrue(LauncherEditorPolicy.validationMessage(for: config)?.contains("control characters") == true, "\(environment)")
+        }
+    }
+
     func testLabelsSubtitlesAndCommandHome() {
         XCTAssertEqual(LauncherEditorPolicy.iconLabel(.copied, kind: .file), "Copied from item")
         XCTAssertEqual(LauncherEditorPolicy.iconLabel(.copied, kind: .cli), "Copied from executable")

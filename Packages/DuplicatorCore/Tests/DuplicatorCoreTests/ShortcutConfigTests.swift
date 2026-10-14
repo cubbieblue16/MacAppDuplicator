@@ -281,4 +281,25 @@ final class ShortcutConfigTests: XCTestCase {
         XCTAssertNil(phase5Dictionary["newWindowCommand"])
         XCTAssertNil(try ShortcutConfig(plistDictionary: phase5Dictionary).newWindowCommand)
     }
+
+    // MARK: Control characters in a command shortcut (C5)
+
+    func testPlistDecodingRefusesAControlCharacterInACommandShortcutsCommandOrEnvironment() throws {
+        var config = makeConfig()
+        config.kind = .cli
+        config.cli = CLIConfig(executablePath: "/bin/ls", arguments: ["-l"], terminal: .terminal)
+        XCTAssertNoThrow(try ShortcutConfig(plistDictionary: config.plistDictionary()))
+
+        var badArgument = config
+        badArgument.cli?.arguments = ["x\u{03}y"]
+        var badKey = config
+        badKey.environment = ["K\u{03}": "v"]
+        var badValue = config
+        badValue.environment = ["K": "v\nw"]
+        for bad in [badArgument, badKey, badValue] {
+            XCTAssertThrowsError(try ShortcutConfig(plistDictionary: bad.plistDictionary())) { error in
+                guard case LauncherError.configCorrupt = error else { return XCTFail("expected configCorrupt, got \(error)") }
+            }
+        }
+    }
 }

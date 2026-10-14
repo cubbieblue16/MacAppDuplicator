@@ -26,13 +26,22 @@ public struct LauncherActionPlanner {
     let fileManager: FileManager
     let realHome: URL
     let terminalLocator: @Sendable (TerminalChoice) -> URL?
+    let terminalCommands: TerminalCommandBuilder
 
     /// - Parameter terminalLocator: the terminal app's `.app` URL, or nil when it is not installed. Called only for
     ///   choices that have a `bundleIdentifier`.
-    public init(fileManager: FileManager = .default, realHome: URL, terminalLocator: @escaping @Sendable (TerminalChoice) -> URL?) {
+    /// - Parameter terminalCommands: how Terminal.app and iTerm2 commands are delivered; the default writes the run
+    ///   script under the system temporary directory, and the Launch Plan preview passes `.preview` to write nothing.
+    public init(
+        fileManager: FileManager = .default,
+        realHome: URL,
+        terminalLocator: @escaping @Sendable (TerminalChoice) -> URL?,
+        terminalCommands: TerminalCommandBuilder = TerminalCommandBuilder()
+    ) {
         self.fileManager = fileManager
         self.realHome = realHome
         self.terminalLocator = terminalLocator
+        self.terminalCommands = terminalCommands
     }
 
     /// - Throws: `LauncherError` (`launcherConfigMissing`, `fileNotFound`, `terminalNotFound`, `dataPathNotWritable`,
@@ -76,6 +85,10 @@ public struct LauncherActionPlanner {
         baseEnvironment: [String: String],
         shortcutBundleURL: URL?
     ) throws -> LauncherAction {
+        // A config built in memory (or decoded before this check existed) gets the same refusal as a decoded one.
+        if let problem = cli.controlCharacterProblem ?? CLIConfig.environmentControlCharacterProblem(config.environment) {
+            throw LauncherError.configCorrupt(problem)
+        }
         var resolved = cli
         resolved.executablePath = (cli.executablePath as NSString).expandingTildeInPath
         var isDirectory: ObjCBool = false
@@ -117,7 +130,7 @@ public struct LauncherActionPlanner {
 
         // `.none` and Ghostty receive `additions` through the spawned process's environment below; Terminal.app and
         // iTerm2 start a fresh login shell, so the builder also writes them into the shell command.
-        let argv = try TerminalCommandBuilder().argv(for: resolved, terminalApp: terminalApp, inlineEnvironment: additions)
+        let argv = try terminalCommands.argv(for: resolved, terminalApp: terminalApp, inlineEnvironment: additions)
         guard let executable = argv.first else {
             throw LauncherError.launcherConfigMissing(.cli)
         }
