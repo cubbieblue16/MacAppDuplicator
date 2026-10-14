@@ -295,7 +295,8 @@ extension WebAppPreset {
         }
         guard extraHosts.count <= ProfilesDocument.maxListEntries else { throw ProfilesError.tooMany("\(path).extraHosts") }
         for (index, extraHost) in extraHosts.enumerated()
-        where !ProfilesDocument.matches(extraHost, ProfilesDocument.hostnamePattern) {
+        where !ProfilesDocument.matches(extraHost, ProfilesDocument.hostnamePattern)
+            || !PublicSuffixes.isAcceptableExtraHost(extraHost) {
             throw ProfilesError.invalidField("\(path).extraHosts[\(index)]")
         }
         if let iconURL { try ProfilesDocument.checkString(iconURL, at: "\(path).iconURL") }

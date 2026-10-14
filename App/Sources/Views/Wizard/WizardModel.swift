@@ -404,9 +404,12 @@ final class WizardModel {
     /// The Review step lines for a web app (it has no target, compatibility, profile or launch plan).
     var webReviewRows: [ReviewRow] {
         let menuBar = !menuBarIcon ? "Off" : (backgroundMode ? "On, keeps running when the window closes" : "On")
+        // The hosts that will really be kept: single-label and public-suffix entries are dropped by `WebAppConfig`.
+        let extraHosts = WebAppConfig.normalizedHosts(Self.parseExtraHosts(extraHostsText))
         return [
             ReviewRow("Name", name.trimmingCharacters(in: .whitespaces)),
             ReviewRow("URL", validatedWebURL?.absoluteString ?? webURL),
+        ] + (extraHosts.isEmpty ? [] : [ReviewRow("Also open in app", extraHosts.joined(separator: ", "))]) + [
             ReviewRow("User agent", Self.userAgentLabel(userAgent)),
             ReviewRow("Data store id", webDataStoreID.uuidString),
             ReviewRow("Menu bar", menuBar),

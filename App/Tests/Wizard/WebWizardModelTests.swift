@@ -421,6 +421,7 @@ final class WebWizardModelTests: XCTestCase {
         XCTAssertEqual(model.webReviewRows, [
             .init("Name", "WhatsApp"),
             .init("URL", "https://web.whatsapp.com"),
+            .init("Also open in app", "whatsapp.com, whatsapp.net"),
             .init("User agent", "Chrome"),
             .init("Data store id", storeID.uuidString),
             .init("Menu bar", "On, keeps running when the window closes"),
@@ -428,10 +429,19 @@ final class WebWizardModelTests: XCTestCase {
         ])
         model.setMenuBarIcon(false)
         model.userAgent = .safari
-        XCTAssertEqual(model.webReviewRows[2], .init("User agent", "Safari"))
-        XCTAssertEqual(model.webReviewRows[4], .init("Menu bar", "Off"))
+        XCTAssertEqual(model.webReviewRows[3], .init("User agent", "Safari"))
+        XCTAssertEqual(model.webReviewRows[5], .init("Menu bar", "Off"))
         model.setMenuBarIcon(true)
-        XCTAssertEqual(model.webReviewRows[4], .init("Menu bar", "On"))
+        XCTAssertEqual(model.webReviewRows[5], .init("Menu bar", "On"))
+    }
+
+    func testTheReviewRowsOmitExtraHostsWhenNoneAndNeverListDroppedRegistries() {
+        let (model, _) = makeModel()
+        model.applyPreset(whatsapp)
+        model.extraHostsText = "com\nco.uk\ngithub.io"
+        XCTAssertFalse(model.webReviewRows.contains { $0.label == "Also open in app" })
+        model.extraHostsText = "com\nCDN.example.com"
+        XCTAssertEqual(model.webReviewRows.first { $0.label == "Also open in app" }, .init("Also open in app", "cdn.example.com"))
     }
 
     func testTheApplicationIconDescriptionsAreUnchanged() {

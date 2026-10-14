@@ -15,7 +15,8 @@ public struct WebHostPolicy: Equatable, Sendable {
             hosts.append(baseHost)
         }
         for extra in extraHosts {
-            if let host = Self.normalizedHost(extra), !hosts.contains(host) {
+            // Defense in depth: a single-label or public-suffix entry would trust a whole registry.
+            if let host = Self.normalizedHost(extra), PublicSuffixes.isAcceptableExtraHost(host), !hosts.contains(host) {
                 hosts.append(host)
             }
         }

@@ -273,4 +273,14 @@ final class ProfilesDocumentTests: XCTestCase {
             XCTAssertEqual(try ProfilesDocument.decodeValidated(from: data).webApps["whatsapp"]?.badgeRegex, pattern)
         }
     }
+
+    func testRejectsSingleLabelAndPublicSuffixExtraHosts() throws {
+        // Security audit C8: an extra host is trusted with all its subdomains.
+        for host in ["com", "co.uk", "github.io", "herokuapp.com", "localhost"] {
+            assertRejects(try makeProfilesData(webApps: ["whatsapp": webAppEntry(extra: ["extraHosts": ["whatsapp.com", host]])]),
+                          with: .invalidField("webApps.whatsapp.extraHosts[1]"))
+        }
+        let data = try makeProfilesData(webApps: ["whatsapp": webAppEntry(extra: ["extraHosts": ["foo.github.io", "example.co.uk"]])])
+        XCTAssertNoThrow(try ProfilesDocument.decodeValidated(from: data))
+    }
 }

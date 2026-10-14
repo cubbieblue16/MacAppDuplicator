@@ -79,13 +79,15 @@ public struct WebAppConfig: Codable, Hashable, Sendable {
         return min(max(value, pageZoomRange.lowerBound), pageZoomRange.upperBound)
     }
 
-    /// Trimmed, lower-cased hosts without empty entries or duplicates, in first-seen order.
+    /// Trimmed, lower-cased hosts without empty entries or duplicates, in first-seen order. Hosts that
+    /// `PublicSuffixes.isAcceptableExtraHost` refuses (a single label such as `com`, or a public suffix such as
+    /// `co.uk`) are dropped: `WebHostPolicy` trusts an extra host and all its subdomains.
     public static func normalizedHosts(_ hosts: [String]) -> [String] {
         var seen = Set<String>()
         var result: [String] = []
         for host in hosts {
             let cleaned = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if !cleaned.isEmpty, seen.insert(cleaned).inserted {
+            if !cleaned.isEmpty, PublicSuffixes.isAcceptableExtraHost(cleaned), seen.insert(cleaned).inserted {
                 result.append(cleaned)
             }
         }
