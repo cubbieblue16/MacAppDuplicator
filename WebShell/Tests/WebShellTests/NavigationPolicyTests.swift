@@ -9,8 +9,7 @@ final class NavigationPolicyTests: XCTestCase {
     private func decide(
         _ address: String,
         targetFrameIsMain: Bool?,
-        navigationType: WKNavigationType = .linkActivated,
-        isPrimaryWebView: Bool = true
+        navigationType: WKNavigationType = .linkActivated
     ) throws -> NavigationDecision {
         let url = try XCTUnwrap(URL(string: address))
         let policy = WebHostPolicy(baseURL: try XCTUnwrap(URL(string: "https://mail.example.com/")), extraHosts: ["login.example.net"])
@@ -19,7 +18,6 @@ final class NavigationPolicyTests: XCTestCase {
             scheme: url.scheme,
             targetFrameIsMain: targetFrameIsMain,
             navigationType: navigationType,
-            isPrimaryWebView: isPrimaryWebView,
             policy: policy
         )
     }
@@ -69,27 +67,49 @@ final class NavigationPolicyTests: XCTestCase {
         XCTAssertEqual(try decide("https://mail.example.com/compose", targetFrameIsMain: nil, navigationType: .other), .allow)
     }
 
-    func testPopupMainFrameHTTPOffPolicyIsAllowed() throws {
-        XCTAssertEqual(try decide("https://accounts.example.org/oauth", targetFrameIsMain: true, isPrimaryWebView: false), .allow)
+    func testPopupWindowsAreNotExemptFromHostPolicy() throws {
+        // A popup's own navigations take the same path as the primary view (R2).
+        XCTAssertEqual(try decide("https://accounts.example.org/oauth", targetFrameIsMain: true, navigationType: .other), .openExternally)
+        XCTAssertEqual(try decide("https://login.example.net/sso", targetFrameIsMain: true, navigationType: .other), .allow)
     }
 
     func testPopupMailtoLinkClickOpensExternally() throws {
         XCTAssertEqual(
-            try decide("mailto:someone@example.com", targetFrameIsMain: true, navigationType: .linkActivated, isPrimaryWebView: false),
+            try decide("mailto:someone@example.com", targetFrameIsMain: true, navigationType: .linkActivated),
             .openExternally
         )
     }
 
     // MARK: - popupDecision
 
-    private func popup(_ address: String?, _ type: WKNavigationType) throws -> PopupDecision {
+    private let trustedSource = "https://app.example/inbox"
+
+    private func popup(
+        _ address: String?,
+        _ type: WKNavigationType,
+        sourceIsMainFrame: Bool = true,
+        source: String? = "https://app.example/inbox",
+        userInitiated: Bool = true
+    ) throws -> PopupDecision {
         let policy = WebHostPolicy(baseURL: try XCTUnwrap(URL(string: "https://app.example/")), extraHosts: ["cdn.example"])
-        return NavigationPolicy.popupDecision(url: address.flatMap { URL(string: $0) }, navigationType: type, policy: policy)
+        return NavigationPolicy.popupDecision(
+            url: address.flatMap { URL(string: $0) },
+            navigationType: type,
+            sourceIsMainFrame: sourceIsMainFrame,
+            sourceURL: source.flatMap { URL(string: $0) },
+            userInitiated: userInitiated,
+            policy: policy
+        )
     }
 
     func testPopupLinkClickOffPolicyOpensExternally() throws {
         XCTAssertEqual(try popup("https://news.example.org/story", .linkActivated), .openExternally)
         XCTAssertEqual(try popup("http://other.example/", .linkActivated), .openExternally)
+        XCTAssertEqual(try popup("https://news.example.org/story", .linkActivated, sourceIsMainFrame: false), .openExternally)
+    }
+
+    func testPopupLinkClickOffPolicyWithoutGestureIsIgnored() throws {
+        XCTAssertEqual(try popup("https://news.example.org/story", .linkActivated, userInitiated: false), .ignore)
     }
 
     func testPopupLinkClickInPolicyOpensInApp() throws {
@@ -97,8 +117,27 @@ final class NavigationPolicyTests: XCTestCase {
         XCTAssertEqual(try popup("https://cdn.example/doc", .linkActivated), .openInApp)
     }
 
-    func testPopupScriptInitiatedStaysInApp() throws {
+    func testPopupScriptInitiatedFromTrustedMainFrameStaysInApp() throws {
         XCTAssertEqual(try popup("https://accounts.google.example/oauth", .other), .openInApp)
+    }
+
+    func testPopupFromSubframeIsNeverInApp() throws {
+        XCTAssertEqual(try popup("https://accounts.google.example/oauth", .other, sourceIsMainFrame: false), .openExternally)
+        XCTAssertEqual(try popup("https://accounts.google.example/oauth", .other, sourceIsMainFrame: false, userInitiated: false), .ignore)
+        XCTAssertEqual(try popup("https://app.example/compose", .linkActivated, sourceIsMainFrame: false), .openExternally)
+    }
+
+    func testPopupFromOffPolicySourceHostIsNeverInApp() throws {
+        XCTAssertEqual(try popup("https://app.example/x", .other, source: "https://ads.example.org/frame"), .openExternally)
+        XCTAssertEqual(try popup("https://app.example/x", .other, source: "https://ads.example.org/frame", userInitiated: false), .ignore)
+        XCTAssertEqual(try popup("https://app.example/x", .other, source: nil), .openExternally)
+        // http source is not an in-place host under R3.
+        XCTAssertEqual(try popup("https://app.example/x", .other, source: "http://app.example/"), .openExternally)
+    }
+
+    func testPopupOtherTypesWithoutGestureAreIgnored() throws {
+        XCTAssertEqual(try popup("https://x.example.org/", .formSubmitted, sourceIsMainFrame: false), .ignore)
+        XCTAssertEqual(try popup("https://x.example.org/", .other, sourceIsMainFrame: false, userInitiated: false), .ignore)
     }
 
     func testPopupNonWebSchemeIsIgnored() throws {
@@ -107,11 +146,16 @@ final class NavigationPolicyTests: XCTestCase {
         XCTAssertEqual(try popup("myapp://callback", .other), .ignore)
     }
 
-    func testPopupBlankFirstFromScriptOpensInApp() throws {
+    func testPopupBlankFirstFromTrustedScriptOpensInApp() throws {
         // MSAL.js loginPopup opens about:blank first; auth0-spa-js opens '' first; previews open blob: URLs.
         XCTAssertEqual(try popup(nil, .other), .openInApp)
         XCTAssertEqual(try popup("about:blank", .other), .openInApp)
         XCTAssertEqual(try popup("blob:https://app.example/0b7c", .other), .openInApp)
+    }
+
+    func testPopupBlankFirstFromUntrustedSourceIsIgnored() throws {
+        XCTAssertEqual(try popup(nil, .other, sourceIsMainFrame: false), .ignore)
+        XCTAssertEqual(try popup("about:blank", .other, source: "https://ads.example.org/"), .ignore)
     }
 
     func testPopupBlankFromLinkClickIsIgnored() throws {

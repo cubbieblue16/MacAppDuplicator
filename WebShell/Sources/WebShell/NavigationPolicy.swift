@@ -25,22 +25,46 @@ enum PopupDecision: Equatable {
 }
 
 enum NavigationPolicy {
-    /// Decision for a new-window request (`createWebViewWith`). A user's click on a link to a site the app does not
-    /// keep in its window goes to the default browser; script-initiated `window.open` stays in-app so OAuth sign-in
-    /// popups complete. A script that opens a blank window first (`window.open('')`, `about:blank`, a `blob:` preview)
-    /// and navigates it later also stays in-app; the popup's own `decide()` polices that later navigation.
-    /// `file:` and custom schemes are refused.
-    static func popupDecision(url: URL?, navigationType: WKNavigationType, policy: WebHostPolicy) -> PopupDecision {
+    /// Decision for a new-window request (`createWebViewWith`).
+    ///
+    /// A popup opens in-app only when the frame that asked for it is the main frame AND that frame is on a host the
+    /// web app keeps in its window. An ad iframe, an embedded widget or a foreign page cannot spawn a window that
+    /// carries the app's name and data store. Otherwise a click (or user-initiated open) on an http(s) target goes to
+    /// the default browser, and everything else is refused. A clicked link to a site the app does not keep in its
+    /// window also goes to the default browser even from a trusted source.
+    ///
+    /// A script that opens a blank window first (`window.open('')`, `about:blank`, a `blob:` preview) and
+    /// navigates it later stays in-app when its source qualifies; the popup's own `decide()` polices that later
+    /// navigation. `file:` and custom schemes are refused.
+    /// - Parameters:
+    ///   - url: The popup's initial URL, nil for `window.open('')`.
+    ///   - navigationType: How the action started.
+    ///   - sourceIsMainFrame: Whether the frame that requested the window is its page's main frame.
+    ///   - sourceURL: That frame's current URL; its host must pass `policy`.
+    ///   - userInitiated: Whether a user gesture started the action.
+    static func popupDecision(
+        url: URL?,
+        navigationType: WKNavigationType,
+        sourceIsMainFrame: Bool,
+        sourceURL: URL?,
+        userInitiated: Bool,
+        policy: WebHostPolicy
+    ) -> PopupDecision {
+        let sourceIsTrusted = sourceIsMainFrame && (sourceURL.map { policy.allowsInPlace($0) } ?? false)
         let scheme = url?.scheme?.lowercased() ?? ""
         switch scheme {
         case "", "about", "blob":
             // A blank-first popup is only meaningful for script; a clicked link to about:blank has nothing to show.
-            return navigationType == .linkActivated ? .ignore : .openInApp
+            return navigationType != .linkActivated && sourceIsTrusted ? .openInApp : .ignore
         case "http", "https":
             if let url, navigationType == .linkActivated, !policy.allowsInPlace(url) {
-                return .openExternally
+                return userInitiated ? .openExternally : .ignore
             }
-            return .openInApp
+            if sourceIsTrusted {
+                return .openInApp
+            }
+            let isClickOrOther = navigationType == .linkActivated || navigationType == .other
+            return isClickOrOther && userInitiated ? .openExternally : .ignore
         default:
             return .ignore
         }
@@ -50,14 +74,11 @@ enum NavigationPolicy {
     /// - Parameters:
     ///   - targetFrameIsMain: `nil` when the action has no target frame (a new-window request),
     ///     otherwise whether the target frame is the main frame.
-    ///   - isPrimaryWebView: `true` for the app's main web view, `false` for popup web views
-    ///     (popups are exempt from the in-place host policy so OAuth completes).
     static func decide(
         url: URL,
         scheme: String?,
         targetFrameIsMain: Bool?,
         navigationType: WKNavigationType,
-        isPrimaryWebView: Bool = true,
         policy: WebHostPolicy
     ) -> NavigationDecision {
         // Only subframes are exempt. New-window (nil frame) and main-frame actions get the scheme checks,
@@ -76,8 +97,9 @@ enum NavigationPolicy {
             }
             return .blocked(reason: "blocked scheme=\(scheme)")
         }
-        if targetFrameIsMain == nil || !isPrimaryWebView {
-            // Popup creation path and popup windows are exempt from the in-place policy.
+        if targetFrameIsMain == nil {
+            // Popup creation path: `popupDecision` judges the request in `createWebViewWith`. Popup windows
+            // themselves are not exempt: their main-frame navigations take the host policy below.
             return .allow
         }
         return policy.allowsInPlace(url) ? .allow : .openExternally

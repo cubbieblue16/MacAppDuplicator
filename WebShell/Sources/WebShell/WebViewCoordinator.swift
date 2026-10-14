@@ -44,6 +44,8 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
         ))
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = controller
+        // Off explicitly: a page cannot open windows without a user gesture (popup spam, window.open from timers).
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         configuration.websiteDataStore = WKWebsiteDataStore(forIdentifier: shell.webApp.dataStoreID)
         userContentController = controller
         webView = WKWebView(frame: .zero, configuration: configuration)
@@ -82,7 +84,6 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
             scheme: url.scheme,
             targetFrameIsMain: navigationAction.targetFrame?.isMainFrame,
             navigationType: navigationAction.navigationType,
-            isPrimaryWebView: webView === self.webView,
             policy: shell.policy
         )
         switch decision {
@@ -92,11 +93,18 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
             return .cancel
         case .openExternally:
             openExternally(url)
+            closeIfEmptyPopup(webView)
             return .cancel
         case .blocked(let reason):
             logger.log(reason)
             return .cancel
         }
+    }
+
+    /// A popup whose first navigation went to the default browser has nothing to show; close it.
+    private func closeIfEmptyPopup(_ popup: WKWebView) {
+        guard popup !== webView, popup.url == nil || popup.url?.absoluteString == "about:blank" else { return }
+        popup.window?.close()
     }
 
     private func openExternally(_ url: URL) {
@@ -199,9 +207,14 @@ final class WebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, NS
         for navigationAction: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
+        // `javaScriptCanOpenWindowsAutomatically` is off, so WebKit only asks for a script window after a user
+        // gesture; clicked links carry one by definition.
         switch NavigationPolicy.popupDecision(
             url: navigationAction.request.url,
             navigationType: navigationAction.navigationType,
+            sourceIsMainFrame: navigationAction.sourceFrame.isMainFrame,
+            sourceURL: navigationAction.sourceFrame.request.url,
+            userInitiated: true,
             policy: shell.policy
         ) {
         case .ignore:
