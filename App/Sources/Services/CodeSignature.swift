@@ -37,7 +37,8 @@ enum CodeSignature: Equatable, Sendable {
     /// by `expected`. Ad hoc: the signature is internally valid and the bundle is flagged ad hoc (anyone can ad hoc sign,
     /// so this proves only that nothing changed after signing). Identity: valid against the requirement
     /// `anchor apple generic and certificate leaf[subject.CN] = "<name>"`, so a self-made certificate with the same name
-    /// fails. `.unknown` never verifies.
+    /// fails, and so does a self-signed keychain identity (not issued by Apple); its shortcuts read as foreign without the
+    /// install token (README, Known limitations). `.unknown` never verifies.
     static func verify(bundleAt url: URL, expecting expected: CodeSignature) -> Bool {
         let requirementText: String?
         switch expected {

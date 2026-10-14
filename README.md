@@ -68,6 +68,7 @@ Launcher events are logged to `~/Library/Logs/App Duplicator/<Name>.log` (rotate
 - Login items, background helpers and launch agents registered by the target run once, for the original bundle identifier; a shortcut gets no copy of them.
 - Updates: shortcuts point at the installed app, so a target update is picked up on the next launch. A shortcut built by an older engine version shows `Needs rebuild` in the library app; Rebuild All refreshes it.
 - Shortcut bundles declare no document types or URL schemes, so a shortcut is never the default handler for anything. Once a copy is running, macOS treats it as the target app: links for the target's URL schemes go to whichever instance registered the scheme last, and an opened document may land in a shortcut's copy.
+- Signing identity: a shortcut without this install's token is only trusted when its signature verifies against `anchor apple generic` and the identity's name, so shortcuts signed with a self-signed (non-Apple-issued) keychain identity read as `Not created here` in another install or after Export; Trust and Rebuild re-signs them. Ad hoc never vouches for a tokenless shortcut.
 - Web apps: no passkeys; see Phase 4 web apps below.
 
 ## Phase 2 library app
