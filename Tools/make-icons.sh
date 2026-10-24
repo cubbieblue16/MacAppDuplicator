@@ -1,6 +1,6 @@
 #!/bin/bash
 # Renders App/Icon/AppIcon.svg to App/Resources/AppIcon.icns and the AppIcon.appiconset.
-# Uses rsvg-convert when installed, otherwise /usr/bin/qlmanage + /usr/bin/sips (both ship with macOS).
+# Uses rsvg-convert when installed, otherwise Tools/render-svg.swift (AppKit) + /usr/bin/sips.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,9 +14,9 @@ MASTER="$WORK/master-1024.png"
 if command -v rsvg-convert >/dev/null 2>&1; then
   rsvg-convert -w 1024 -h 1024 -o "$MASTER" "$SVG"
 else
-  # qlmanage writes <dir>/<basename>.png; the result keeps the SVG's alpha channel.
-  /usr/bin/qlmanage -t -s 1024 -o "$WORK" "$SVG" >/dev/null 2>&1
-  mv "$WORK/$(basename "$SVG").png" "$MASTER"
+  # AppKit renders the SVG with a real alpha channel. (qlmanage flattens the area
+  # outside the icon body to opaque white, which shipped in 0.8.1 and earlier.)
+  swift "$REPO/Tools/render-svg.swift" "$SVG" "$MASTER" 1024
 fi
 
 ICONSET="$WORK/AppIcon.iconset"
