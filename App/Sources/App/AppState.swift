@@ -143,7 +143,18 @@ final class AppState {
             pendingForeignApproval = ForeignShortcutApproval(record: record, config: config, signature: signature)
             return false
         }
+        // The editor already blocks Save for a bad name; this is the same rule for any other caller. Only an edit that
+        // changes the environment is held to it, so a shortcut with an older, unusual name still regenerates.
+        if config.environment != record.config.environment, refuseUnportableEnvironment(config) { return false }
         return await write(record: record, config: config)
+    }
+
+    /// CC-2 tier 2: sets `pendingError` and returns true when `config` has an environment variable name outside
+    /// `[A-Za-z_][A-Za-z0-9_]*`. The editor policy's message, so the sheet, the editor and the alert read the same.
+    private func refuseUnportableEnvironment(_ config: ShortcutConfig) -> Bool {
+        guard let problem = CLIConfig.portableEnvironmentNameProblem(config.environment) else { return false }
+        pendingError = AppError(context: "Could not save shortcut", message: problem)
+        return true
     }
 
     /// Trust and Rebuild (C3): writes the reviewed config with this install's token and signing identity, so the
@@ -151,6 +162,9 @@ final class AppState {
     @discardableResult
     func approveForeignShortcut(_ approval: ForeignShortcutApproval) async -> Bool {
         pendingForeignApproval = nil
+        // Trust and Rebuild writes through `write`, which runs no editor policy, so the name rule is checked here: a
+        // received config is exactly where a hostile name would come from.
+        if refuseUnportableEnvironment(approval.config) { return false }
         return await write(record: approval.record, config: approval.config)
     }
 

@@ -105,7 +105,7 @@ struct ShortcutEditorView: View {
                     .keyboardShortcut(.defaultAction)
                     .disabled(
                         !hasChanges || isSaving || !webURLIsValid || draft.name.trimmingCharacters(in: .whitespaces).isEmpty
-                            || (isLauncher && LauncherEditorPolicy.validationMessage(for: draft) != nil)
+                            || LauncherEditorPolicy.validationMessage(for: draft) != nil
                             || HelperEditorPolicy.validationMessage(for: draft) != nil
                     )
             }

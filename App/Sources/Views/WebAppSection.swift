@@ -36,6 +36,10 @@ struct WebAppSection: View {
                     Label(urlMessage, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption).foregroundStyle(.red)
                 }
+                // A web app has no environment editor, so a stored name that breaks the rule can only be reported.
+                if let message = CLIConfig.portableEnvironmentNameProblem(draft.environment) {
+                    Label(message, systemImage: "xmark.octagon").font(.caption).foregroundStyle(.red)
+                }
                 Picker("User agent", selection: web.userAgent) {
                     Text("Safari").tag(UserAgentPreset.safari)
                     Text("Chrome").tag(UserAgentPreset.chrome)

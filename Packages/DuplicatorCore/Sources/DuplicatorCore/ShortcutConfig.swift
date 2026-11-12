@@ -134,7 +134,9 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         file = try container.decodeIfPresent(FileConfig.self, forKey: .file)
         cli = try container.decodeIfPresent(CLIConfig.self, forKey: .cli)
         // A command shortcut's environment is written into the terminal command, so it gets the same check as `cli`.
-        if cli != nil, let problem = CLIConfig.environmentControlCharacterProblem(environment) {
+        // Its names also become leading arguments of `/usr/bin/env`, so one that `env` would read as an option is refused.
+        if cli != nil, let problem = CLIConfig.environmentControlCharacterProblem(environment)
+            ?? CLIConfig.environmentNameProblem(environment) {
             throw DecodingError.dataCorruptedError(forKey: .environment, in: container, debugDescription: problem)
         }
         engineVersion = try container.decode(Int.self, forKey: .engineVersion)

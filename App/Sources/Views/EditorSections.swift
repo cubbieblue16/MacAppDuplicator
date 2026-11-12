@@ -318,6 +318,9 @@ struct AdvancedSection: View {
                 ArgumentsEditor(arguments: $draft.arguments)
             }
             EnvironmentTableView(environment: $draft.environment)
+            if let message = CLIConfig.portableEnvironmentNameProblem(draft.environment) {
+                Label(message, systemImage: "xmark.octagon").font(.caption).foregroundStyle(.red)
+            }
             if HelperEditorPolicy.helperControlsVisible(kind: draft.kind) {
                 Toggle("Menu bar icon", isOn: $draft.menuBarIcon)
                     .help("Shows the app's icon in the menu bar while it runs, with Show, New Window and Quit.")

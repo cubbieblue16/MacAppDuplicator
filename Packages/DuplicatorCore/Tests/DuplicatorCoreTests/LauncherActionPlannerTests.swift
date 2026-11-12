@@ -312,6 +312,23 @@ final class LauncherActionPlannerTests: XCTestCase {
         }
     }
 
+    /// A name that `/usr/bin/env` would read as an option (`-S...` runs a program) or split at `=` is refused for a
+    /// config built in memory too, before anything is created.
+    func testEnvironmentNamesThatWouldBecomeEnvOptionsAreRefusedBeforeAnythingIsCreated() throws {
+        let root = try makeTemporaryDirectory()
+        for terminal in [TerminalChoice.terminal, .iterm2, .none] {
+            for name in ["-S/bin/echo hi #", "A=B", ""] {
+                let config = makeConfig(
+                    kind: .cli, cli: CLIConfig(executablePath: "/usr/bin/top", terminal: terminal), environment: [name: "1"]
+                )
+                assertLauncherError(try makePlanner(realHome: root).plan(config: config, baseEnvironment: [:], shortcutBundleURL: nil)) { error in
+                    if case .configCorrupt(let detail) = error { return detail.contains("start with") }
+                    return false
+                }
+            }
+        }
+    }
+
     func testUninstalledTerminalDoesNotCreateTheHomeFolder() throws {
         let realHome = try makeTemporaryDirectory()
         let planner = makePlanner(realHome: realHome, locator: LauncherActionPlannerTests.nothingInstalled)

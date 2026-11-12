@@ -86,7 +86,9 @@ public struct LauncherActionPlanner {
         shortcutBundleURL: URL?
     ) throws -> LauncherAction {
         // A config built in memory (or decoded before this check existed) gets the same refusal as a decoded one.
-        if let problem = cli.controlCharacterProblem ?? CLIConfig.environmentControlCharacterProblem(config.environment) {
+        if let problem = cli.controlCharacterProblem
+            ?? CLIConfig.environmentControlCharacterProblem(config.environment)
+            ?? CLIConfig.environmentNameProblem(config.environment) {
             throw LauncherError.configCorrupt(problem)
         }
         var resolved = cli

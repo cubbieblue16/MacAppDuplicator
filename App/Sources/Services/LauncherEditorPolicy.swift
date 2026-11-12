@@ -48,6 +48,12 @@ nonisolated enum LauncherEditorPolicy {
 
     /// Why Save is not allowed, or nil. Only the shape of the path is checked; a missing item shows as "Item missing".
     static func validationMessage(for config: ShortcutConfig) -> String? {
+        launcherValidationMessage(for: config) ?? CLIConfig.portableEnvironmentNameProblem(config.environment)
+    }
+
+    /// The per-kind checks. The environment-name rule (CC-2 tier 2) is added by `validationMessage(for:)` for every kind,
+    /// after these, so a control-character message still wins.
+    private static func launcherValidationMessage(for config: ShortcutConfig) -> String? {
         switch config.kind {
         case .file, .folder:
             let path = config.file?.path.trimmingCharacters(in: .whitespaces) ?? ""

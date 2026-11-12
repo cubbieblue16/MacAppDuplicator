@@ -99,4 +99,31 @@ public struct CLIConfig: Codable, Hashable, Sendable {
         let dirty = environment.contains { containsControlCharacter($0.key) || containsControlCharacter($0.value) }
         return dirty ? "Environment variables may not contain control characters." : nil
     }
+
+    /// Tier 1 of the environment-name checks, for a command shortcut: a name that is empty, starts with "-" or
+    /// contains "=" is refused. In a terminal, each pair becomes a leading argument of `/usr/bin/env`, which reads a
+    /// leading "-" as one of its options (`-S` runs a program) and splits a name at the first "=".
+    public static func environmentNameProblem(_ environment: [String: String]) -> String? {
+        let bad = environment.keys.contains { $0.isEmpty || $0.hasPrefix("-") || $0.contains("=") }
+        return bad ? "Environment variable names may not be empty, start with \"-\" or contain \"=\"." : nil
+    }
+
+    /// Tier 2, enforced when a shortcut of any kind is saved: a name made of ASCII letters, digits and underscores
+    /// that does not start with a digit (`^[A-Za-z_][A-Za-z0-9_]*$`). Stricter than tier 1 on purpose, so a stored
+    /// shortcut with an unusual but harmless name keeps loading and running until it is next edited.
+    public static func isPortableEnvironmentName(_ name: String) -> Bool {
+        guard let first = name.utf8.first, first == 0x5F || isASCIILetter(first) else { return false }
+        return name.utf8.allSatisfy { $0 == 0x5F || isASCIILetter($0) || ($0 >= 0x30 && $0 <= 0x39) }
+    }
+
+    /// The save-time sentence for the first environment name that is not portable, or nil when all are.
+    public static func portableEnvironmentNameProblem(_ environment: [String: String]) -> String? {
+        environment.keys.allSatisfy(isPortableEnvironmentName)
+            ? nil
+            : "Environment variable names may use only letters, digits and underscores, and may not start with a digit."
+    }
+
+    private static func isASCIILetter(_ byte: UInt8) -> Bool {
+        (byte >= 0x41 && byte <= 0x5A) || (byte >= 0x61 && byte <= 0x7A)
+    }
 }

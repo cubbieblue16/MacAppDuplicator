@@ -79,4 +79,38 @@ final class CLIConfigTests: XCTestCase {
         XCTAssertNotNil(CLIConfig.environmentControlCharacterProblem(["A\u{3}": "b"]))
         XCTAssertNotNil(CLIConfig.environmentControlCharacterProblem(["A": "b\n"]))
     }
+
+    // MARK: Environment variable names (two tiers)
+
+    /// Tier 1: a name that would be parsed as an `env` option or would shift the NAME=VALUE split.
+    func testEnvironmentNameProblemRefusesEmptyDashLeadingAndEqualsNames() {
+        XCTAssertNil(CLIConfig.environmentNameProblem([:]))
+        XCTAssertNil(CLIConfig.environmentNameProblem(["PATH": "/bin", "FOO.BAR": "1", "A-B": "2", "1A": "3", "A B": "4"]))
+        for name in ["", "-S/bin/echo hi #", "-i", "A=B", "=", "A=", "=A"] {
+            XCTAssertEqual(
+                CLIConfig.environmentNameProblem([name: "v"]),
+                "Environment variable names may not be empty, start with \"-\" or contain \"=\".",
+                name.debugDescription
+            )
+        }
+    }
+
+    /// Tier 2: the portable shell identifier form, enforced when a shortcut is saved.
+    func testIsPortableEnvironmentNameTable() {
+        for name in ["PATH", "_x", "A1", "a", "_", "My_Var_2"] {
+            XCTAssertTrue(CLIConfig.isPortableEnvironmentName(name), name.debugDescription)
+        }
+        for name in ["1A", "A-B", "A.B", "A B", "-S", "A=B", "", "A\n", "\u{00E9}x", "A\u{FF21}"] {
+            XCTAssertFalse(CLIConfig.isPortableEnvironmentName(name), name.debugDescription)
+        }
+    }
+
+    func testPortableEnvironmentNameProblemNamesTheRule() {
+        XCTAssertNil(CLIConfig.portableEnvironmentNameProblem(["PATH": "1", "_x": "2"]))
+        XCTAssertEqual(
+            CLIConfig.portableEnvironmentNameProblem(["GOOD": "1", "A.B": "2"]),
+            "Environment variable names may use only letters, digits and underscores, and may not start with a digit."
+        )
+        XCTAssertNotNil(CLIConfig.portableEnvironmentNameProblem(["": "1"]))
+    }
 }

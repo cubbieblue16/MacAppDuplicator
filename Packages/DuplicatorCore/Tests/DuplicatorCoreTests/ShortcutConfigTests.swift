@@ -303,6 +303,42 @@ final class ShortcutConfigTests: XCTestCase {
         }
     }
 
+    // MARK: Environment variable names in a command shortcut (CC-2)
+
+    func testPlistDecodingRefusesAnEnvironmentNameThatWouldBecomeAnEnvOptionInACommandShortcut() throws {
+        var config = makeConfig()
+        config.kind = .cli
+        config.cli = CLIConfig(executablePath: "/bin/ls", arguments: ["-l"], terminal: .terminal)
+        for name in ["-S/bin/echo hi #", "A=B", ""] {
+            var bad = config
+            bad.environment = [name: "v"]
+            XCTAssertThrowsError(try ShortcutConfig(plistDictionary: bad.plistDictionary()), name.debugDescription) { error in
+                guard case LauncherError.configCorrupt = error else { return XCTFail("expected configCorrupt, got \(error)") }
+            }
+        }
+    }
+
+    func testPlistDecodingStillAcceptsUnusualButHarmlessNamesInACommandShortcut() throws {
+        var config = makeConfig()
+        config.kind = .cli
+        config.cli = CLIConfig(executablePath: "/bin/ls", terminal: .terminal)
+        config.environment = ["FOO.BAR": "1", "A-B": "2", "1A": "3"]
+        let decoded = try ShortcutConfig(plistDictionary: config.plistDictionary())
+        XCTAssertEqual(decoded.environment, config.environment)
+    }
+
+    /// Other kinds never put their environment into `/usr/bin/env` argv, and a decode refusal would make an existing
+    /// shortcut unreadable, so the tier-1 names still decode there (the save-time check catches them instead).
+    func testPlistDecodingStillAcceptsTierOneNamesOutsideACommandShortcut() throws {
+        for name in ["-S/bin/echo hi #", "A=B", ""] {
+            var config = makeConfig()
+            config.environment = [name: "v"]
+            XCTAssertNil(config.cli)
+            let decoded = try ShortcutConfig(plistDictionary: config.plistDictionary())
+            XCTAssertEqual(decoded.environment, [name: "v"], name.debugDescription)
+        }
+    }
+
     /// The approval sheets' coverage guard compares these lists with the fields they show, so each list must be exactly
     /// the keys the stored form uses: a config with every optional field set encodes one entry per listed key.
     func testAllCodingKeyNamesMatchTheKeysOfAFullyPopulatedStoredConfig() throws {

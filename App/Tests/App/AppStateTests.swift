@@ -128,6 +128,59 @@ final class AppStateTests: XCTestCase {
         XCTAssertEqual(library.record(for: bundle)?.config.arguments, ["--again"])
     }
 
+    // MARK: Environment variable names (CC-2 tier 2)
+
+    private let portableNameMessage = "Environment variable names may use only letters, digits and underscores, and may not start with a digit."
+
+    /// Trust and Rebuild goes through `write`, which runs no editor policy, so the name rule is checked on that path.
+    /// Findings: `approveForeignShortcut` -> `write` -> `builder.regenerate` never consulted `LauncherEditorPolicy`.
+    func testTrustAndRebuildRefusesAForeignConfigWithAnUnportableEnvironmentName() async throws {
+        var planted = config(name: "Planted")
+        planted.environment = ["-S/bin/echo hi #": "1", "OK_NAME": "2"]
+        let bundle = try writeShortcutBundle(named: "Planted", in: out, config: planted)
+        await library.rescan()
+        let record = try XCTUnwrap(library.record(for: bundle))
+        XCTAssertTrue(record.isForeign)
+        let before = try infoPlist(of: bundle)
+
+        _ = await state.save(record: record, config: record.config)
+        let approval = try XCTUnwrap(state.pendingForeignApproval)
+        let approved = await state.approveForeignShortcut(approval)
+
+        XCTAssertFalse(approved)
+        XCTAssertEqual(state.pendingError?.context, "Could not save shortcut")
+        XCTAssertEqual(state.pendingError?.message, portableNameMessage)
+        XCTAssertEqual(try infoPlist(of: bundle), before, "nothing is written or signed")
+        XCTAssertEqual(library.record(for: bundle)?.isForeign, true)
+    }
+
+    func testSavingAnEditedUnportableEnvironmentNameIsRefusedForAnOwnShortcut() async throws {
+        let created = await state.create(config: config())
+        let record = try XCTUnwrap(library.record(for: try XCTUnwrap(created)))
+        let before = try infoPlist(of: record.bundleURL)
+        var edited = record.config
+        edited.environment = ["BAD.NAME": "1"]
+
+        let saved = await state.save(record: record, config: edited)
+
+        XCTAssertFalse(saved)
+        XCTAssertEqual(state.pendingError?.message, portableNameMessage)
+        XCTAssertEqual(try infoPlist(of: record.bundleURL), before)
+    }
+
+    /// Existing shortcuts keep rebuilding: only an edit that changes the environment is held to the rule.
+    func testRegeneratingAnOwnShortcutWithALegacyEnvironmentNameStillWorks() async throws {
+        var legacy = config(name: "Legacy")
+        legacy.environment = ["LEGACY.NAME": "1"]
+        let created = await state.create(config: legacy)
+        let record = try XCTUnwrap(library.record(for: try XCTUnwrap(created)))
+
+        await state.regenerate(record)
+
+        XCTAssertNil(state.pendingError, state.pendingError?.message ?? "")
+        XCTAssertEqual(library.record(for: record.bundleURL)?.config.environment, ["LEGACY.NAME": "1"])
+    }
+
     /// The recipient flow the export sheet describes (C3): a received copy carries another install's token and the
     /// download's quarantine flag on every file. Trust and Rebuild assembles a fresh bundle, so it carries neither and
     /// is this install's shortcut from then on.

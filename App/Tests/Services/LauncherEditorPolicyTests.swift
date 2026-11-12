@@ -94,6 +94,31 @@ final class LauncherEditorPolicyTests: XCTestCase {
         }
     }
 
+    /// CC-2 tier 2: the environment-name rule applies to every kind, not only command shortcuts, and follows the same
+    /// path as the other messages (the editor's Save is disabled while `validationMessage` is non-nil).
+    func testEnvironmentNamesMustBePortableForEveryKind() {
+        let message = "Environment variable names may use only letters, digits and underscores, and may not start with a digit."
+        let file = FileConfig(path: "/Users/me/Notes.txt", openerAppPath: nil)
+        let cli = CLIConfig(executablePath: "/bin/echo", arguments: [], workingDirectory: nil, terminal: .terminal, homeOverride: false)
+        for kind in [ShortcutKind.app, .webApp, .file, .folder, .cli] {
+            for name in ["A.B", "1A", "A-B", "A B", "-S/bin/echo hi #", "A=B", ""] {
+                var config = launcher(kind: kind, file: kind == .file || kind == .folder ? file : nil, cli: kind == .cli ? cli : nil)
+                config.environment = [name: "v"]
+                XCTAssertEqual(LauncherEditorPolicy.validationMessage(for: config), message, "\(kind) \(name.debugDescription)")
+            }
+            var fine = launcher(kind: kind, file: kind == .file || kind == .folder ? file : nil, cli: kind == .cli ? cli : nil)
+            fine.environment = ["PATH": "/bin", "_x": "1", "A1": "2"]
+            XCTAssertNil(LauncherEditorPolicy.validationMessage(for: fine), "\(kind)")
+        }
+    }
+
+    func testControlCharacterMessageStillWinsOverTheNameRule() {
+        let cli = CLIConfig(executablePath: "/bin/echo", arguments: [], workingDirectory: nil, terminal: .terminal, homeOverride: false)
+        var config = launcher(kind: .cli, cli: cli)
+        config.environment = ["A.B\u{3}": "1"]
+        XCTAssertEqual(LauncherEditorPolicy.validationMessage(for: config), "Environment variables may not contain control characters.")
+    }
+
     func testLabelsSubtitlesAndCommandHome() {
         XCTAssertEqual(LauncherEditorPolicy.iconLabel(.copied, kind: .file), "Copied from item")
         XCTAssertEqual(LauncherEditorPolicy.iconLabel(.copied, kind: .cli), "Copied from executable")
