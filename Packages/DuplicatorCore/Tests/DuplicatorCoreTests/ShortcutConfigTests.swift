@@ -302,4 +302,25 @@ final class ShortcutConfigTests: XCTestCase {
             }
         }
     }
+
+    /// The approval sheets' coverage guard compares these lists with the fields they show, so each list must be exactly
+    /// the keys the stored form uses: a config with every optional field set encodes one entry per listed key.
+    func testAllCodingKeyNamesMatchTheKeysOfAFullyPopulatedStoredConfig() throws {
+        var config = makeConfig()
+        config.newWindowCommand = "open {target}"
+        config.customIconPath = "/tmp/icon.png"
+        config.homeSymlinkEntries = ["Library"]
+        config.webApp = WebAppConfig(url: "https://example.test/", badgeRegex: "(\\d+)", extraHosts: ["example.org"])
+        config.file = FileConfig(path: "/tmp/a", openerAppPath: "/Applications/Opener.app")
+        config.cli = CLIConfig(executablePath: "/bin/ls", workingDirectory: "/tmp")
+
+        let stored = config.plistDictionary()
+        XCTAssertEqual(Set(stored.keys), Set(ShortcutConfig.allCodingKeyNames))
+        XCTAssertEqual(Set(try XCTUnwrap(stored["webApp"] as? [String: Any]).keys), Set(WebAppConfig.allCodingKeyNames))
+        XCTAssertEqual(Set(try XCTUnwrap(stored["file"] as? [String: Any]).keys), Set(FileConfig.allCodingKeyNames))
+        XCTAssertEqual(Set(try XCTUnwrap(stored["cli"] as? [String: Any]).keys), Set(CLIConfig.allCodingKeyNames))
+        for names in [ShortcutConfig.allCodingKeyNames, WebAppConfig.allCodingKeyNames, FileConfig.allCodingKeyNames, CLIConfig.allCodingKeyNames] {
+            XCTAssertEqual(names.count, Set(names).count, "no key is listed twice")
+        }
+    }
 }

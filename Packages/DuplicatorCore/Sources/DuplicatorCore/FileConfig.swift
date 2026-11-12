@@ -12,6 +12,14 @@ public struct FileConfig: Codable, Hashable, Sendable {
         self.openerAppPath = openerAppPath
     }
 
+    /// Spelled out (instead of synthesized) so `allCodingKeyNames` can list the keys; the stored form is unchanged.
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case path, openerAppPath
+    }
+
+    /// Every key of a file or folder shortcut's settings, in declaration order.
+    public static var allCodingKeyNames: [String] { CodingKeys.allCases.map(\.stringValue) }
+
     /// `raw` with a leading `~` expanded, `.` and `..` components removed (lexically, the file system is not
     /// consulted) and trailing `/` stripped. `"/"` stays `"/"`; a relative path only loses its trailing `/`.
     public static func normalizedPath(_ raw: String) -> String {

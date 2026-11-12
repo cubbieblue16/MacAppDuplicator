@@ -81,23 +81,12 @@ struct LegacyTrustReviewSheet: View {
             + "Check every value first."
     }
 
-    /// One block per shortcut: name, kind, target and signer always; the other rows only when they carry data.
+    /// One block per shortcut: name, kind and target always, then every other field that holds a set value (a field left
+    /// at its default is omitted to keep the list short, a set one never is), then the signer.
     @ViewBuilder
     private func rows(for approval: ForeignShortcutApproval) -> some View {
-        row("Name", [approval.config.name])
-        row("Kind", [approval.kindDescription])
-        row("Target", [approval.targetDescription])
-        if !approval.argumentLines.isEmpty {
-            row("Arguments", approval.argumentLines)
-        }
-        if !approval.environmentLines.isEmpty {
-            row("Environment", approval.environmentLines)
-        }
-        if approval.config.dataPath != nil {
-            row("Data path", [approval.dataPathDescription])
-        }
-        if approval.config.eraseOnQuit {
-            row("Erase on quit", [approval.eraseOnQuitDescription])
+        ForEach(approval.legacyReviewRows) { reviewRow in
+            row(reviewRow.label, reviewRow.lines)
         }
         row("Signer", [approval.signerDescription])
     }
@@ -106,11 +95,15 @@ struct LegacyTrustReviewSheet: View {
         GridRow {
             Text(label).foregroundStyle(.secondary).gridColumnAlignment(.trailing)
             VStack(alignment: .leading, spacing: 2) {
-                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                    Text(verbatim: line)
-                        .font(.system(.body, design: .monospaced))
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
+                if lines.isEmpty {
+                    Text("None").foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                        Text(verbatim: line)
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }

@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The review before a shortcut this App Duplicator did not create is rewritten and signed as the user's own (security
-/// review C3). A received or planted bundle can carry any target, argument or environment variable, so every value is
-/// shown in full and unmasked. Values are rendered verbatim so nothing in them is read as Markdown.
+/// review C3). A received or planted bundle can carry any target, argument, environment variable or other setting, so every
+/// field (`ForeignShortcutApproval.reviewRows`) is shown in full and unmasked. Values are rendered verbatim so nothing in them is read as Markdown.
 struct ForeignShortcutApprovalSheet: View {
     @Environment(AppState.self) private var appState
     let approval: ForeignShortcutApproval
@@ -15,13 +15,10 @@ struct ForeignShortcutApprovalSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             ScrollView {
                 Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 6) {
-                    row("Name", [approval.config.name])
-                    row("Kind", [approval.kindDescription])
-                    row("Target", [approval.targetDescription])
-                    row("Arguments", approval.argumentLines)
-                    row("Environment", approval.environmentLines)
-                    row("Data path", [approval.dataPathDescription])
-                    row("Erase on quit", [approval.eraseOnQuitDescription])
+                    // Every field of the config, defaults included; `ForeignShortcutApproval.reviewRows` is the one list.
+                    ForEach(approval.reviewRows) { reviewRow in
+                        row(reviewRow.label, reviewRow.lines)
+                    }
                     row("Not created here", [approval.reason])
                     row("Signer", [approval.signerDescription])
                 }

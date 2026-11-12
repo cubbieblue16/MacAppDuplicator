@@ -54,9 +54,12 @@ public struct WebAppConfig: Codable, Hashable, Sendable {
         self.backgroundMode = backgroundMode
     }
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case url, dataStoreID, userAgent, badgeRegex, extraHosts, pageZoom, backgroundMode
     }
+
+    /// Every key of a web app's settings, in declaration order.
+    public static var allCodingKeyNames: [String] { CodingKeys.allCases.map(\.stringValue) }
 
     /// `url` and `dataStoreID` are required; every other key falls back to its default so older or hand-edited
     /// dictionaries still load. Hosts and zoom pass through the same normalisation as `init(url:...)`.

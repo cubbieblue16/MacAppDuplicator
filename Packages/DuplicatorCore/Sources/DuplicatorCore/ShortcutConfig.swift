@@ -97,11 +97,15 @@ public struct ShortcutConfig: Codable, Hashable, Sendable {
         self.engineVersion = engineVersion
     }
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case kind, name, slug, bundleIdentifier, targetPath, targetBundleIdentifier, launchMode, dataMode, dataPath
         case environment, arguments, appearance, languageCode, eraseOnQuit, menuBarIcon, newWindowCommand
         case iconMode, customIconPath, homeSymlinkEntries, webApp, file, cli, engineVersion
     }
+
+    /// Every key of `MADConfig` at this level, in declaration order (including `webApp`, `file` and `cli`, which hold the
+    /// nested settings). The approval sheet's coverage test compares it with the fields it shows.
+    public static var allCodingKeyNames: [String] { CodingKeys.allCases.map(\.stringValue) }
 
     /// Decodes Phase 1 to 5 dictionaries too: `newWindowCommand`, `iconMode`, `customIconPath`, `homeSymlinkEntries`,
     /// `webApp`, `file` and `cli` are optional on input.

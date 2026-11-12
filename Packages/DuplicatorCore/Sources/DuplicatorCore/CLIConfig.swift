@@ -45,9 +45,12 @@ public struct CLIConfig: Codable, Hashable, Sendable {
         self.homeOverride = homeOverride
     }
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case executablePath, arguments, workingDirectory, terminal, homeOverride
     }
+
+    /// Every key of a command's settings, in declaration order.
+    public static var allCodingKeyNames: [String] { CodingKeys.allCases.map(\.stringValue) }
 
     /// Only `executablePath` is required on input; every other key falls back to the initializer default.
     /// - Throws: `DecodingError.dataCorrupted` when `controlCharacterProblem` finds one, so a foreign config that hides
