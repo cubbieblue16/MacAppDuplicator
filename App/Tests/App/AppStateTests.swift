@@ -190,6 +190,42 @@ final class AppStateTests: XCTestCase {
         XCTAssertTrue(message.contains("Planted") && message.contains("Trust and Rebuild"), message)
     }
 
+    /// S1: an export is re-signed with this install's identity, so a shortcut it did not write is reviewed first.
+    func testExportRefusesAShortcutNotCreatedHere() async throws {
+        let bundle = try writeForeignShortcut(named: "Planted")
+        await library.rescan()
+        let record = try XCTUnwrap(library.record(for: bundle))
+        let reason = try XCTUnwrap(record.foreignReason)
+        let destination = dir.appending(path: "Exported.app")
+
+        let outcome = await state.exportCopy(record, to: destination)
+        let exported = await state.export(record, to: destination)
+
+        XCTAssertNil(outcome)
+        XCTAssertFalse(exported)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+        XCTAssertEqual(state.pendingError?.context, "Could not export shortcut")
+        XCTAssertEqual(
+            state.pendingError?.message,
+            "\u{201C}Planted\u{201D} was not created by this App Duplicator (\(reason)). Choose Regenerate, review it and choose Trust and Rebuild before exporting it."
+        )
+    }
+
+    /// A2: the Export button asks before opening a save panel; the answer is the same refusal.
+    func testRefuseForeignExportReportsBeforeAnySavePanel() async throws {
+        let planted = try writeForeignShortcut(named: "Planted")
+        let createdURL = await state.create(config: config())
+        let created = try XCTUnwrap(createdURL)
+        await library.rescan()
+        let foreign = try XCTUnwrap(library.record(for: planted))
+        let own = try XCTUnwrap(library.record(for: created))
+
+        XCTAssertFalse(state.refuseForeignExport(own))
+        XCTAssertNil(state.pendingError)
+        XCTAssertTrue(state.refuseForeignExport(foreign))
+        XCTAssertEqual(state.pendingError?.context, "Could not export shortcut")
+    }
+
     func testCreateSelectsNewRecordAndRescans() async throws {
         let url = await state.create(config: config())
         XCTAssertNotNil(url)

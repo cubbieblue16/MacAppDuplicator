@@ -315,10 +315,23 @@ final class AppState {
         }
     }
 
+    /// S1: an export is signed with this install's identity, so a shortcut it did not write is reviewed first (like
+    /// `duplicate`). Sets `pendingError` and returns true when `record` is foreign. The Export button asks this before it
+    /// opens a save panel, and `exportCopy` asks it again, so the view and the export cannot drift apart.
+    func refuseForeignExport(_ record: ShortcutRecord) -> Bool {
+        guard let reason = record.foreignReason else { return false }
+        pendingError = AppError(
+            context: "Could not export shortcut",
+            message: "\u{201C}\(record.name)\u{201D} was not created by this App Duplicator (\(reason)). Choose Regenerate, review it and choose Trust and Rebuild before exporting it."
+        )
+        return true
+    }
+
     /// Exports a copy of `record` (re-review Minors 4 and 5): checked against the target's current location as well
     /// as the stored one; an item already at `destination` goes to the Trash and comes back if the export fails. The
     /// library is rescanned afterwards. Returns nil and sets `pendingError` on failure.
     func exportCopy(_ record: ShortcutRecord, to destination: URL) async -> ShortcutBuilder.ExportOutcome? {
+        if refuseForeignExport(record) { return nil }
         // The copy can block on a folder-access prompt or a large bundle, so it runs off the main actor (like Rebuild All).
         let builder = self.builder
         let otherTargetPaths = library.records.map(\.config.targetPath)

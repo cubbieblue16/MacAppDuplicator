@@ -22,6 +22,9 @@ struct ShortcutBuilder: Sendable {
         case itemMissing(String)
         /// An erase-on-quit build whose data folder fails the `DataPathRules` shape rules; carries the folder and the reason.
         case eraseOnQuitFolderRefused(path: String, reason: String)
+        /// The bundle carries an install token that is not this install's: another install wrote it, so an export would
+        /// sign it with this install's identity as if it were this install's own.
+        case exportOfForeignBundle
 
         var errorDescription: String? {
             switch self {
@@ -37,6 +40,7 @@ struct ShortcutBuilder: Sendable {
             case .itemMissing(let path): "Nothing exists at \(path)."
             case .eraseOnQuitFolderRefused(let path, let reason):
                 "Erase on quit would empty \(path), which is not a shortcut data folder (\(reason)). Turn Erase on quit off or pick a folder inside your data root."
+            case .exportOfForeignBundle: "This shortcut was not created by this App Duplicator, so it cannot be exported as your own."
             }
         }
     }
@@ -373,12 +377,14 @@ struct ShortcutBuilder: Sendable {
     /// Removes `MADInstallToken` from a staged export copy and signs it again, because editing Info.plist breaks the
     /// signature. The token is what marks a bundle as written by this install; an export that kept it could be edited
     /// elsewhere and carried back (USB, scp, rsync: no quarantine flag) still reading as this install's own. A copy
-    /// without a token is left alone and keeps its signature.
+    /// without a token is left alone and keeps its signature. A token that is not this install's (or any token when this
+    /// builder has none) means another install wrote the bundle: that throws before anything is written or signed.
     private func stripInstallToken(from staging: URL, config: ShortcutConfig) throws {
         let infoURL = staging.appending(path: "Contents/Info.plist", directoryHint: .notDirectory)
         let data = try Data(contentsOf: infoURL)
         guard var info = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-              info[ShortcutConfig.installTokenInfoPlistKey] != nil else { return }
+              let stamped = info[ShortcutConfig.installTokenInfoPlistKey] else { return }
+        guard let ownToken = installToken, stamped as? String == ownToken else { throw BuilderError.exportOfForeignBundle }
         info.removeValue(forKey: ShortcutConfig.installTokenInfoPlistKey)
         try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: infoURL, options: .atomic)
         try Signer().sign(bundle: staging, identity: signingIdentity, needsAppleEvents: Self.drivesTerminal(config))

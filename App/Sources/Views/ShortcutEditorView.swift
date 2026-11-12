@@ -190,6 +190,8 @@ struct ShortcutEditorView: View {
     }
 
     private func exportPanel() {
+        // A foreign shortcut is refused before the save panel opens, not after the user has picked a place.
+        guard !appState.refuseForeignExport(record) else { return }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = record.bundleURL.lastPathComponent
         panel.allowedContentTypes = [.applicationBundle]

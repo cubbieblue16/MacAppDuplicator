@@ -258,6 +258,33 @@ final class ShortcutBuilderTests: XCTestCase {
         XCTAssertEqual(leftovers, [], "no staging copy is left behind")
     }
 
+    /// S1: a bundle stamped by another install (or any install when this builder has no token) must not be re-signed
+    /// with this install's identity by an export.
+    func testExportRefusesABundleStampedWithAnotherInstallsToken() throws {
+        let otherToken = String(repeating: "bb", count: 32)
+        let stampingOther = ShortcutBuilder(launcherBinary: launcher, webShellBinary: webShell, signingIdentity: nil, installToken: otherToken)
+        let out = dir.appending(path: "out", directoryHint: .isDirectory)
+        let bundle = try stampingOther.create(config: config(), in: out)
+        let record = try LibraryScanner.record(forBundleAt: bundle)
+        let infoBefore = try Data(contentsOf: bundle.appending(path: "Contents/Info.plist"))
+        let mine = String(repeating: "aa", count: 32)
+        for token in [mine, nil] as [String?] {
+            let exporting = ShortcutBuilder(launcherBinary: launcher, webShellBinary: webShell, signingIdentity: nil, installToken: token)
+            let destination = dir.appending(path: "exported.app")
+
+            XCTAssertThrowsError(try exporting.export(record: record, to: destination)) { error in
+                guard case ShortcutBuilder.BuilderError.exportOfForeignBundle = error else { return XCTFail("\(error)") }
+                XCTAssertEqual(error.localizedDescription, "This shortcut was not created by this App Duplicator, so it cannot be exported as your own.")
+            }
+
+            XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path), "nothing reaches the destination")
+            let leftovers = try FileManager.default.contentsOfDirectory(atPath: dir.path).filter { ShortcutBuilder.isStagingName($0) }
+            XCTAssertEqual(leftovers, [], "the staging copy is removed")
+            XCTAssertEqual(try Data(contentsOf: bundle.appending(path: "Contents/Info.plist")), infoBefore, "the source is unchanged")
+            XCTAssertTrue(CodeSignature.verify(bundleAt: bundle, expecting: .adHoc), "the source's signature is untouched")
+        }
+    }
+
     func testExportOfATokenlessBundleLeavesTheCopyUntouched() throws {
         let out = dir.appending(path: "out", directoryHint: .isDirectory)
         let bundle = try builder.create(config: config(), in: out)
